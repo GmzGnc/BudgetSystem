@@ -1,16 +1,17 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   BarChart, Bar, LineChart, Line, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
-import { Sun, Moon, Download } from 'lucide-react';
+import { Sun, Moon, Download, Upload, FileSpreadsheet, X, ChevronRight } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 import { CATEGORIES, CATEGORY_COLORS, INDEX_BADGE_COLORS } from '@/data/categories';
 import { ICA_BUDGET, ICE_BUDGET, GROUP_MONTHLY } from '@/data/budget-data';
 import { getSapData, SAP_CATEGORY_COLORS } from '@/data/sap-data';
+import type { SapEntry } from '@/data/sap-data';
 import {
   totalAnnual, categoryAnnual, monthlyAverage,
   buildProjection2026, variancePct, categoryShare, aggregateMonthly,
@@ -60,6 +61,16 @@ export default function Home() {
   const [tab, setTab]                 = useState<Tab>('overview');
   const [coefficients, setCoefficients] = useState<ProjectionCoefficients>(DEFAULT_COEFFICIENTS);
   const [dark, setDark]               = useState(false);
+
+  // ── excel import state ──
+  const [importOpen,      setImportOpen]      = useState(false);
+  const [dragOver,        setDragOver]        = useState(false);
+  const [sheets,          setSheets]          = useState<string[]>([]);
+  const [selectedSheet,   setSelectedSheet]   = useState('');
+  const [importedSapData, setImportedSapData] = useState<SapEntry[] | null>(null);
+  const [toast,           setToast]           = useState('');
+  const wbRef = useRef<XLSX.WorkBook | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── dark mode bootstrap from localStorage ──
   useEffect(() => {
@@ -115,8 +126,11 @@ export default function Home() {
     }).sort((a, b) => b.pct - a.pct),
   [monthlyData, projection2026]);
 
-  // ── SAP data ──
-  const sapData = useMemo(() => getSapData(company), [company]);
+  // ── SAP data (imported overrides static) ──
+  const sapData = useMemo(
+    () => importedSapData ?? getSapData(company),
+    [importedSapData, company],
+  );
 
   const sapSummary = useMemo(() => {
     const totalBudget    = sapData.reduce((s, r) => s + r.budget,    0);
@@ -203,6 +217,101 @@ export default function Home() {
     XLSX.writeFile(wb, `Butce_2025_2026_${companyLabel.replace(' ', '_')}.xlsx`);
   }, [monthlyData, projection2026, coefficients, sapamaData, total2025, total2026, companyLabel]);
 
+  // ── Excel import ──
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), 3500);
+  }, []);
+
+  const loadWorkbook = useCallback((file: File) => {
+    if (!/\.(xlsx|xls)$/i.test(file.name)) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const data = e.target?.result;
+      if (!data) return;
+      const wb = XLSX.read(data, { type: 'array' });
+      wbRef.current = wb;
+      setSheets(wb.SheetNames);
+      setSelectedSheet(wb.SheetNames[0] ?? '');
+    };
+    reader.readAsArrayBuffer(file);
+  }, []);
+
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) loadWorkbook(file);
+  }, [loadWorkbook]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) loadWorkbook(file);
+  }, [loadWorkbook]);
+
+  const handleImport = useCallback(() => {
+    const wb = wbRef.current;
+    if (!wb || !selectedSheet) return;
+
+    const ws      = wb.Sheets[selectedSheet];
+    const rows    = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' });
+    if (rows.length === 0) return;
+
+    // sütun adlarını normalize ederek eşleştir
+    const colMap: Record<string, string> = {};
+    const TARGET: Record<string, string> = {
+      'bütçe kodu':            'code',
+      'bütce kodu':            'code',
+      'budget kodu':           'code',
+      'bütçe kodu tanımı':     'name',
+      'bütce kodu tanımı':     'name',
+      'bütçe kodu tanimi':     'name',
+      'bütce kodu tanimi':     'name',
+      'orjinal bütçe':         'budget',
+      'orjinal butce':         'budget',
+      'orijinal bütçe':        'budget',
+      'kalan bütçe':           'remaining',
+      'kalan butce':           'remaining',
+      'fatura giriş tutarı':   'used',
+      'fatura giris tutari':   'used',
+      'fatura tutarı':         'used',
+      'kullanılan':            'used',
+      'kullanilan':            'used',
+    };
+    for (const key of Object.keys(rows[0])) {
+      const norm = key.toLowerCase().trim();
+      if (TARGET[norm]) colMap[key] = TARGET[norm];
+    }
+
+    const parsed: SapEntry[] = [];
+    for (const row of rows) {
+      const code      = String(row[Object.keys(colMap).find(k => colMap[k] === 'code')      ?? ''] ?? '').trim();
+      const name      = String(row[Object.keys(colMap).find(k => colMap[k] === 'name')      ?? ''] ?? '').trim();
+      const budget    = parseFloat(String(row[Object.keys(colMap).find(k => colMap[k] === 'budget')    ?? ''] ?? '0').replace(/[^\d.-]/g, '')) || 0;
+      const remaining = parseFloat(String(row[Object.keys(colMap).find(k => colMap[k] === 'remaining') ?? ''] ?? '0').replace(/[^\d.-]/g, '')) || 0;
+      const used      = parseFloat(String(row[Object.keys(colMap).find(k => colMap[k] === 'used')      ?? ''] ?? '0').replace(/[^\d.-]/g, '')) || 0;
+      if (!code) continue;
+      parsed.push({ code, name: name || code, budget, remaining, used, category: 'Diğer Çeşitli', company: company === 'GRUP' ? 'ICA' : company });
+    }
+
+    if (parsed.length === 0) return;
+    setImportedSapData(parsed);
+    setImportOpen(false);
+    wbRef.current = null;
+    setSheets([]);
+    setSelectedSheet('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    showToast(`✓ ${parsed.length} SAP kodu yüklendi`);
+  }, [selectedSheet, company, showToast]);
+
+  const closeImport = useCallback(() => {
+    setImportOpen(false);
+    wbRef.current = null;
+    setSheets([]);
+    setSelectedSheet('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, []);
+
   // ── tooltip components (inside component to access `dark`) ──
   const BarTooltip = useCallback(({ active, payload, label }: {
     active?: boolean;
@@ -287,6 +396,15 @@ export default function Home() {
               <span className="w-2 h-2 rounded-full bg-green-400 inline-block animate-pulse" />
               Canlı Veri
             </div>
+
+            {/* Excel import */}
+            <button
+              onClick={() => setImportOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors shadow-sm"
+            >
+              <Upload size={13} />
+              Excel Yükle
+            </button>
 
             {/* Excel export */}
             <button
@@ -837,6 +955,121 @@ export default function Home() {
         )}
 
       </main>
+
+      {/* ── EXCEL IMPORT MODAL ── */}
+      {importOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={closeImport}
+          />
+
+          <div className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-lg">
+
+            {/* modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+              <div className="flex items-center gap-2">
+                <FileSpreadsheet size={18} className="text-blue-600 dark:text-blue-400" />
+                <h2 className="text-sm font-bold text-gray-800 dark:text-gray-100">Excel Dosyası Yükle</h2>
+              </div>
+              <button
+                onClick={closeImport}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+
+              {/* drag-drop alanı */}
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
+                  dragOver
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30'
+                    : 'border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                }`}
+              >
+                <Upload size={28} className={`mx-auto mb-3 ${dragOver ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500'}`} />
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {dragOver ? 'Dosyayı bırakın…' : 'Dosyayı sürükleyin veya tıklayın'}
+                </p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">.xlsx ve .xls desteklenir</p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  onChange={handleFileInput}
+                />
+              </div>
+
+              {/* sheet seçimi */}
+              {sheets.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    Sheet Seç ({sheets.length} sheet bulundu)
+                  </p>
+                  <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                    {sheets.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setSelectedSheet(s)}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg border text-sm transition-colors ${
+                          selectedSheet === s
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-semibold'
+                            : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <FileSpreadsheet size={14} className="flex-shrink-0" />
+                          {s}
+                        </span>
+                        {selectedSheet === s && <ChevronRight size={14} />}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* sütun bilgisi */}
+                  <p className="text-xs text-gray-400 dark:text-gray-500 pt-1">
+                    Beklenen sütunlar: <span className="font-mono">Bütçe Kodu · Bütçe Kodu Tanımı · Orjinal Bütçe · Kalan Bütçe · Fatura Giriş Tutarı</span>
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* modal footer */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
+              <button
+                onClick={closeImport}
+                className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleImport}
+                disabled={!selectedSheet}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
+              >
+                <Upload size={14} />
+                Yükle
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TOAST ── */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 bg-emerald-600 text-white text-sm font-semibold rounded-xl shadow-xl animate-fade-in">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
