@@ -253,8 +253,8 @@ export default function Home() {
     const wb = wbRef.current;
     if (!wb || !selectedSheet) return;
 
-    const ws      = wb.Sheets[selectedSheet];
-    const rows    = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' });
+    const ws   = wb.Sheets[selectedSheet];
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' });
     if (rows.length === 0) return;
 
     // sütun adlarını normalize ederek eşleştir
@@ -277,21 +277,54 @@ export default function Home() {
       'fatura tutarı':         'used',
       'kullanılan':            'used',
       'kullanilan':            'used',
+      'kategori':              'category',
+      'category':              'category',
+      'sap kategori':          'category',
+      'harcama kalemi':        'category',
     };
     for (const key of Object.keys(rows[0])) {
       const norm = key.toLowerCase().trim();
       if (TARGET[norm]) colMap[key] = TARGET[norm];
     }
 
+    // isim/kod'dan kategori otomatik tespiti
+    function detectCategory(code: string, name: string): string {
+      const n = (name + ' ' + code).toUpperCase();
+      if (/YEMEK|PERSONEL YEMEK/.test(n))          return 'Yemek';
+      if (/ARAÇ KİRA|ARAC KIRA|ARAÇ KİRAL/.test(n)) return 'Araç Kira';
+      if (/\bHGS\b/.test(n))                         return 'HGS';
+      if (/YAKIT|YAKITI|FUEL/.test(n))               return 'Araç Yakıt';
+      if (/BAKIM|ONARIM|SERVIS|SERVİS/.test(n))      return 'Araç Bakım';
+      if (/İÇME SUYU|ICME SUYU|\bSU\b|SU GİD/.test(n)) return 'Su';
+      if (/TEMİZLİK|TEMIZLIK|TAŞERON|TASERON/.test(n)) return 'Temizlik';
+      // SAP kod öneki tespiti
+      if (/^26DE19/.test(code)) return 'Yemek';
+      if (/^26DE21|^26DE07/.test(code)) return 'Araç Kira';
+      if (/^26DE22|^26DE06/.test(code)) return 'HGS';
+      if (/^26DE24|^26DE03/.test(code)) return 'Araç Yakıt';
+      if (/^26DE25|^26DE05/.test(code)) return 'Araç Bakım';
+      if (/^26DE29|^26DE04/.test(code)) return 'Su';
+      if (/^26DE30|^26DE08|^26DE09/.test(code)) return 'Temizlik';
+      return 'Diğer Çeşitli';
+    }
+
+    const pick = (field: string) =>
+      Object.keys(colMap).find((k) => colMap[k] === field) ?? '';
+
     const parsed: SapEntry[] = [];
     for (const row of rows) {
-      const code      = String(row[Object.keys(colMap).find(k => colMap[k] === 'code')      ?? ''] ?? '').trim();
-      const name      = String(row[Object.keys(colMap).find(k => colMap[k] === 'name')      ?? ''] ?? '').trim();
-      const budget    = parseFloat(String(row[Object.keys(colMap).find(k => colMap[k] === 'budget')    ?? ''] ?? '0').replace(/[^\d.-]/g, '')) || 0;
-      const remaining = parseFloat(String(row[Object.keys(colMap).find(k => colMap[k] === 'remaining') ?? ''] ?? '0').replace(/[^\d.-]/g, '')) || 0;
-      const used      = parseFloat(String(row[Object.keys(colMap).find(k => colMap[k] === 'used')      ?? ''] ?? '0').replace(/[^\d.-]/g, '')) || 0;
+      const code      = String(row[pick('code')]      ?? '').trim();
+      const name      = String(row[pick('name')]      ?? '').trim();
+      const budget    = parseFloat(String(row[pick('budget')]    ?? '0').replace(/[^\d.-]/g, '')) || 0;
+      const remaining = parseFloat(String(row[pick('remaining')] ?? '0').replace(/[^\d.-]/g, '')) || 0;
+      const used      = parseFloat(String(row[pick('used')]      ?? '0').replace(/[^\d.-]/g, '')) || 0;
+      const rawCat    = String(row[pick('category')] ?? '').trim();
+      const category  = rawCat || detectCategory(code, name);
       if (!code) continue;
-      parsed.push({ code, name: name || code, budget, remaining, used, category: 'Diğer Çeşitli', company: company === 'GRUP' ? 'ICA' : company });
+      parsed.push({
+        code, name: name || code, budget, remaining, used, category,
+        company: company === 'GRUP' ? 'ICA' : company,
+      });
     }
 
     if (parsed.length === 0) return;
@@ -832,6 +865,23 @@ export default function Home() {
         {/* ══════════ SAP BÜTÇE TAKİBİ TAB ══════════ */}
         {tab === 'sap' && (
           <div className="space-y-6">
+
+            {/* yüklenen veri bildirimi */}
+            {importedSapData && (
+              <div className="flex items-center justify-between px-4 py-2.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl text-sm">
+                <span className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                  <FileSpreadsheet size={15} />
+                  <span className="font-medium">Yüklenen Excel verisi gösteriliyor</span>
+                  <span className="text-blue-500 dark:text-blue-400">({importedSapData.length} SAP kodu)</span>
+                </span>
+                <button
+                  onClick={() => setImportedSapData(null)}
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 font-semibold underline underline-offset-2"
+                >
+                  Statik Veriye Dön
+                </button>
+              </div>
+            )}
 
             {/* özet kartlar */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
