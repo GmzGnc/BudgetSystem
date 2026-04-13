@@ -15,6 +15,7 @@ import { getSapData, SAP_CATEGORY_COLORS } from '@/data/sap-data';
 import type { SapEntry } from '@/data/sap-data';
 import { DEPARTMENTS, ICA_DEPT, DEPT_COLORS } from '@/data/department-data';
 import type { Department } from '@/data/department-data';
+import { getDrillDownData, MONTH_LABELS } from '@/data/drill-down-data';
 import {
   totalAnnual, categoryAnnual, monthlyAverage,
   buildProjection2026, variancePct, categoryShare, aggregateMonthly,
@@ -27,6 +28,13 @@ function fmt(n: number): string {
   if (n >= 1_000_000) return `₺${(n / 1_000_000).toFixed(2)}M`;
   if (n >= 1_000)     return `₺${(n / 1_000).toFixed(0)}K`;
   return `₺${n.toFixed(0)}`;
+}
+
+function fmtShort(n: number): string {
+  if (n === 0) return '—';
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000)     return `${(n / 1_000).toFixed(0)}B`;
+  return n.toFixed(0);
 }
 
 function fmtFull(n: number): string {
@@ -781,6 +789,78 @@ export default function Home() {
                                         </div>
                                       )}
                                     </div>
+
+                                    {/* aylık alt kalem detay tablosu */}
+                                    {(() => {
+                                      const ddData = getDrillDownData(cat.id);
+                                      if (!ddData) return null;
+                                      const items = ddData.items;
+                                      const colTotals = MONTH_LABELS.map((_, mi) =>
+                                        items.reduce((s, it) => s + it.monthly[mi], 0)
+                                      );
+                                      const grandTotal = colTotals.reduce((s, v) => s + v, 0);
+                                      return (
+                                        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+                                          <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700">
+                                            <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">Aylık Detay Tablosu</p>
+                                          </div>
+                                          <div className="overflow-x-auto">
+                                            <table className="w-full min-w-[860px] text-xs">
+                                              <thead className="bg-gray-50 dark:bg-gray-800">
+                                                <tr>
+                                                  <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide sticky left-0 bg-gray-50 dark:bg-gray-800 min-w-[120px]">
+                                                    Alt Kalem
+                                                  </th>
+                                                  {MONTH_LABELS.map((m) => (
+                                                    <th key={m} className="px-2 py-2 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[62px]">
+                                                      {m}
+                                                    </th>
+                                                  ))}
+                                                  <th className="px-3 py-2 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[80px]">
+                                                    Toplam
+                                                  </th>
+                                                </tr>
+                                              </thead>
+                                              <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+                                                {items.map((item) => {
+                                                  const rowTotal = item.monthly.reduce((s, v) => s + v, 0);
+                                                  return (
+                                                    <tr key={item.name} className="hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors">
+                                                      <td className="px-3 py-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/60">
+                                                        {item.name}
+                                                      </td>
+                                                      {item.monthly.map((v, mi) => (
+                                                        <td key={mi} className="px-2 py-2 text-right font-mono text-gray-600 dark:text-gray-400">
+                                                          {fmtShort(v)}
+                                                        </td>
+                                                      ))}
+                                                      <td className="px-3 py-2 text-right font-mono font-semibold text-gray-800 dark:text-gray-200">
+                                                        {fmtShort(rowTotal)}
+                                                      </td>
+                                                    </tr>
+                                                  );
+                                                })}
+                                              </tbody>
+                                              <tfoot>
+                                                <tr className="border-t-2 border-gray-200 dark:border-gray-600" style={{ backgroundColor: `${catColor}18` }}>
+                                                  <td className="px-3 py-2.5 font-bold text-gray-900 dark:text-white sticky left-0" style={{ backgroundColor: `${catColor}18` }}>
+                                                    Toplam
+                                                  </td>
+                                                  {colTotals.map((v, mi) => (
+                                                    <td key={mi} className="px-2 py-2.5 text-right font-mono font-bold text-gray-900 dark:text-white">
+                                                      {fmtShort(v)}
+                                                    </td>
+                                                  ))}
+                                                  <td className="px-3 py-2.5 text-right font-mono font-bold text-gray-900 dark:text-white">
+                                                    {fmtShort(grandTotal)}
+                                                  </td>
+                                                </tr>
+                                              </tfoot>
+                                            </table>
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
 
                                     {/* departman detay tablosu */}
                                     {showDept && deptRow && (
