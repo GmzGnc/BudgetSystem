@@ -1,63 +1,56 @@
-export interface DrillDownItem {
-  name: string;
-  monthly: number[]; // 12 element: Ocak–Aralık
-}
-
-export interface DrillDownCategory {
-  categoryId: string;
-  items: DrillDownItem[];
-}
+import fullData from './drill-down-full.json';
 
 export const MONTH_LABELS = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'] as const;
 
-export const DRILL_DOWN_DATA: DrillDownCategory[] = [
-  {
-    categoryId: 'guvenlik',
-    items: [
-      { name: 'GYG',          monthly: [2232401,2232401,2232401,2232401,2232401,2232401,2232401,2232401,2232401,2232401,2232401,2232401] },
-      { name: 'OHT',          monthly: [1531590,1531590,1531590,1531590,1531590,1531590,1531590,1531590,1531590,1531590,1531590,1531590] },
-      { name: 'Operasyon',    monthly: [3095038,3095038,3095038,3095038,3095038,3095038,3095038,3095038,3095038,3095038,3095038,3095038] },
-      { name: 'Kilyos',       monthly: [2801783,2804895,2810050,2814111,2810514,2837049,3279340,3294724,3796035,4374291,5041030,5808161] },
-      { name: 'Ek Giderler',  monthly: [1372000,1372000,1372000,1372000,1372000,1372000,1372000,1372000,1372000,1372000,1372000,1372000] },
-    ],
-  },
-  {
-    categoryId: 'temizlik',
-    items: [
-      { name: 'GYG (AKM+PMO)', monthly: [315199,315199,315199,315199,315199,315199,315199,315199,315199,315199,315199,315199] },
-      { name: 'Kamu',           monthly: [225142,225142,225142,225142,225142,225142,225142,225142,225142,225142,225142,225142] },
-      { name: 'OHT',            monthly: [2444031,2444031,2444031,2444031,2444031,2444031,2444031,2444031,2444031,2444031,2444031,2444031] },
-      { name: 'Operasyon',      monthly: [1346948,1346948,1346948,1346948,1346948,1346948,1346948,1346948,1346948,1346948,1346948,1346948] },
-      { name: 'Kilyos',         monthly: [847313,862921,879484,896043,908516,930672,965325,982392,999906,1021344,1043167,1065092] },
-    ],
-  },
-  {
-    categoryId: 'yemek',
-    items: [
-      { name: 'GYG',       monthly: [226546,226546,226546,233464,233464,233464,240048,240048,240048,246450,246450,246450] },
-      { name: 'Operasyon', monthly: [86560,86560,86560,90145,90145,90145,93557,93557,93557,96874,96874,96874] },
-      { name: 'Kamu',      monthly: [621108,621108,621108,646828,646828,646828,671311,671311,671311,695115,695115,695115] },
-      { name: 'Kilyos',    monthly: [6290581,6221429,6232202,6156102,6127492,6184777,6544551,6553261,6579962,6938875,6942863,6967212] },
-    ],
-  },
-  {
-    categoryId: 'servis',
-    items: [
-      { name: 'GYG',       monthly: [1131874,1131874,1161135,1161135,1161135,1161135,1227142,1227142,1227142,1255889,1255889,1255889] },
-      { name: 'Operasyon', monthly: [4527496,4527496,4644539,4644539,4644539,4644539,4908568,4908568,4908568,5023558,5023558,5023558] },
-      { name: 'Kilyos',    monthly: [1688905,1644496,1655393,1654369,1691839,1666793,1681935,1727483,1693043,1740633,1705518,1752595] },
-    ],
-  },
-  {
-    categoryId: 'arac_kira',
-    items: [
-      { name: 'GYG',       monthly: [206265,209581,212896,216226,219557,222887,226203,229518,232833,236164,239494,242825] },
-      { name: 'Operasyon', monthly: [243768,247686,251604,255540,259476,263412,267331,271249,275167,279103,283039,286975] },
-      { name: 'Kamu',      monthly: [127509,129559,131608,133667,135726,137785,139834,141884,143933,145992,148051,150110] },
-    ],
-  },
-];
+export interface DrillDownItem {
+  name: string;
+  monthly: number[];
+}
 
-export function getDrillDownData(categoryId: string): DrillDownCategory | undefined {
-  return DRILL_DOWN_DATA.find((d) => d.categoryId === categoryId);
+export interface DrillDownGroup {
+  department: string;
+  total: number[];
+  items: DrillDownItem[];
+}
+
+/** cat.id → JSON key */
+const CAT_ID_MAP: Record<string, string> = {
+  guvenlik:      'Güvenlik',
+  temizlik:      'Temizlik',
+  yemek:         'Yemek',
+  servis:        'Servis/Ulaşım',
+  arac_kira:     'Araç Kira',
+  hgs:           'HGS',
+  arac_yakit:    'Araç Yakıt',
+  arac_bakim:    'Araç Bakım',
+  su:            'Su',
+  diger_hizmet:  'Diğer Hizmet',
+  diger_cesitli: 'Diğer Çeşitli',
+};
+
+type JsonData = typeof fullData;
+type CompanyKey = 'ica' | 'ice';
+
+function getGroups(companyKey: CompanyKey, catName: string): DrillDownGroup[] {
+  const companyData = fullData[companyKey] as Record<string, { groups: DrillDownGroup[] }>;
+  return companyData[catName]?.groups ?? [];
+}
+
+export function getDrillDownData(
+  categoryId: string,
+  company: 'ICA' | 'ICE' | 'GRUP',
+): DrillDownGroup[] {
+  const catName = CAT_ID_MAP[categoryId];
+  if (!catName) return [];
+
+  if (company === 'ICA') return getGroups('ica', catName);
+  if (company === 'ICE') return getGroups('ice', catName);
+
+  // GRUP — ICA groups then ICE groups (prefixed)
+  const icaGroups = getGroups('ica', catName);
+  const iceGroups = getGroups('ice', catName).map((g) => ({
+    ...g,
+    department: `ICE · ${g.department}`,
+  }));
+  return [...icaGroups, ...iceGroups];
 }

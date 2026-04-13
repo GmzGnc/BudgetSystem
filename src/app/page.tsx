@@ -16,6 +16,7 @@ import type { SapEntry } from '@/data/sap-data';
 import { DEPARTMENTS, ICA_DEPT, DEPT_COLORS } from '@/data/department-data';
 import type { Department } from '@/data/department-data';
 import { getDrillDownData, MONTH_LABELS } from '@/data/drill-down-data';
+import type { DrillDownGroup } from '@/data/drill-down-data';
 import {
   totalAnnual, categoryAnnual, monthlyAverage,
   buildProjection2026, variancePct, categoryShare, aggregateMonthly,
@@ -75,6 +76,17 @@ export default function Home() {
 
   const [selectedDept,     setSelectedDept]     = useState<Department | 'ALL'>('ALL');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  // ── drill-down detail table state ──
+  const [ddSearch,     setDdSearch]     = useState('');
+  const [ddOpenGroups, setDdOpenGroups] = useState<Set<string>>(new Set());
+  const [ddShowMore,   setDdShowMore]   = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    setDdSearch('');
+    setDdOpenGroups(new Set());
+    setDdShowMore({});
+  }, [selectedCategory]);
 
   // ── excel import state ──
   const [importOpen,      setImportOpen]      = useState(false);
@@ -790,74 +802,155 @@ export default function Home() {
                                       )}
                                     </div>
 
-                                    {/* aylık alt kalem detay tablosu */}
+                                    {/* aylık alt kalem detay tablosu — collapse/expand gruplar */}
                                     {(() => {
-                                      const ddData = getDrillDownData(cat.id);
-                                      if (!ddData) return null;
-                                      const items = ddData.items;
-                                      const colTotals = MONTH_LABELS.map((_, mi) =>
-                                        items.reduce((s, it) => s + it.monthly[mi], 0)
-                                      );
-                                      const grandTotal = colTotals.reduce((s, v) => s + v, 0);
+                                      const groups: DrillDownGroup[] = getDrillDownData(cat.id, company);
+                                      if (!groups.length) return null;
+
+                                      const searchLower = ddSearch.trim().toLowerCase();
+
                                       return (
                                         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-                                          <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700">
-                                            <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">Aylık Detay Tablosu</p>
+                                          {/* başlık + arama */}
+                                          <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center gap-2">
+                                            <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 flex-shrink-0">
+                                              Aylık Alt Kalem Detayı
+                                            </p>
+                                            <input
+                                              type="text"
+                                              placeholder="Alt kalem ara..."
+                                              value={ddSearch}
+                                              onChange={(e) => { setDdSearch(e.target.value); setDdShowMore({}); }}
+                                              onClick={(e) => e.stopPropagation()}
+                                              className="flex-1 text-xs px-2.5 py-1 rounded-md border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:border-indigo-400 dark:focus:border-indigo-500"
+                                            />
                                           </div>
-                                          <div className="overflow-x-auto">
-                                            <table className="w-full min-w-[860px] text-xs">
-                                              <thead className="bg-gray-50 dark:bg-gray-800">
-                                                <tr>
-                                                  <th className="px-3 py-2 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide sticky left-0 bg-gray-50 dark:bg-gray-800 min-w-[120px]">
-                                                    Alt Kalem
-                                                  </th>
-                                                  {MONTH_LABELS.map((m) => (
-                                                    <th key={m} className="px-2 py-2 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[62px]">
-                                                      {m}
-                                                    </th>
-                                                  ))}
-                                                  <th className="px-3 py-2 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[80px]">
-                                                    Toplam
-                                                  </th>
-                                                </tr>
-                                              </thead>
-                                              <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                                                {items.map((item) => {
-                                                  const rowTotal = item.monthly.reduce((s, v) => s + v, 0);
-                                                  return (
-                                                    <tr key={item.name} className="hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors">
-                                                      <td className="px-3 py-2 font-medium text-gray-700 dark:text-gray-300 sticky left-0 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/60">
-                                                        {item.name}
-                                                      </td>
-                                                      {item.monthly.map((v, mi) => (
-                                                        <td key={mi} className="px-2 py-2 text-right font-mono text-gray-600 dark:text-gray-400">
-                                                          {fmtShort(v)}
-                                                        </td>
-                                                      ))}
-                                                      <td className="px-3 py-2 text-right font-mono font-semibold text-gray-800 dark:text-gray-200">
-                                                        {fmtShort(rowTotal)}
-                                                      </td>
-                                                    </tr>
-                                                  );
-                                                })}
-                                              </tbody>
-                                              <tfoot>
-                                                <tr className="border-t-2 border-gray-200 dark:border-gray-600" style={{ backgroundColor: `${catColor}18` }}>
-                                                  <td className="px-3 py-2.5 font-bold text-gray-900 dark:text-white sticky left-0" style={{ backgroundColor: `${catColor}18` }}>
-                                                    Toplam
-                                                  </td>
-                                                  {colTotals.map((v, mi) => (
-                                                    <td key={mi} className="px-2 py-2.5 text-right font-mono font-bold text-gray-900 dark:text-white">
-                                                      {fmtShort(v)}
-                                                    </td>
-                                                  ))}
-                                                  <td className="px-3 py-2.5 text-right font-mono font-bold text-gray-900 dark:text-white">
-                                                    {fmtShort(grandTotal)}
-                                                  </td>
-                                                </tr>
-                                              </tfoot>
-                                            </table>
-                                          </div>
+
+                                          {/* gruplar */}
+                                          {groups.map((group) => {
+                                            const isGroupOpen = ddOpenGroups.has(group.department);
+                                            const filtered = searchLower
+                                              ? group.items.filter((it) => it.name.toLowerCase().includes(searchLower))
+                                              : group.items;
+                                            if (searchLower && filtered.length === 0) return null;
+
+                                            const showCount  = ddShowMore[group.department] ?? 20;
+                                            const visible    = filtered.slice(0, showCount);
+                                            const remaining  = filtered.length - showCount;
+                                            const groupAnnual = group.total.reduce((s, v) => s + v, 0);
+
+                                            return (
+                                              <div key={group.department} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
+                                                {/* grup başlık butonu */}
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setDdOpenGroups((prev) => {
+                                                      const next = new Set(prev);
+                                                      if (next.has(group.department)) next.delete(group.department);
+                                                      else next.add(group.department);
+                                                      return next;
+                                                    });
+                                                  }}
+                                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors"
+                                                >
+                                                  <span
+                                                    className="text-gray-400 dark:text-gray-500 text-[10px] transition-transform duration-200 flex-shrink-0"
+                                                    style={{ display: 'inline-block', transform: isGroupOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
+                                                  >
+                                                    ▶
+                                                  </span>
+                                                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 flex-1 text-left">
+                                                    {group.department}
+                                                  </span>
+                                                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                                                    {group.items.length} kalem
+                                                  </span>
+                                                  <span className="text-xs font-mono font-semibold text-gray-700 dark:text-gray-200 ml-3">
+                                                    {fmtShort(groupAnnual)}
+                                                  </span>
+                                                </button>
+
+                                                {/* açık iken: tablo */}
+                                                {isGroupOpen && (
+                                                  <div className="border-t border-gray-100 dark:border-gray-800">
+                                                    <div className="overflow-x-auto">
+                                                      <table className="w-full min-w-[900px] text-xs">
+                                                        <thead className="bg-gray-50 dark:bg-gray-800/60">
+                                                          <tr>
+                                                            <th className="px-4 py-2 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[180px]">
+                                                              Alt Kalem
+                                                            </th>
+                                                            {MONTH_LABELS.map((m) => (
+                                                              <th key={m} className="px-1.5 py-2 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[52px]">
+                                                                {m}
+                                                              </th>
+                                                            ))}
+                                                            <th className="px-3 py-2 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[72px]">
+                                                              Yıllık
+                                                            </th>
+                                                          </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+                                                          {visible.map((item) => {
+                                                            const annual = item.monthly.reduce((s, v) => s + v, 0);
+                                                            return (
+                                                              <tr key={item.name} className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
+                                                                <td className="px-4 pl-7 py-1.5 text-gray-700 dark:text-gray-300">
+                                                                  {item.name}
+                                                                </td>
+                                                                {item.monthly.map((v, mi) => (
+                                                                  <td key={mi} className="px-1.5 py-1.5 text-right font-mono text-gray-600 dark:text-gray-400">
+                                                                    {fmtShort(v)}
+                                                                  </td>
+                                                                ))}
+                                                                <td className="px-3 py-1.5 text-right font-mono font-semibold text-gray-800 dark:text-gray-200">
+                                                                  {fmtShort(annual)}
+                                                                </td>
+                                                              </tr>
+                                                            );
+                                                          })}
+                                                        </tbody>
+                                                        <tfoot>
+                                                          <tr
+                                                            className="border-t-2 border-gray-200 dark:border-gray-600"
+                                                            style={{ backgroundColor: `${catColor}18` }}
+                                                          >
+                                                            <td className="px-4 pl-7 py-2 font-bold text-gray-900 dark:text-white">
+                                                              Grup Toplamı
+                                                            </td>
+                                                            {group.total.map((v, mi) => (
+                                                              <td key={mi} className="px-1.5 py-2 text-right font-mono font-bold text-gray-900 dark:text-white">
+                                                                {fmtShort(v)}
+                                                              </td>
+                                                            ))}
+                                                            <td className="px-3 py-2 text-right font-mono font-bold text-gray-900 dark:text-white">
+                                                              {fmtShort(groupAnnual)}
+                                                            </td>
+                                                          </tr>
+                                                        </tfoot>
+                                                      </table>
+                                                    </div>
+                                                    {/* daha fazla göster */}
+                                                    {remaining > 0 && (
+                                                      <button
+                                                        onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          setDdShowMore((prev) => ({
+                                                            ...prev,
+                                                            [group.department]: showCount + 20,
+                                                          }));
+                                                        }}
+                                                        className="w-full py-2 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 transition-colors border-t border-gray-100 dark:border-gray-800"
+                                                      >
+                                                        Daha Fazla Göster ({remaining} kalem daha)
+                                                      </button>
+                                                    )}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            );
+                                          })}
                                         </div>
                                       );
                                     })()}
