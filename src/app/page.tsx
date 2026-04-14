@@ -58,6 +58,37 @@ function sapamaStatus(pct: number): { label: string; cls: string } {
   return           { label: 'Kritik',  cls: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' };
 }
 
+// ─── model gider types & row ranges ─────────────────────────────────────────
+
+interface ModelRow {
+  rowNum: number;      // 1-based Excel row number
+  paramName: string;   // K column
+  budget: number[];    // 12 months  N–Y
+  actual: number[];    // 12 months  AC–AN
+}
+
+/** Excel row ranges for each category (1-based) */
+const CAT_ROW_RANGES: Record<string, [number, number]> = {
+  guvenlik:      [20,   123],
+  temizlik:      [124,  179],
+  yemek:         [180,  237],
+  servis:        [238,  605],
+  arac_kira:     [606,  784],
+  hgs:           [785,  966],
+  arac_yakit:    [970,  1162],
+  arac_bakim:    [1163, 1272],
+  diger_hizmet:  [1273, 1336],
+  diger_cesitli: [1337, 1376],
+};
+
+function isQuantityParam(name: string): boolean {
+  return /KİŞİ|KISI|ADET|SAYI|ÇALIŞAN|CALISAN|PERSONEL SAYI|ELEMAN/.test(name.toUpperCase());
+}
+
+function isPriceParam(name: string): boolean {
+  return /FİYAT|FIYAT|ÜCRET|UCRET|TARİFE|TARIFE|BİRİM|BIRIM/.test(name.toUpperCase());
+}
+
 // ─── default coefficients ────────────────────────────────────────────────────
 
 const DEFAULT_COEFFICIENTS: ProjectionCoefficients = Object.fromEntries(
@@ -81,12 +112,18 @@ export default function Home() {
   const [ddSearch,     setDdSearch]     = useState('');
   const [ddOpenGroups, setDdOpenGroups] = useState<Set<string>>(new Set());
   const [ddShowMore,   setDdShowMore]   = useState<Record<string, number>>({});
+  const [ddActiveTab,  setDdActiveTab]  = useState<'detail' | 'variance'>('detail');
+  const [varMonth,     setVarMonth]     = useState(0);
 
   useEffect(() => {
     setDdSearch('');
     setDdOpenGroups(new Set());
     setDdShowMore({});
+    setDdActiveTab('detail');
   }, [selectedCategory]);
+
+  // ── model gider import state ──
+  const [importedModelData, setImportedModelData] = useState<ModelRow[] | null>(null);
 
   // ── excel import state ──
   const [importOpen,      setImportOpen]      = useState(false);
@@ -307,7 +344,37 @@ export default function Home() {
     const wb = wbRef.current;
     if (!wb || !selectedSheet) return;
 
-    const ws   = wb.Sheets[selectedSheet];
+    const ws = wb.Sheets[selectedSheet];
+
+    // ── Model Gider sheet handler ──
+    if (/model/i.test(selectedSheet)) {
+      const rawRows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1 });
+      const parsed: ModelRow[] = [];
+      for (let i = 0; i < rawRows.length; i++) {
+        const row = rawRows[i] as unknown[];
+        const paramName = String(row[10] ?? '').trim(); // K column (index 10)
+        if (!paramName || paramName.length < 2) continue;
+        const budget: number[] = [];
+        const actual: number[] = [];
+        for (let m = 0; m < 12; m++) {
+          budget.push(parseFloat(String(row[13 + m] ?? '0').replace(/[^\d.-]/g, '')) || 0); // N..Y
+          actual.push(parseFloat(String(row[28 + m] ?? '0').replace(/[^\d.-]/g, '')) || 0); // AC..AN
+        }
+        parsed.push({ rowNum: i + 1, paramName, budget, actual });
+      }
+      if (parsed.length === 0) { showToast('Model sheet okunamadı — sütunları kontrol edin'); return; }
+      const hasActual = parsed.some((r) => r.actual.some((v) => v !== 0));
+      setImportedModelData(parsed);
+      setImportOpen(false);
+      wbRef.current = null;
+      setSheets([]);
+      setSelectedSheet('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      showToast(`✓ ${parsed.length} parametre yüklendi${!hasActual ? ' — fiili sütunlar boş' : ''}`);
+      return;
+    }
+
+    // ── SAP sheet handler (existing) ──
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' });
     if (rows.length === 0) return;
 
@@ -802,6 +869,26 @@ export default function Home() {
                                       )}
                                     </div>
 
+                                    {/* ── inner tab bar: Aylık Detay / Varyans Analizi ── */}
+                                    <div className="flex gap-0 border-b border-gray-200 dark:border-gray-700 -mx-4 sm:-mx-5 px-4 sm:px-5">
+                                      {(['detail', 'variance'] as const).map((t) => (
+                                        <button
+                                          key={t}
+                                          onClick={(e) => { e.stopPropagation(); setDdActiveTab(t); }}
+                                          className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors ${
+                                            ddActiveTab === t
+                                              ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                                              : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                                          }`}
+                                        >
+                                          {t === 'detail' ? 'Aylık Detay' : 'Varyans Analizi'}
+                                        </button>
+                                      ))}
+                                    </div>
+
+                                    {/* ── TAB: Aylık Detay ── */}
+                                    {ddActiveTab === 'detail' && (<>
+
                                     {/* aylık alt kalem detay tablosu — collapse/expand gruplar */}
                                     {(() => {
                                       const groups: DrillDownGroup[] = getDrillDownData(cat.id, company);
@@ -1022,6 +1109,221 @@ export default function Home() {
                                         </div>
                                       </div>
                                     )}
+
+                                    </>) /* end Aylık Detay tab */}
+
+                                    {/* ── TAB: Varyans Analizi ── */}
+                                    {ddActiveTab === 'variance' && (() => {
+                                      if (!importedModelData) {
+                                        return (
+                                          <div className="bg-white dark:bg-gray-900 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 p-8 text-center">
+                                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Varyans analizi için Excel dosyasını yükleyin</p>
+                                            <p className="text-xs text-gray-400 dark:text-gray-500">Model Gider sheet seçin — fiili sütunlar (AC–AN) dolu olmalı</p>
+                                          </div>
+                                        );
+                                      }
+
+                                      const range = CAT_ROW_RANGES[cat.id];
+                                      const catRows = range
+                                        ? importedModelData.filter((r) => r.rowNum >= range[0] && r.rowNum <= range[1])
+                                        : importedModelData;
+
+                                      if (catRows.length === 0) {
+                                        return (
+                                          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-6 text-center">
+                                            <p className="text-sm text-gray-400">Bu kategori için satır aralığında veri bulunamadı</p>
+                                          </div>
+                                        );
+                                      }
+
+                                      const hasActual = catRows.some((r) => r.actual.some((v) => v !== 0));
+                                      const monthsWithData = hasActual
+                                        ? MONTH_LABELS.map((_, mi) => catRows.some((r) => r.actual[mi] !== 0) ? mi : -1).filter((mi) => mi >= 0)
+                                        : [];
+
+                                      const safeMonth = monthsWithData.includes(varMonth)
+                                        ? varMonth
+                                        : (monthsWithData[monthsWithData.length - 1] ?? 0);
+
+                                      const budgetTotal = catRows.reduce((s, r) => s + r.budget[safeMonth], 0);
+                                      const actualTotal = catRows.reduce((s, r) => s + r.actual[safeMonth], 0);
+                                      const diffTotal   = actualTotal - budgetTotal;
+                                      const diffPctVar  = budgetTotal > 0 ? (diffTotal / budgetTotal) * 100 : 0;
+
+                                      // top 5 sapmalar
+                                      const top5 = [...catRows]
+                                        .map((r) => ({
+                                          name: r.paramName.length > 22 ? r.paramName.slice(0, 22) + '…' : r.paramName,
+                                          diff: Math.abs(r.actual[safeMonth] - r.budget[safeMonth]),
+                                          raw:  r.actual[safeMonth] - r.budget[safeMonth],
+                                        }))
+                                        .filter((r) => r.diff > 0)
+                                        .sort((a, b) => b.diff - a.diff)
+                                        .slice(0, 5);
+
+                                      // trend (tüm aylar, bütçe vs fiili)
+                                      const trendVarData = MONTH_LABELS.map((label, mi) => ({
+                                        label,
+                                        Bütçe:  catRows.reduce((s, r) => s + r.budget[mi], 0),
+                                        Fiili:  catRows.reduce((s, r) => s + r.actual[mi], 0),
+                                      }));
+
+                                      return (
+                                        <div className="space-y-4">
+                                          {/* ay seçici */}
+                                          <div className="flex items-center gap-3">
+                                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">Ay:</span>
+                                            <select
+                                              value={safeMonth}
+                                              onChange={(e) => { e.stopPropagation(); setVarMonth(Number(e.target.value)); }}
+                                              onClick={(e) => e.stopPropagation()}
+                                              className="text-xs px-2.5 py-1 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 outline-none focus:border-indigo-400"
+                                            >
+                                              {MONTH_LABELS.map((m, mi) => (
+                                                <option key={m} value={mi} disabled={hasActual && !monthsWithData.includes(mi)}>
+                                                  {m}{hasActual && !monthsWithData.includes(mi) ? ' (veri yok)' : ''}
+                                                </option>
+                                              ))}
+                                            </select>
+                                            {!hasActual && (
+                                              <span className="text-xs text-amber-600 dark:text-amber-400">Fiili veriler yüklenmemiş — sadece bütçe gösteriliyor</span>
+                                            )}
+                                          </div>
+
+                                          {/* özet kartlar */}
+                                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                            {[
+                                              { label: 'Bütçe', value: fmtFull(budgetTotal), cls: 'text-gray-900 dark:text-white' },
+                                              { label: 'Fiili', value: hasActual ? fmtFull(actualTotal) : '—', cls: 'text-blue-600 dark:text-blue-400' },
+                                              { label: 'Fark (TL)', value: hasActual ? (diffTotal >= 0 ? '+' : '') + fmtFull(diffTotal) : '—', cls: diffTotal > 0 ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400' },
+                                              { label: 'Fark (%)', value: hasActual ? (diffPctVar >= 0 ? '+' : '') + diffPctVar.toFixed(1) + '%' : '—', cls: diffPctVar > 0 ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400' },
+                                            ].map(({ label, value, cls }) => (
+                                              <div key={label} className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2.5 shadow-sm">
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">{label}</p>
+                                                <p className={`text-sm font-bold mt-0.5 font-mono ${cls}`}>{value}</p>
+                                              </div>
+                                            ))}
+                                          </div>
+
+                                          {/* grafikler */}
+                                          {hasActual && (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                              {/* top 5 sapma bar chart */}
+                                              {top5.length > 0 && (
+                                                <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3 shadow-sm">
+                                                  <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-3">En Yüksek 5 Sapma — {MONTH_LABELS[safeMonth]}</p>
+                                                  <ResponsiveContainer width="100%" height={180}>
+                                                    <BarChart layout="vertical" data={top5} margin={{ top: 0, right: 60, bottom: 0, left: 8 }}>
+                                                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridColor} />
+                                                      <XAxis type="number" tickFormatter={fmt} tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} />
+                                                      <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} width={120} />
+                                                      <Tooltip
+                                                        formatter={(v) => [fmtFull(Number(v)), 'Sapma']}
+                                                        contentStyle={{ background: dark ? '#1f2937' : '#fff', border: `1px solid ${dark ? '#374151' : '#e5e7eb'}`, borderRadius: 6, fontSize: 11 }}
+                                                      />
+                                                      <Bar dataKey="diff" radius={[0, 3, 3, 0]}
+                                                        label={{ position: 'right', formatter: (v: unknown) => fmt(v as number), fontSize: 9, fill: axisColor }}
+                                                      >
+                                                        {top5.map((d) => (
+                                                          <Cell key={d.name} fill={d.raw > 0 ? '#ef4444' : '#22c55e'} />
+                                                        ))}
+                                                      </Bar>
+                                                    </BarChart>
+                                                  </ResponsiveContainer>
+                                                </div>
+                                              )}
+                                              {/* bütçe vs fiili trend */}
+                                              <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3 shadow-sm">
+                                                <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-3">Bütçe vs Fiili Trend — 2025</p>
+                                                <ResponsiveContainer width="100%" height={180}>
+                                                  <LineChart data={trendVarData} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                                                    <XAxis dataKey="label" tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} />
+                                                    <YAxis tickFormatter={fmt} tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} width={52} />
+                                                    <Tooltip
+                                                      formatter={(v) => [fmtFull(Number(v)), '']}
+                                                      contentStyle={{ background: dark ? '#1f2937' : '#fff', border: `1px solid ${dark ? '#374151' : '#e5e7eb'}`, borderRadius: 6, fontSize: 11 }}
+                                                    />
+                                                    <Legend wrapperStyle={{ fontSize: 10 }} />
+                                                    <Line type="monotone" dataKey="Bütçe" stroke="#6366f1" strokeWidth={2} dot={{ r: 2 }} strokeDasharray="4 2" />
+                                                    <Line type="monotone" dataKey="Fiili" stroke="#f59e0b" strokeWidth={2} dot={{ r: 2.5 }} />
+                                                  </LineChart>
+                                                </ResponsiveContainer>
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {/* parametre tablosu */}
+                                          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+                                            <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700">
+                                              <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">Parametre Detayı — {MONTH_LABELS[safeMonth]}</p>
+                                            </div>
+                                            <div className="overflow-x-auto">
+                                              <table className="w-full min-w-[520px] text-xs">
+                                                <thead className="bg-gray-50 dark:bg-gray-800">
+                                                  <tr>
+                                                    {['Parametre', 'Bütçe', 'Fiili', 'Fark (TL)', 'Fark (%)'].map((h, i) => (
+                                                      <th key={h} className={`px-3 py-2 font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide ${i === 0 ? 'text-left' : 'text-right'}`}>{h}</th>
+                                                    ))}
+                                                  </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+                                                  {catRows.map((r) => {
+                                                    const bv  = r.budget[safeMonth];
+                                                    const av  = r.actual[safeMonth];
+                                                    const dv  = av - bv;
+                                                    const dp  = bv > 0 ? (dv / bv) * 100 : 0;
+                                                    const isQty   = isQuantityParam(r.paramName);
+                                                    const isPrice = isPriceParam(r.paramName);
+                                                    const rowBg = isQty
+                                                      ? 'bg-blue-50/40 dark:bg-blue-950/20'
+                                                      : isPrice
+                                                        ? 'bg-amber-50/40 dark:bg-amber-950/20'
+                                                        : '';
+                                                    return (
+                                                      <tr key={`${r.rowNum}-${r.paramName}`} className={`hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors ${rowBg}`}>
+                                                        <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                                                          {isQty && <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" title="Miktar parametresi" />}
+                                                          {isPrice && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" title="Fiyat parametresi" />}
+                                                          {!isQty && !isPrice && <span className="w-1.5 h-1.5 flex-shrink-0" />}
+                                                          {r.paramName}
+                                                        </td>
+                                                        <td className="px-3 py-1.5 text-right font-mono text-gray-600 dark:text-gray-400">{fmtShort(bv)}</td>
+                                                        <td className="px-3 py-1.5 text-right font-mono text-gray-600 dark:text-gray-400">{hasActual ? fmtShort(av) : '—'}</td>
+                                                        <td className={`px-3 py-1.5 text-right font-mono font-semibold ${hasActual ? (dv > 0 ? 'text-red-500 dark:text-red-400' : dv < 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-500') : 'text-gray-400'}`}>
+                                                          {hasActual ? ((dv >= 0 ? '+' : '') + fmtShort(dv)) : '—'}
+                                                        </td>
+                                                        <td className={`px-3 py-1.5 text-right font-semibold ${hasActual ? (dp > 0 ? 'text-red-500 dark:text-red-400' : dp < 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-500') : 'text-gray-400'}`}>
+                                                          {hasActual ? ((dp >= 0 ? '+' : '') + dp.toFixed(1) + '%') : '—'}
+                                                        </td>
+                                                      </tr>
+                                                    );
+                                                  })}
+                                                </tbody>
+                                                <tfoot className="border-t-2 border-gray-200 dark:border-gray-600" style={{ backgroundColor: `${catColor}18` }}>
+                                                  <tr>
+                                                    <td className="px-3 py-2 font-bold text-gray-900 dark:text-white">Toplam</td>
+                                                    <td className="px-3 py-2 text-right font-mono font-bold text-gray-900 dark:text-white">{fmtShort(budgetTotal)}</td>
+                                                    <td className="px-3 py-2 text-right font-mono font-bold text-gray-900 dark:text-white">{hasActual ? fmtShort(actualTotal) : '—'}</td>
+                                                    <td className={`px-3 py-2 text-right font-mono font-bold ${diffTotal > 0 ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                                                      {hasActual ? ((diffTotal >= 0 ? '+' : '') + fmtShort(diffTotal)) : '—'}
+                                                    </td>
+                                                    <td className={`px-3 py-2 text-right font-bold ${diffPctVar > 0 ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                                                      {hasActual ? ((diffPctVar >= 0 ? '+' : '') + diffPctVar.toFixed(1) + '%') : '—'}
+                                                    </td>
+                                                  </tr>
+                                                </tfoot>
+                                              </table>
+                                            </div>
+                                            {/* miktar / fiyat legend */}
+                                            <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-800 flex flex-wrap gap-4">
+                                              <span className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400"><span className="w-2 h-2 rounded-full bg-blue-400" />Miktar parametresi</span>
+                                              <span className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400"><span className="w-2 h-2 rounded-full bg-amber-400" />Fiyat parametresi</span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                 </div>
                               </div>
