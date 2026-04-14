@@ -314,7 +314,7 @@ export default function Home() {
     reader.onload = (e) => {
       const data = e.target?.result;
       if (!data) return;
-      const wb = XLSX.read(data, { type: 'array' });
+      const wb = XLSX.read(data, { type: 'array', cellFormula: false, cellNF: false });
       wbRef.current = wb;
       setSheets(wb.SheetNames);
       setSelectedSheet(wb.SheetNames[0] ?? '');
@@ -349,11 +349,20 @@ export default function Home() {
         const paramName = String(row[10] ?? '').trim(); // K column (index 10)
         if (!paramName || paramName.length < 2) continue;
         const unitType = String(row[11] ?? '').trim(); // L column (index 11) — PB (Para Birimi)
+        // Hücre değerini güvenli sayıya çevir.
+        // cellFormula:false ile XLSX cached değer döndürür; yine de string formül gelirse 0 say.
+        const toNum = (v: unknown): number => {
+          if (typeof v === 'number') return isFinite(v) ? v : 0;
+          if (v === null || v === undefined || v === '') return 0;
+          const s = String(v).trim();
+          if (s.startsWith('=') || s === '') return 0; // formül string — cached değer yok
+          return parseFloat(s.replace(/[^\d.-]/g, '')) || 0;
+        };
         const budget: number[] = [];
         const actual: number[] = [];
         for (let m = 0; m < 12; m++) {
-          budget.push(parseFloat(String(row[13 + m] ?? '0').replace(/[^\d.-]/g, '')) || 0); // N..Y
-          actual.push(parseFloat(String(row[28 + m] ?? '0').replace(/[^\d.-]/g, '')) || 0); // AC..AN
+          budget.push(toNum(row[13 + m])); // N..Y
+          actual.push(toNum(row[28 + m])); // AC..AN
         }
         parsed.push({ rowNum: i + 1, paramName, unitType, budget, actual });
       }
