@@ -140,7 +140,7 @@ Lütfen bu varyansı analiz et ve JSON formatında yanıt ver.`;
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1024,
+        max_tokens: 4000,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userMessage }],
       }),
@@ -162,7 +162,10 @@ Lütfen bu varyansı analiz et ve JSON formatında yanıt ver.`;
       analysisResult = JSON.parse(rawText);
     } catch {
       console.error('[analyze-variance] JSON parse failed. rawText:', rawText);
-      return NextResponse.json({ error: 'Claude yanıtı JSON olarak ayrıştırılamadı', raw: rawText }, { status: 502 });
+      return NextResponse.json({
+        error: 'Claude yanıtı JSON olarak ayrıştırılamadı',
+        preview: rawText?.substring(0, 500),
+      }, { status: 500 });
     }
     return NextResponse.json(analysisResult);
   } catch (err) {
