@@ -18,6 +18,11 @@ import type { Department } from '@/data/department-data';
 import { getDrillDownData, MONTH_LABELS } from '@/data/drill-down-data';
 import type { DrillDownGroup } from '@/data/drill-down-data';
 import {
+  getCompanies, getFiscalYears, getCategories,
+  upsertBudgetEntries, upsertSapEntries, logExcelImport,
+} from '@/lib/db';
+import type { BudgetEntry, SapEntry as DbSapEntry } from '@/lib/db';
+import {
   totalAnnual, categoryAnnual, monthlyAverage,
   buildProjection2026, variancePct, categoryShare, aggregateMonthly,
 } from '@/lib/calculations';
@@ -334,11 +339,23 @@ export default function Home() {
     if (file) loadWorkbook(file);
   }, [loadWorkbook]);
 
-  const handleImport = useCallback(() => {
+  const handleImport = useCallback(async () => {
     const wb = wbRef.current;
     if (!wb || !selectedSheet) return;
 
     const ws = wb.Sheets[selectedSheet];
+
+    // ── ortak DB lookup yardımcısı ──
+    async function resolveDbIds() {
+      const [companiesRes, yearsRes, catsRes] = await Promise.all([
+        getCompanies(), getFiscalYears(), getCategories(),
+      ]);
+      const companyCode = company === 'GRUP' ? 'ICA' : company;
+      const dbCompany   = companiesRes.data?.find((c) => c.code === companyCode) ?? null;
+      const dbYear      = yearsRes.data?.find((y) => y.year === 2025 && !y.is_projection) ?? null;
+      const dbCats      = catsRes.data ?? [];
+      return { dbCompany, dbYear, dbCats };
+    }
 
     // ── Model Gider sheet handler ──
     if (/model/i.test(selectedSheet)) {
@@ -348,93 +365,105 @@ export default function Home() {
         const row = rawRows[i] as unknown[];
         const paramName = String(row[10] ?? '').trim(); // K column (index 10)
         if (!paramName || paramName.length < 2) continue;
-        const unitType = String(row[11] ?? '').trim(); // L column (index 11) — PB (Para Birimi)
-        // Hücre değerini güvenli sayıya çevir.
-        // cellFormula:false ile XLSX cached değer döndürür; yine de string formül gelirse 0 say.
+        const unitType = String(row[11] ?? '').trim(); // L column (index 11) — PB
         const toNum = (v: unknown): number => {
           if (typeof v === 'number') return isFinite(v) ? v : 0;
           if (v === null || v === undefined || v === '') return 0;
           const s = String(v).trim();
-          if (s.startsWith('=') || s === '') return 0; // formül string — cached değer yok
+          if (s.startsWith('=') || s === '') return 0;
           return parseFloat(s.replace(/[^\d.-]/g, '')) || 0;
         };
         const budget: number[] = [];
         const actual: number[] = [];
         for (let m = 0; m < 12; m++) {
-          budget.push(toNum(row[13 + m])); // N..Y
-          actual.push(toNum(row[28 + m])); // AC..AN
+          budget.push(toNum(row[13 + m]));
+          actual.push(toNum(row[28 + m]));
         }
         parsed.push({ rowNum: i + 1, paramName, unitType, budget, actual });
       }
       if (parsed.length === 0) { showToast('Model sheet okunamadı — sütunları kontrol edin'); return; }
+
+      // ── state güncelle (önce UI, sonra DB) ──
       const hasActual = parsed.some((r) => r.actual.some((v) => v !== 0));
       setImportedModelData(parsed);
       setImportOpen(false);
-      wbRef.current = null;
-      setSheets([]);
-      setSelectedSheet('');
+      wbRef.current = null; setSheets([]); setSelectedSheet('');
       if (fileInputRef.current) fileInputRef.current.value = '';
       showToast(`✓ ${parsed.length} parametre yüklendi${!hasActual ? ' — fiili sütunlar boş' : ''}`);
+
+      // ── DB'ye yaz (best-effort, UI'ı bloklamaz) ──
+      void (async () => {
+        try {
+          const { dbCompany, dbYear, dbCats } = await resolveDbIds();
+          if (!dbCompany || !dbYear) return; // DB tabloları henüz kurulmamış
+
+          const entries: BudgetEntry[] = [];
+          for (const [catCode, range] of Object.entries(CAT_ROW_RANGES)) {
+            const catRows  = parsed.filter((r) => r.rowNum >= range[0] && r.rowNum <= range[1]);
+            const mainRow  = catRows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName))
+              ?? catRows.find((r) => /^TL/i.test(r.unitType))
+              ?? catRows[0];
+            if (!mainRow) continue;
+            const catId = dbCats.find((c) => c.code === catCode)?.id ?? catCode;
+            for (let m = 0; m < 12; m++) {
+              const amount = mainRow.budget[m];
+              if (amount === 0) continue;
+              entries.push({ company_id: dbCompany.id, fiscal_year_id: dbYear.id, category_id: catId, department_id: null, month: m + 1, amount });
+            }
+          }
+          if (entries.length > 0) {
+            const res = await upsertBudgetEntries(entries);
+            if (res.error) console.warn('[DB] budget_entries upsert:', res.error);
+          }
+          await logExcelImport({ company_id: dbCompany.id, fiscal_year_id: dbYear.id, sheet_name: selectedSheet, row_count: parsed.length, import_type: 'model' });
+        } catch (e) {
+          console.warn('[DB] Model import DB write failed:', e);
+        }
+      })();
       return;
     }
 
-    // ── SAP sheet handler (existing) ──
+    // ── SAP sheet handler ──
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' });
     if (rows.length === 0) return;
 
-    // sütun adlarını normalize ederek eşleştir
     const colMap: Record<string, string> = {};
     const TARGET: Record<string, string> = {
-      'bütçe kodu':            'code',
-      'bütce kodu':            'code',
-      'budget kodu':           'code',
-      'bütçe kodu tanımı':     'name',
-      'bütce kodu tanımı':     'name',
-      'bütçe kodu tanimi':     'name',
-      'bütce kodu tanimi':     'name',
-      'orjinal bütçe':         'budget',
-      'orjinal butce':         'budget',
-      'orijinal bütçe':        'budget',
-      'kalan bütçe':           'remaining',
-      'kalan butce':           'remaining',
-      'fatura giriş tutarı':   'used',
-      'fatura giris tutari':   'used',
-      'fatura tutarı':         'used',
-      'kullanılan':            'used',
-      'kullanilan':            'used',
-      'kategori':              'category',
-      'category':              'category',
-      'sap kategori':          'category',
-      'harcama kalemi':        'category',
+      'bütçe kodu': 'code', 'bütce kodu': 'code', 'budget kodu': 'code',
+      'bütçe kodu tanımı': 'name', 'bütce kodu tanımı': 'name',
+      'bütçe kodu tanimi': 'name', 'bütce kodu tanimi': 'name',
+      'orjinal bütçe': 'budget', 'orjinal butce': 'budget', 'orijinal bütçe': 'budget',
+      'kalan bütçe': 'remaining', 'kalan butce': 'remaining',
+      'fatura giriş tutarı': 'used', 'fatura giris tutari': 'used',
+      'fatura tutarı': 'used', 'kullanılan': 'used', 'kullanilan': 'used',
+      'kategori': 'category', 'category': 'category',
+      'sap kategori': 'category', 'harcama kalemi': 'category',
     };
     for (const key of Object.keys(rows[0])) {
       const norm = key.toLowerCase().trim();
       if (TARGET[norm]) colMap[key] = TARGET[norm];
     }
 
-    // isim/kod'dan kategori otomatik tespiti
     function detectCategory(code: string, name: string): string {
       const n = (name + ' ' + code).toUpperCase();
-      if (/YEMEK|PERSONEL YEMEK/.test(n))          return 'Yemek';
-      if (/ARAÇ KİRA|ARAC KIRA|ARAÇ KİRAL/.test(n)) return 'Araç Kira';
-      if (/\bHGS\b/.test(n))                         return 'HGS';
-      if (/YAKIT|YAKITI|FUEL/.test(n))               return 'Araç Yakıt';
-      if (/BAKIM|ONARIM|SERVIS|SERVİS/.test(n))      return 'Araç Bakım';
+      if (/YEMEK|PERSONEL YEMEK/.test(n))             return 'Yemek';
+      if (/ARAÇ KİRA|ARAC KIRA|ARAÇ KİRAL/.test(n))   return 'Araç Kira';
+      if (/\bHGS\b/.test(n))                            return 'HGS';
+      if (/YAKIT|YAKITI|FUEL/.test(n))                  return 'Araç Yakıt';
+      if (/BAKIM|ONARIM|SERVIS|SERVİS/.test(n))         return 'Araç Bakım';
       if (/İÇME SUYU|ICME SUYU|\bSU\b|SU GİD/.test(n)) return 'Su';
-      if (/TEMİZLİK|TEMIZLIK|TAŞERON|TASERON/.test(n)) return 'Temizlik';
-      // SAP kod öneki tespiti
-      if (/^26DE19/.test(code)) return 'Yemek';
-      if (/^26DE21|^26DE07/.test(code)) return 'Araç Kira';
-      if (/^26DE22|^26DE06/.test(code)) return 'HGS';
-      if (/^26DE24|^26DE03/.test(code)) return 'Araç Yakıt';
-      if (/^26DE25|^26DE05/.test(code)) return 'Araç Bakım';
-      if (/^26DE29|^26DE04/.test(code)) return 'Su';
-      if (/^26DE30|^26DE08|^26DE09/.test(code)) return 'Temizlik';
+      if (/TEMİZLİK|TEMIZLIK|TAŞERON|TASERON/.test(n))  return 'Temizlik';
+      if (/^26DE19/.test(code))                          return 'Yemek';
+      if (/^26DE21|^26DE07/.test(code))                  return 'Araç Kira';
+      if (/^26DE22|^26DE06/.test(code))                  return 'HGS';
+      if (/^26DE24|^26DE03/.test(code))                  return 'Araç Yakıt';
+      if (/^26DE25|^26DE05/.test(code))                  return 'Araç Bakım';
+      if (/^26DE29|^26DE04/.test(code))                  return 'Su';
+      if (/^26DE30|^26DE08|^26DE09/.test(code))          return 'Temizlik';
       return 'Diğer Çeşitli';
     }
 
-    const pick = (field: string) =>
-      Object.keys(colMap).find((k) => colMap[k] === field) ?? '';
+    const pick = (field: string) => Object.keys(colMap).find((k) => colMap[k] === field) ?? '';
 
     const parsed: SapEntry[] = [];
     for (const row of rows) {
@@ -446,20 +475,41 @@ export default function Home() {
       const rawCat    = String(row[pick('category')] ?? '').trim();
       const category  = rawCat || detectCategory(code, name);
       if (!code) continue;
-      parsed.push({
-        code, name: name || code, budget, remaining, used, category,
-        company: company === 'GRUP' ? 'ICA' : company,
-      });
+      parsed.push({ code, name: name || code, budget, remaining, used, category, company: company === 'GRUP' ? 'ICA' : company });
     }
 
     if (parsed.length === 0) return;
+
+    // ── state güncelle ──
     setImportedSapData(parsed);
     setImportOpen(false);
-    wbRef.current = null;
-    setSheets([]);
-    setSelectedSheet('');
+    wbRef.current = null; setSheets([]); setSelectedSheet('');
     if (fileInputRef.current) fileInputRef.current.value = '';
     showToast(`✓ ${parsed.length} SAP kodu yüklendi`);
+
+    // ── DB'ye yaz (best-effort) ──
+    void (async () => {
+      try {
+        const { dbCompany, dbYear } = await resolveDbIds();
+        if (!dbCompany || !dbYear) return;
+
+        const dbEntries: DbSapEntry[] = parsed.map((p) => ({
+          company_id:     dbCompany.id,
+          fiscal_year_id: dbYear.id,
+          sap_code:       p.code,
+          name:           p.name,
+          category:       p.category,
+          budget:         p.budget,
+          used:           p.used,
+          remaining:      p.remaining,
+        }));
+        const res = await upsertSapEntries(dbEntries);
+        if (res.error) console.warn('[DB] sap_entries upsert:', res.error);
+        await logExcelImport({ company_id: dbCompany.id, fiscal_year_id: dbYear.id, sheet_name: selectedSheet, row_count: parsed.length, import_type: 'sap' });
+      } catch (e) {
+        console.warn('[DB] SAP import DB write failed:', e);
+      }
+    })();
   }, [selectedSheet, company, showToast]);
 
   const closeImport = useCallback(() => {
