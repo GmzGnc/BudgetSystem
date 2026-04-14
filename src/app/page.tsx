@@ -124,6 +124,20 @@ export default function Home() {
   // ── model gider import state ──
   const [importedModelData, setImportedModelData] = useState<ModelRow[] | null>(null);
 
+  // ── variance analysis drawer state ──
+  const [varDrawerOpen,    setVarDrawerOpen]    = useState(false);
+  const [varDrawerLoading, setVarDrawerLoading] = useState(false);
+  const [varDrawerResult,  setVarDrawerResult]  = useState<{
+    summary: string;
+    totalVariance: number;
+    direction: 'over' | 'under' | 'on_budget';
+    effects: Array<{ name: string; amount: number; explanation: string; driver: string }>;
+    monthlyTrend: string;
+    recommendations: string[];
+    interRelations: string;
+  } | null>(null);
+  const [varDrawerError, setVarDrawerError] = useState<string | null>(null);
+
   // ── excel import state ──
   const [importOpen,      setImportOpen]      = useState(false);
   const [dragOver,        setDragOver]        = useState(false);
@@ -1336,6 +1350,59 @@ export default function Home() {
                                             </div>
                                           )}
 
+                                          {/* ── Sapma Raporu Oluştur butonu ── */}
+                                          {hasActual && (
+                                            <div className="flex justify-end">
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setVarDrawerOpen(true);
+                                                  setVarDrawerResult(null);
+                                                  setVarDrawerError(null);
+                                                  setVarDrawerLoading(true);
+                                                  const params = catRows.map((r) => {
+                                                    const bv = r.budget[safeMonth];
+                                                    const av = r.actual[safeMonth];
+                                                    const dv = av - bv;
+                                                    const isTL = /^TL/i.test(r.unitType);
+                                                    const dp = (isTL && bv > 0) ? (dv / bv) * 100 : null;
+                                                    return { paramName: r.paramName, unitType: r.unitType, budget: bv, actual: av, diff: dv, diffPct: dp };
+                                                  });
+                                                  const monthly = MONTH_LABELS.map((m, mi) => ({
+                                                    month: m,
+                                                    budget: mainTotalRow?.budget[mi] ?? 0,
+                                                    actual: mainTotalRow?.actual[mi] ?? 0,
+                                                  }));
+                                                  fetch('/api/analyze-variance', {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({
+                                                      mode: 'category',
+                                                      categoryName: cat.name,
+                                                      budgetTotal,
+                                                      actualTotal,
+                                                      varianceAmount: diffTotal,
+                                                      variancePercent: diffPctVar,
+                                                      monthlyData: monthly,
+                                                      parameters: params,
+                                                    }),
+                                                  })
+                                                    .then((r) => r.json())
+                                                    .then((d) => {
+                                                      if (d.error) setVarDrawerError(d.error);
+                                                      else setVarDrawerResult(d);
+                                                    })
+                                                    .catch((err) => setVarDrawerError(err.message))
+                                                    .finally(() => setVarDrawerLoading(false));
+                                                }}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-colors"
+                                              >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="M12 8v4l3 3"/></svg>
+                                                Sapma Raporu Oluştur
+                                              </button>
+                                            </div>
+                                          )}
+
                                           {/* parametre tablosu — tüm satırlar, unitType'a göre format */}
                                           <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
                                             <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700">
@@ -2218,6 +2285,153 @@ export default function Home() {
                 Yükle
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── VARYANS ANALİZİ SLIDE-OVER DRAWER ── */}
+      {varDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex" onClick={() => setVarDrawerOpen(false)}>
+          {/* backdrop */}
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+
+          {/* panel */}
+          <div
+            className="relative ml-auto h-full w-full max-w-lg bg-white dark:bg-gray-900 shadow-2xl flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900 dark:text-white">Sapma Raporu</h2>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500">Claude AI tarafından oluşturuldu</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setVarDrawerOpen(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* content */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+
+              {/* loading */}
+              {varDrawerLoading && (
+                <div className="flex flex-col items-center justify-center py-16 gap-3">
+                  <div className="w-10 h-10 border-3 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Analiz hazırlanıyor…</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">Claude varyans verilerini inceliyor</p>
+                </div>
+              )}
+
+              {/* error */}
+              {!varDrawerLoading && varDrawerError && (
+                <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-4">
+                  <p className="text-sm font-semibold text-red-700 dark:text-red-300 mb-1">Analiz başarısız</p>
+                  <p className="text-xs text-red-600 dark:text-red-400">{varDrawerError}</p>
+                </div>
+              )}
+
+              {/* result */}
+              {!varDrawerLoading && varDrawerResult && (() => {
+                const r = varDrawerResult;
+                const isOver = r.direction === 'over';
+                const isUnder = r.direction === 'under';
+                const totalAbs = Math.abs(r.totalVariance);
+                const maxEffect = Math.max(...r.effects.map((e) => Math.abs(e.amount)), 1);
+
+                return (
+                  <>
+                    {/* summary card */}
+                    <div className={`rounded-xl border p-4 ${isOver ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/20' : isUnder ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/20' : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800'}`}>
+                      <div className="flex items-start justify-between mb-2">
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isOver ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300' : isUnder ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}>
+                          {isOver ? 'BÜTÇE AŞIMI' : isUnder ? 'BÜTÇE ALTINDA' : 'BÜTÇEDE'}
+                        </span>
+                        <span className={`text-lg font-bold font-mono ${isOver ? 'text-red-600 dark:text-red-400' : isUnder ? 'text-green-600 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                          {isOver ? '+' : isUnder ? '-' : ''}{fmtFull(totalAbs)}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{r.summary}</p>
+                    </div>
+
+                    {/* effects */}
+                    {r.effects.length > 0 && (
+                      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+                        <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Varyans Ayrıştırması</h3>
+                        {r.effects.map((effect, i) => {
+                          const pct = (Math.abs(effect.amount) / maxEffect) * 100;
+                          const effIsOver = effect.amount > 0;
+                          return (
+                            <div key={i} className="space-y-1">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="font-semibold text-gray-700 dark:text-gray-300">{effect.name}</span>
+                                <span className={`font-bold font-mono ${effIsOver ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                                  {effIsOver ? '+' : ''}{fmtFull(effect.amount)}
+                                </span>
+                              </div>
+                              <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
+                                <div
+                                  className="h-1.5 rounded-full transition-all"
+                                  style={{ width: `${pct}%`, backgroundColor: effIsOver ? '#ef4444' : '#22c55e' }}
+                                />
+                              </div>
+                              <p className="text-[11px] text-gray-500 dark:text-gray-400">{effect.explanation}</p>
+                              <p className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400">▸ {effect.driver}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* monthly trend */}
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                      <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2">Aylık Trend</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{r.monthlyTrend}</p>
+                    </div>
+
+                    {/* inter-relations */}
+                    {r.interRelations && (
+                      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                        <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2">Etki İlişkileri</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{r.interRelations}</p>
+                      </div>
+                    )}
+
+                    {/* recommendations */}
+                    {r.recommendations.length > 0 && (
+                      <div className="bg-indigo-50 dark:bg-indigo-950/30 rounded-xl border border-indigo-200 dark:border-indigo-800 p-4">
+                        <h3 className="text-xs font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wide mb-3">Öneriler</h3>
+                        <ul className="space-y-2">
+                          {r.recommendations.map((rec, i) => (
+                            <li key={i} className="flex items-start gap-2 text-sm text-indigo-800 dark:text-indigo-200">
+                              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-200 dark:bg-indigo-800 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold flex items-center justify-center mt-0.5">{i + 1}</span>
+                              <span className="leading-relaxed">{rec}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* footer */}
+            {!varDrawerLoading && (
+              <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center">
+                  Bu analiz yapay zeka tarafından üretilmiştir. Finansal kararlar için bağımsız doğrulama yapılması önerilir.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
