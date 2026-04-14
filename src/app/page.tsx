@@ -10,6 +10,8 @@ import { Sun, Moon, Download, Upload, FileSpreadsheet, X, ChevronRight } from 'l
 import * as XLSX from 'xlsx';
 
 import { CATEGORIES, CATEGORY_COLORS, INDEX_BADGE_COLORS } from '@/data/categories';
+import { generateBudgetPDF } from '@/components/pdf/generateBudgetPDF';
+import type { CategoryPDFData, PDFReportData } from '@/components/pdf/generateBudgetPDF';
 import { ICA_BUDGET, ICE_BUDGET, GROUP_MONTHLY } from '@/data/budget-data';
 import { getSapData, SAP_CATEGORY_COLORS } from '@/data/sap-data';
 import type { SapEntry } from '@/data/sap-data';
@@ -137,6 +139,7 @@ export default function Home() {
     interRelations: string;
   } | null>(null);
   const [varDrawerError, setVarDrawerError] = useState<string | null>(null);
+  const [isPdfLoading,   setIsPdfLoading]   = useState(false);
 
   // ── excel import state ──
   const [importOpen,      setImportOpen]      = useState(false);
@@ -1350,9 +1353,10 @@ export default function Home() {
                                             </div>
                                           )}
 
-                                          {/* ── Sapma Raporu Oluştur butonu ── */}
+                                          {/* ── Aksiyon butonları: Sapma Raporu + PDF ── */}
                                           {hasActual && (
-                                            <div className="flex justify-end">
+                                            <div className="flex items-center justify-end gap-2">
+                                              {/* Sapma Raporu Oluştur */}
                                               <button
                                                 onClick={(e) => {
                                                   e.stopPropagation();
@@ -1399,6 +1403,88 @@ export default function Home() {
                                               >
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="M12 8v4l3 3"/></svg>
                                                 Sapma Raporu Oluştur
+                                              </button>
+
+                                              {/* PDF Raporu İndir */}
+                                              <button
+                                                disabled={isPdfLoading}
+                                                onClick={async (e) => {
+                                                  e.stopPropagation();
+                                                  setIsPdfLoading(true);
+                                                  const CAT_EN: Record<string, string> = {
+                                                    'Güvenlik': 'Security',
+                                                    'Temizlik': 'Cleaning',
+                                                    'Yemek': 'Food/Catering',
+                                                    'Servis/Ulaşım': 'Transportation',
+                                                    'Araç Kira': 'Vehicle Rental',
+                                                    'HGS': 'HGS/Toll',
+                                                    'Araç Yakıt': 'Vehicle Fuel',
+                                                    'Araç Bakım': 'Vehicle Maintenance',
+                                                    'Su': 'Water',
+                                                    'Diğer Hizmet': 'Other Services',
+                                                    'Diğer Çeşitli': 'Miscellaneous',
+                                                  };
+                                                  const pdfCategories: CategoryPDFData[] = CATEGORIES.map((c) => {
+                                                    const cRange = CAT_ROW_RANGES[c.id];
+                                                    const cRows = importedModelData
+                                                      ? (cRange ? importedModelData.filter((r) => r.rowNum >= cRange[0] && r.rowNum <= cRange[1]) : importedModelData)
+                                                      : [];
+                                                    const cTLRow = cRows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName))
+                                                      ?? cRows.find((r) => /^TL/i.test(r.unitType));
+                                                    const cBudget = cTLRow ? cTLRow.budget.reduce((s, v) => s + v, 0) : 0;
+                                                    const cActual = cTLRow ? cTLRow.actual.reduce((s, v) => s + v, 0) : 0;
+                                                    const cVar    = cActual - cBudget;
+                                                    const cVarPct = cBudget > 0 ? (cVar / cBudget) * 100 : 0;
+                                                    const cMonthly = Array.from({ length: 12 }, (_, mi) => ({
+                                                      month: mi + 1,
+                                                      budget: cTLRow?.budget[mi] ?? 0,
+                                                      actual: cTLRow?.actual[mi] ?? 0,
+                                                    }));
+                                                    const aiEff = varDrawerResult?.effects?.map((eff) => ({
+                                                      type: eff.name,
+                                                      label: eff.name,
+                                                      amount: eff.amount,
+                                                      contributionPercent: Math.abs(eff.amount) / (Math.abs(varDrawerResult.totalVariance) || 1) * 100,
+                                                      description: eff.explanation,
+                                                    })) ?? [];
+                                                    return {
+                                                      name: c.name,
+                                                      nameEn: CAT_EN[c.name] ?? c.name,
+                                                      budgetTotal: cBudget,
+                                                      actualTotal: cActual,
+                                                      variance: cVar,
+                                                      variancePercent: cVarPct,
+                                                      monthlyData: cMonthly,
+                                                      aiAnalysis: (c.id === cat.id && varDrawerResult) ? {
+                                                        summary: varDrawerResult.summary,
+                                                        effects: aiEff,
+                                                        monthlyTrend: varDrawerResult.monthlyTrend,
+                                                        recommendations: varDrawerResult.recommendations,
+                                                        interRelations: varDrawerResult.interRelations,
+                                                      } : undefined,
+                                                    };
+                                                  });
+                                                  const pdfData: PDFReportData = {
+                                                    companyName: companyLabel,
+                                                    companyCode: company,
+                                                    period: '2025 Yili Butce Karsilastirmasi',
+                                                    generatedAt: new Date().toLocaleString('tr-TR'),
+                                                    categories: pdfCategories,
+                                                  };
+                                                  try {
+                                                    await generateBudgetPDF(pdfData);
+                                                  } finally {
+                                                    setIsPdfLoading(false);
+                                                  }
+                                                }}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-[#1e2a4a] hover:bg-[#263461] disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm transition-colors"
+                                              >
+                                                {isPdfLoading ? (
+                                                  <svg className="animate-spin" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                                                ) : (
+                                                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                                                )}
+                                                PDF Raporu İndir
                                               </button>
                                             </div>
                                           )}
