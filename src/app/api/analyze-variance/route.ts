@@ -152,15 +152,18 @@ Lütfen bu varyansı analiz et ve JSON formatında yanıt ver.`;
     }
 
     const claudeData = await response.json();
-    const rawText: string = claudeData?.content?.[0]?.text ?? '';
+    let rawText: string = claudeData?.content?.[0]?.text ?? '';
 
-    // Extract JSON from the response (Claude may occasionally add markdown fences)
-    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      return NextResponse.json({ error: 'Claude response did not contain valid JSON', raw: rawText }, { status: 502 });
+    // Markdown kod bloğunu temizle (```json ... ``` veya ``` ... ```)
+    rawText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+    let analysisResult: VarianceAnalysisResponse;
+    try {
+      analysisResult = JSON.parse(rawText);
+    } catch {
+      console.error('[analyze-variance] JSON parse failed. rawText:', rawText);
+      return NextResponse.json({ error: 'Claude yanıtı JSON olarak ayrıştırılamadı', raw: rawText }, { status: 502 });
     }
-
-    const analysisResult: VarianceAnalysisResponse = JSON.parse(jsonMatch[0]);
     return NextResponse.json(analysisResult);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
