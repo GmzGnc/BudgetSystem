@@ -1,5 +1,19 @@
 import jsPDF from 'jspdf';
-import { ICA_LOGO_BASE64 } from '@/data/logo';
+
+async function loadLogo(): Promise<string> {
+  try {
+    const response = await fetch('/ica-logo.png');
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return '';
+  }
+}
 
 export interface CategoryPDFData {
   name: string;
@@ -56,13 +70,12 @@ function formatPct(val: number): string {
   return (val >= 0 ? '+' : '') + val.toFixed(1) + '%';
 }
 
-function addPageHeader(doc: jsPDF, companyName: string, pageNum: number, totalPages: number) {
+function addPageHeader(doc: jsPDF, companyName: string, pageNum: number, totalPages: number, logoBase64: string) {
   doc.setFillColor(...NAVY);
   doc.rect(0, 0, 297, 18, 'F');
 
-  const logoValid = ICA_LOGO_BASE64 && !ICA_LOGO_BASE64.includes('LOGO_BASE64_BURAYA');
-  if (logoValid) {
-    doc.addImage(ICA_LOGO_BASE64, 'PNG', 4, 1, 22, 16);
+  if (logoBase64) {
+    doc.addImage(logoBase64, 'PNG', 4, 1, 22, 16);
   }
 
   doc.setTextColor(...WHITE);
@@ -85,13 +98,12 @@ function addPageFooter(doc: jsPDF, generatedAt: string) {
   doc.text('Claude AI ile analiz edildi / Analyzed with Claude AI', 289, 199, { align: 'right' });
 }
 
-function addCoverPage(doc: jsPDF, data: PDFReportData) {
+function addCoverPage(doc: jsPDF, data: PDFReportData, logoBase64: string) {
   doc.setFillColor(...NAVY);
   doc.rect(0, 0, 297, 210, 'F');
 
-  const logoValid = ICA_LOGO_BASE64 && !ICA_LOGO_BASE64.includes('LOGO_BASE64_BURAYA');
-  if (logoValid) {
-    doc.addImage(ICA_LOGO_BASE64, 'PNG', 98, 20, 100, 70);
+  if (logoBase64) {
+    doc.addImage(logoBase64, 'PNG', 98, 20, 100, 70);
   }
 
   doc.setDrawColor(...BLUE);
@@ -123,8 +135,8 @@ function addCoverPage(doc: jsPDF, data: PDFReportData) {
   doc.text('Yavuz Sultan Selim Koprusu ve Kuzey Cevre Otoyolu Isletmesi', 148, 205, { align: 'center' });
 }
 
-function addExecutiveSummaryPage(doc: jsPDF, data: PDFReportData, pageNum: number, totalPages: number) {
-  addPageHeader(doc, data.companyName, pageNum, totalPages);
+function addExecutiveSummaryPage(doc: jsPDF, data: PDFReportData, pageNum: number, totalPages: number, logoBase64: string) {
+  addPageHeader(doc, data.companyName, pageNum, totalPages, logoBase64);
   addPageFooter(doc, data.generatedAt);
 
   const totalBudget  = data.categories.reduce((s, c) => s + c.budgetTotal, 0);
@@ -235,8 +247,8 @@ function addExecutiveSummaryPage(doc: jsPDF, data: PDFReportData, pageNum: numbe
   });
 }
 
-function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, pageNum: number, totalPages: number) {
-  addPageHeader(doc, data.companyName, pageNum, totalPages);
+function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, pageNum: number, totalPages: number, logoBase64: string) {
+  addPageHeader(doc, data.companyName, pageNum, totalPages, logoBase64);
   addPageFooter(doc, data.generatedAt);
 
   // Kategori baslik
@@ -403,10 +415,10 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
   }
 }
 
-function addDepartmentPage(doc: jsPDF, data: PDFReportData, pageNum: number, totalPages: number) {
+function addDepartmentPage(doc: jsPDF, data: PDFReportData, pageNum: number, totalPages: number, logoBase64: string) {
   if (!data.departments || data.departments.length === 0) return;
 
-  addPageHeader(doc, data.companyName, pageNum, totalPages);
+  addPageHeader(doc, data.companyName, pageNum, totalPages, logoBase64);
   addPageFooter(doc, data.generatedAt);
 
   doc.setFontSize(13);
@@ -464,23 +476,25 @@ function addDepartmentPage(doc: jsPDF, data: PDFReportData, pageNum: number, tot
 }
 
 export async function generateBudgetPDF(data: PDFReportData): Promise<void> {
+  const logoBase64 = await loadLogo();
+
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
   const totalPages = 2 + data.categories.length + (data.departments && data.departments.length > 0 ? 1 : 0);
 
-  addCoverPage(doc, data);
+  addCoverPage(doc, data, logoBase64);
 
   doc.addPage();
-  addExecutiveSummaryPage(doc, data, 2, totalPages);
+  addExecutiveSummaryPage(doc, data, 2, totalPages, logoBase64);
 
   data.categories.forEach((cat, i) => {
     doc.addPage();
-    addCategoryPage(doc, cat, data, 3 + i, totalPages);
+    addCategoryPage(doc, cat, data, 3 + i, totalPages, logoBase64);
   });
 
   if (data.departments && data.departments.length > 0) {
     doc.addPage();
-    addDepartmentPage(doc, data, totalPages, totalPages);
+    addDepartmentPage(doc, data, totalPages, totalPages, logoBase64);
   }
 
   const fileName = `${data.companyCode}_Idari_Isler_Butce_${data.period.replace(/\s/g, '_')}.pdf`;
