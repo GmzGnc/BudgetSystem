@@ -131,6 +131,7 @@ export async function getCompanies(): Promise<DbResult<Company[]>> {
     if (error) return fail(error.message);
     return ok(data as Company[]);
   } catch (e) {
+    console.error('[db] getCompanies error:', e);
     return fail(e);
   }
 }
@@ -146,6 +147,7 @@ export async function getCategories(): Promise<DbResult<Category[]>> {
     if (error) return fail(error.message);
     return ok(data as Category[]);
   } catch (e) {
+    console.error('[db] getCategories error:', e);
     return fail(e);
   }
 }
@@ -177,6 +179,7 @@ export async function getFiscalYears(): Promise<DbResult<FiscalYear[]>> {
     if (error) return fail(error.message);
     return ok(data as FiscalYear[]);
   } catch (e) {
+    console.error('[db] getFiscalYears error:', e);
     return fail(e);
   }
 }
@@ -212,6 +215,7 @@ export async function getBudgetEntries(
     if (error) return fail(error.message);
     return ok(data as BudgetEntry[]);
   } catch (e) {
+    console.error('[db] getBudgetEntries error:', e);
     return fail(e);
   }
 }
@@ -434,7 +438,8 @@ export async function getBudgetEntriesAsModelRows(
     });
     console.log('[db] result:', JSON.stringify(result).slice(0, 200));
     return result;
-  } catch {
+  } catch (e) {
+    console.error('[db] getBudgetEntriesAsModelRows error:', e);
     return null;
   }
 }
