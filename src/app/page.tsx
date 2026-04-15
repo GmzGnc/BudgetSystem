@@ -479,11 +479,20 @@ export default function Home() {
               ?? catRows.find((r) => /^TL/i.test(r.unitType))
               ?? catRows[0];
             if (!mainRow) continue;
-            const catId = dbCats.find((c) => (CATEGORY_CODE_MAP[c.name] ?? c.name) === catCode)?.id ?? catCode;
+            const dbCat = dbCats.find((c) => (CATEGORY_CODE_MAP[c.name] ?? c.name) === catCode);
+            if (!dbCat) continue;
             for (let m = 0; m < 12; m++) {
-              const amount = mainRow.budget[m];
-              if (amount === 0) continue;
-              entries.push({ company_id: dbCompany.id, fiscal_year_id: dbYear.id, category_id: catId, department_id: null, month: m + 1, amount });
+              if (mainRow.budget[m] === 0 && (mainRow.actual[m] ?? 0) === 0) continue;
+              entries.push({
+                company_id:    dbCompany.id,
+                fiscal_year_id: dbYear.id,
+                category_id:   dbCat.id,
+                department_id: null,
+                month:         m + 1,
+                budget_amount: mainRow.budget[m],
+                actual_amount: mainRow.actual[m] ?? 0,
+                unit_type:     mainRow.unitType,
+              });
             }
           }
           if (entries.length > 0) {

@@ -74,7 +74,10 @@ export interface BudgetEntry {
   category_id: string;
   department_id?: string | null;
   month: number;        // 1–12
-  amount: number;
+  budget_amount: number;
+  actual_amount?: number;
+  unit_type?: string;
+  meta?: unknown;
   updated_at?: string;
 }
 
@@ -336,7 +339,7 @@ export async function getBudgetMonthlyData(
         const rows = entriesRes.data!.filter(
           (e) => e.category_id === cat.id && e.month === mi + 1,
         );
-        (entry as Record<string, unknown>)[CATEGORY_CODE_MAP[cat.name] ?? cat.name] = rows.reduce((s, r) => s + r.amount, 0);
+        (entry as Record<string, unknown>)[CATEGORY_CODE_MAP[cat.name] ?? cat.name] = rows.reduce((s, r) => s + r.budget_amount, 0);
       }
       return entry;
     });
@@ -422,7 +425,7 @@ export async function getBudgetEntriesAsModelRows(
         const rows = entriesRes.data!.filter(
           (e) => e.category_id === cat.id && e.month === mi + 1,
         );
-        return rows.reduce((s, r) => s + r.amount, 0);
+        return rows.reduce((s, r) => s + r.budget_amount, 0);
       });
 
       return {
