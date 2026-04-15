@@ -22,6 +22,7 @@ export interface VarianceAnalysisRequest {
     diffPct: number | null;
   }>;
   categoryFormula?: string;
+  activeMonths?: number[];  // fiili verisi olan ay indeksleri (0-based)
   monthBreakdown?: Array<{
     month: string;
     budget: number;
@@ -112,6 +113,7 @@ Eğer aylık breakdown varsa, zamansal karma etkiyi analiz et:
 
 Önemli kurallar:
 - Tüm metin Türkçe olacak
+- Analizde YALNIZCA fiili verisi olan ayları (activeMonths) dikkate al. [FİİLİ YOK] etiketli aylar bütçe karşılaştırmasına dahil edilmez; yalnızca tamamlanan dönem üzerinden yorum yap.
 - effects dizisinde yalnızca 0'dan büyük tutarda etkileri dahil et (en az 1, en fazla 4 etki)
 - Sayısal değerler kesinlikle TL cinsinden olacak (yüzde değil)
 - departmentInsights ve monthlyInsights: veri yoksa boş string ("") döndür
@@ -147,8 +149,33 @@ export async function POST(req: NextRequest) {
 
   const direction = varianceAmount > 0 ? 'AŞIM (fiili > bütçe)' : varianceAmount < 0 ? 'TASARRUF (fiili < bütçe)' : 'BÜTÇEDE';
 
+  const activeMonthIndices = monthlyData
+    .map((m, i) => ({ ...m, i }))
+    .filter((m) => m.actual > 0)
+    .map((m) => m.i);
+
+  const effectiveActiveMonths = (body.activeMonths && body.activeMonths.length > 0)
+    ? body.activeMonths
+    : activeMonthIndices;
+
+  const activeBudget  = monthlyData.filter((_, i) => effectiveActiveMonths.includes(i)).reduce((s, m) => s + m.budget, 0);
+  const activeActual  = monthlyData.filter((_, i) => effectiveActiveMonths.includes(i)).reduce((s, m) => s + m.actual, 0);
+  const activeVariance = activeActual - activeBudget;
+  const activeVariancePct = activeBudget !== 0 ? (activeVariance / activeBudget) * 100 : 0;
+  const activeDirection = activeVariance > 0 ? 'AŞIM (fiili > bütçe)' : activeVariance < 0 ? 'TASARRUF (fiili < bütçe)' : 'BÜTÇEDE';
+
+  const activeMonthsNote = effectiveActiveMonths.length > 0
+    ? `Aktif aylar (fiili verisi olan): ${effectiveActiveMonths.map((i) => monthlyData[i]?.month ?? i + 1).join(', ')}`
+    : 'Henüz fiili veri girilmemiş';
+
   const monthlyLines = monthlyData
-    .map((m) => `  ${m.month}: Bütçe ${m.budget.toLocaleString('tr-TR')} ₺, Fiili ${m.actual.toLocaleString('tr-TR')} ₺, Fark ${(m.actual - m.budget).toLocaleString('tr-TR')} ₺`)
+    .map((m, i) => {
+      const hasActual = effectiveActiveMonths.includes(i);
+      if (!hasActual) {
+        return `  ${m.month}: Bütçe ${m.budget.toLocaleString('tr-TR')} ₺, Fiili — [FİİLİ YOK]`;
+      }
+      return `  ${m.month}: Bütçe ${m.budget.toLocaleString('tr-TR')} ₺, Fiili ${m.actual.toLocaleString('tr-TR')} ₺, Fark ${(m.actual - m.budget).toLocaleString('tr-TR')} ₺`;
+    })
     .join('\n');
 
   const paramLines = parameters
@@ -173,10 +200,16 @@ export async function POST(req: NextRequest) {
 
   const userMessage = `Analiz konusu: ${subject}
 
-ÖZET:
-- Bütçe: ${budgetTotal.toLocaleString('tr-TR')} ₺
-- Fiili: ${actualTotal.toLocaleString('tr-TR')} ₺
-- Varyans: ${varianceAmount >= 0 ? '+' : ''}${varianceAmount.toLocaleString('tr-TR')} ₺ (${variancePercent >= 0 ? '+' : ''}${variancePercent.toFixed(1)}%) — ${direction}
+ÖZET (TÜM YIL):
+- Yıllık Bütçe: ${budgetTotal.toLocaleString('tr-TR')} ₺
+- Yıllık Fiili: ${actualTotal.toLocaleString('tr-TR')} ₺
+- Yıllık Varyans: ${varianceAmount >= 0 ? '+' : ''}${varianceAmount.toLocaleString('tr-TR')} ₺ (${variancePercent >= 0 ? '+' : ''}${variancePercent.toFixed(1)}%) — ${direction}
+
+ÖZET (YALNIZCA AKTİF AYLAR — ANALİZ BAZISI):
+- ${activeMonthsNote}
+- Aktif Dönem Bütçe: ${activeBudget.toLocaleString('tr-TR')} ₺
+- Aktif Dönem Fiili: ${activeActual.toLocaleString('tr-TR')} ₺
+- Aktif Dönem Varyans: ${activeVariance >= 0 ? '+' : ''}${activeVariance.toLocaleString('tr-TR')} ₺ (${activeVariancePct >= 0 ? '+' : ''}${activeVariancePct.toFixed(1)}%) — ${activeDirection}
 
 AYLIK VERİ:
 ${monthlyLines}

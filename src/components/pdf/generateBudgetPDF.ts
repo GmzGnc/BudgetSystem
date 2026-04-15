@@ -336,12 +336,17 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
     doc.setTextColor(...BLACK);
     doc.text(row.label, 16, rowY + 5.5);
     row.values.forEach((v, i) => {
+      const noActual = cat.monthlyData[i]?.actual === 0;
       if (row.isVariance) {
-        doc.setTextColor(...(v > 0 ? RED : v < 0 ? GREEN : BLACK));
+        if (noActual) {
+          doc.setTextColor(...BLACK);
+        } else {
+          doc.setTextColor(...(v > 0 ? RED : v < 0 ? GREEN : BLACK));
+        }
       } else {
         doc.setTextColor(...BLACK);
       }
-      const formatted = v === 0 ? '-' : new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(v);
+      const formatted = (v === 0 || (row.isVariance && noActual)) ? '-' : new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(v);
       doc.text(formatted, 42 + i * colW, rowY + 5.5);
     });
   });

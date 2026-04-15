@@ -1419,21 +1419,32 @@ export default function Home() {
                                                         };
                                                       }).filter((d) => d.budget > 0)
                                                     : [];
+                                                  // Aktif ay bazlı bütçe/fiili hesabı
+                                                  const activeMonthIdxs = MONTH_LABELS
+                                                    .map((_, mi) => mi)
+                                                    .filter((mi) => (mainTotalRow?.actual[mi] ?? 0) > 0);
+                                                  const activeBudgetTotal = activeMonthIdxs.length > 0
+                                                    ? activeMonthIdxs.reduce((s, mi) => s + (mainTotalRow?.budget[mi] ?? 0), 0)
+                                                    : budgetTotal;
+                                                  const activeActualTotal = activeMonthIdxs.reduce((s, mi) => s + (mainTotalRow?.actual[mi] ?? 0), 0);
+                                                  const activeVarianceAmount = activeActualTotal - activeBudgetTotal;
+                                                  const activeVariancePct = activeBudgetTotal > 0 ? (activeVarianceAmount / activeBudgetTotal) * 100 : 0;
                                                   fetch('/api/analyze-variance', {
                                                     method: 'POST',
                                                     headers: { 'Content-Type': 'application/json' },
                                                     body: JSON.stringify({
                                                       mode: 'category',
                                                       categoryName: cat.name,
-                                                      budgetTotal,
-                                                      actualTotal,
-                                                      varianceAmount: diffTotal,
-                                                      variancePercent: diffPctVar,
+                                                      budgetTotal: activeBudgetTotal,
+                                                      actualTotal: activeActualTotal,
+                                                      varianceAmount: activeVarianceAmount,
+                                                      variancePercent: activeVariancePct,
                                                       monthlyData: monthly,
                                                       parameters: params,
                                                       monthBreakdown,
                                                       departmentBreakdown,
                                                       analysisScope: 'full',
+                                                      activeMonths: activeMonthIdxs,
                                                     }),
                                                   })
                                                     .then((r) => r.json())
@@ -1477,22 +1488,38 @@ export default function Home() {
                                                         const cTLRow = cRows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName))
                                                           ?? cRows.find((r) => /^TL/i.test(r.unitType));
 
-                                                        const cBudget = cTLRow ? cTLRow.budget.reduce((s, v) => s + v, 0) : categoryAnnual(monthlyData, c.id);
-                                                        const cActual = cTLRow ? cTLRow.actual.reduce((s, v) => s + v, 0) : 0;
-                                                        const cVar = cActual - cBudget;
-                                                        const cVarPct = cBudget > 0 ? (cVar / cBudget) * 100 : 0;
-
                                                         const monthly = MONTH_LABELS.map((m, mi) => ({
                                                           month: m,
                                                           budget: cTLRow?.budget[mi] ?? 0,
                                                           actual: cTLRow?.actual[mi] ?? 0,
                                                         }));
 
-                                                        const monthBreakdown = MONTH_LABELS.map((m, mi) => {
-                                                          const bv = cTLRow?.budget[mi] ?? 0;
-                                                          const av = cTLRow?.actual[mi] ?? 0;
+                                                        // Aktif ayları tespit et (fiili > 0 olan aylar)
+                                                        const activeMonthIndices = monthly
+                                                          .map((m, i) => ({ ...m, i }))
+                                                          .filter((m) => m.actual > 0)
+                                                          .map((m) => m.i);
+
+                                                        // Bütçe ve fiiliyi YALNIZCA aktif aylar üzerinden hesapla
+                                                        const cActual = activeMonthIndices.reduce((s, i) => s + (cTLRow?.actual[i] ?? 0), 0);
+                                                        const cBudget = activeMonthIndices.length > 0
+                                                          ? activeMonthIndices.reduce((s, i) => s + (cTLRow?.budget[i] ?? 0), 0)
+                                                          : (cTLRow ? cTLRow.budget.reduce((s, v) => s + v, 0) : categoryAnnual(monthlyData, c.id));
+                                                        const cVar = cActual - cBudget;
+                                                        const cVarPct = cBudget > 0 ? (cVar / cBudget) * 100 : 0;
+
+                                                        // monthBreakdown da aktif ay bazlı
+                                                        const monthBreakdown = monthly.map((m, mi) => {
+                                                          const bv = m.budget;
+                                                          const av = m.actual;
                                                           const vv = av - bv;
-                                                          return { month: m, budget: bv, actual: av, variance: vv, variancePct: bv > 0 ? (vv / bv) * 100 : 0 };
+                                                          return {
+                                                            month: m.month,
+                                                            budget: bv,
+                                                            actual: av,
+                                                            variance: vv,
+                                                            variancePct: bv > 0 ? (vv / bv) * 100 : 0,
+                                                          };
                                                         });
 
                                                         const deptRowAI = ICA_DEPT.find((r) => r.categoryId === c.id);
@@ -1522,6 +1549,7 @@ export default function Home() {
                                                             monthBreakdown,
                                                             departmentBreakdown,
                                                             analysisScope: 'full',
+                                                            activeMonths: activeMonthIndices,
                                                           }),
                                                         });
                                                         const d = await res.json();
