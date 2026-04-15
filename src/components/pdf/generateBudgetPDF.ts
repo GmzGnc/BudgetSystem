@@ -44,6 +44,14 @@ export interface CategoryPDFData {
   variance: number;
   variancePercent: number;
   monthlyData: { month: number; budget: number; actual: number }[];
+  parameters?: Array<{
+    paramName: string;
+    unitType: string;
+    budgetTotal: number;
+    actualTotal: number;
+    diff: number;
+    diffPct: number | null;
+  }>;
   aiAnalysis?: {
     summary: string;
     effects: { type: string; label: string; amount: number; contributionPercent: number; description: string }[];
@@ -364,8 +372,49 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
   doc.setTextColor(...varColor);
   doc.text(formatTL(cat.variance) + ' (' + formatPct(cat.variancePercent) + ')', 42 + colW * 2, totY + 5.5);
 
+  // Parametre detay tablosu
+  if (cat.parameters && cat.parameters.length > 0) {
+    const prmY = totY + 12;
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...NAVY);
+    doc.text(tr('Parametre Detayi / Parameter Detail'), 14, prmY);
+
+    const pCols = [14, 100, 140, 180, 220, 252];
+    const pHeaders = [tr('Parametre'), tr('Tip'), tr('Butce'), tr('Fiili'), tr('Fark'), tr('Oran')];
+    doc.setFillColor(...NAVY);
+    doc.rect(14, prmY + 3, 269, 7, 'F');
+    doc.setTextColor(...WHITE);
+    doc.setFontSize(5.5);
+    doc.setFont('helvetica', 'bold');
+    pHeaders.forEach((h, i) => doc.text(h, pCols[i] + 2, prmY + 7.5));
+
+    let pCurY = prmY + 10;
+    const visibleParams = cat.parameters.slice(0, 12);
+    visibleParams.forEach((p, pi) => {
+      if (pCurY > 130) return;
+      doc.setFillColor(...(pi % 2 === 0 ? GRAY_LIGHT : WHITE));
+      doc.rect(14, pCurY, 269, 6.5, 'F');
+      doc.setFontSize(5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...BLACK);
+      const pName = p.paramName.length > 28 ? p.paramName.slice(0, 28) + '...' : p.paramName;
+      doc.text(tr(pName), pCols[0] + 2, pCurY + 4.5);
+      doc.text(tr(p.unitType || 'adet'), pCols[1] + 2, pCurY + 4.5);
+      doc.text(new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(p.budgetTotal), pCols[2] + 2, pCurY + 4.5);
+      doc.text(p.actualTotal > 0 ? new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(p.actualTotal) : '-', pCols[3] + 2, pCurY + 4.5);
+      doc.setTextColor(...(p.diff > 0 ? RED : p.diff < 0 ? GREEN : BLACK));
+      doc.text(p.diff !== 0 ? (p.diff > 0 ? '+' : '') + new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(p.diff) : '-', pCols[4] + 2, pCurY + 4.5);
+      doc.setTextColor(...(p.diff > 0 ? RED : p.diff < 0 ? GREEN : BLACK));
+      doc.text(p.diffPct !== null ? (p.diffPct > 0 ? '+' : '') + p.diffPct.toFixed(1) + '%' : '-', pCols[5] + 2, pCurY + 4.5);
+      pCurY += 6.5;
+    });
+  }
+
   if (cat.aiAnalysis) {
-    const aiY = totY + 14;
+    const paramCount = cat.parameters?.length ?? 0;
+    const paramTableHeight = paramCount > 0 ? 14 + Math.min(paramCount, 12) * 6.5 + 8 : 0;
+    const aiY = totY + 14 + paramTableHeight;
     doc.setFillColor(235, 242, 255);
     doc.roundedRect(14, aiY, 269, 6, 1, 1, 'F');
     doc.setFontSize(8);

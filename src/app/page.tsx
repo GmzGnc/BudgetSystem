@@ -602,6 +602,187 @@ export default function Home() {
   const axisColor = dark ? '#9ca3af' : '#6b7280';
   const gridColor = dark ? '#374151' : '#f0f0f0';
 
+  // ── PDF handler ──
+  const handleFullPdf = useCallback(async () => {
+    if (isPdfLoading) return;
+    setIsPdfLoading(true);
+
+    const CAT_EN: Record<string, string> = {
+      'Güvenlik': 'Security', 'Temizlik': 'Cleaning',
+      'Yemek': 'Food/Catering', 'Servis/Ulaşım': 'Transportation',
+      'Araç Kira': 'Vehicle Rental', 'HGS': 'HGS/Toll',
+      'Araç Yakıt': 'Vehicle Fuel', 'Araç Bakım': 'Vehicle Maintenance',
+      'Su': 'Water', 'Diğer Hizmet': 'Other Services',
+      'Diğer Çeşitli': 'Miscellaneous',
+    };
+
+    try {
+      // Tüm kategoriler için paralel AI analizi yap
+      const aiResults = await Promise.allSettled(
+        CATEGORIES.map(async (c) => {
+          const cRange = CAT_ROW_RANGES[c.id];
+          const cRows = importedModelData
+            ? (cRange ? importedModelData.filter((r) => r.rowNum >= cRange[0] && r.rowNum <= cRange[1]) : [])
+            : [];
+          const cTLRow = cRows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName))
+            ?? cRows.find((r) => /^TL/i.test(r.unitType));
+
+          const monthly = MONTH_LABELS.map((m, mi) => ({
+            month: m,
+            budget: cTLRow?.budget[mi] ?? 0,
+            actual: cTLRow?.actual[mi] ?? 0,
+          }));
+
+          const activeMonthIndices = monthly
+            .map((m, i) => ({ ...m, i }))
+            .filter((m) => m.actual > 0)
+            .map((m) => m.i);
+
+          const cActual = activeMonthIndices.reduce((s, i) => s + (cTLRow?.actual[i] ?? 0), 0);
+          const cBudget = activeMonthIndices.length > 0
+            ? activeMonthIndices.reduce((s, i) => s + (cTLRow?.budget[i] ?? 0), 0)
+            : (cTLRow ? cTLRow.budget.reduce((s, v) => s + v, 0) : categoryAnnual(monthlyData, c.id));
+          const cVar = cActual - cBudget;
+          const cVarPct = cBudget > 0 ? (cVar / cBudget) * 100 : 0;
+
+          const monthBreakdown = monthly.map((m, mi) => {
+            const bv = m.budget;
+            const av = m.actual;
+            const vv = av - bv;
+            return { month: m.month, budget: bv, actual: av, variance: vv, variancePct: bv > 0 ? (vv / bv) * 100 : 0 };
+          });
+
+          const deptRowAI = ICA_DEPT.find((r) => r.categoryId === c.id);
+          const departmentBreakdown = deptRowAI
+            ? DEPARTMENTS.map((d) => ({ department: d, budget: deptRowAI[d] ?? 0, actual: deptRowAI[d] ?? 0, variance: 0, variancePct: 0 })).filter((d) => d.budget > 0)
+            : [];
+
+          const params = cRows.slice(0, 20).map((r) => {
+            const bv = r.budget.reduce((s, v) => s + v, 0);
+            const av = r.actual.reduce((s, v) => s + v, 0);
+            const dv = av - bv;
+            return { paramName: r.paramName, unitType: r.unitType, budget: bv, actual: av, diff: dv, diffPct: bv > 0 ? (dv / bv) * 100 : null };
+          });
+
+          const res = await fetch('/api/analyze-variance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mode: 'category',
+              categoryName: c.name,
+              budgetTotal: cBudget,
+              actualTotal: cActual,
+              varianceAmount: cVar,
+              variancePercent: cVarPct,
+              monthlyData: monthly,
+              parameters: params,
+              monthBreakdown,
+              departmentBreakdown,
+              analysisScope: 'full',
+              activeMonths: activeMonthIndices,
+            }),
+          });
+          const d = await res.json();
+          return { catId: c.id, result: d };
+        })
+      );
+
+      const aiMap = new Map<string, typeof varDrawerResult>();
+      aiResults.forEach((r, i) => {
+        if (r.status === 'fulfilled' && !r.value.result.error) {
+          aiMap.set(CATEGORIES[i].id, r.value.result);
+        }
+      });
+
+      const pdfCategories: CategoryPDFData[] = CATEGORIES.map((c) => {
+        const cRange = CAT_ROW_RANGES[c.id];
+        const cRows = importedModelData
+          ? (cRange ? importedModelData.filter((r) => r.rowNum >= cRange[0] && r.rowNum <= cRange[1]) : [])
+          : [];
+        const cTLRow = cRows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName))
+          ?? cRows.find((r) => /^TL/i.test(r.unitType));
+        const cMonthly = Array.from({ length: 12 }, (_, mi) => ({
+          month: mi + 1,
+          budget: cTLRow?.budget[mi] ?? 0,
+          actual: cTLRow?.actual[mi] ?? 0,
+        }));
+
+        const cActiveIndices = cMonthly.map((m, i) => i).filter((i) => cMonthly[i].actual > 0);
+
+        const cActual = cActiveIndices.reduce((s, i) => s + cMonthly[i].actual, 0);
+        const cBudget = cActiveIndices.length > 0
+          ? cActiveIndices.reduce((s, i) => s + cMonthly[i].budget, 0)
+          : (cTLRow ? cTLRow.budget.reduce((s, v) => s + v, 0) : categoryAnnual(monthlyData, c.id));
+        const cVar = cActual - cBudget;
+        const cVarPct = cBudget > 0 ? (cVar / cBudget) * 100 : 0;
+
+        const cActiveParams = cRows
+          .filter((r) => {
+            const bTotal = cActiveIndices.reduce((s, i) => s + r.budget[i], 0);
+            const aTotal = cActiveIndices.reduce((s, i) => s + r.actual[i], 0);
+            return bTotal > 0 || aTotal > 0;
+          })
+          .slice(0, 15)
+          .map((r) => {
+            const bTotal = cActiveIndices.length > 0
+              ? cActiveIndices.reduce((s, i) => s + r.budget[i], 0)
+              : r.budget.reduce((s, v) => s + v, 0);
+            const aTotal = cActiveIndices.reduce((s, i) => s + r.actual[i], 0);
+            const dTotal = aTotal - bTotal;
+            return {
+              paramName: r.paramName,
+              unitType: r.unitType,
+              budgetTotal: bTotal,
+              actualTotal: aTotal,
+              diff: dTotal,
+              diffPct: bTotal > 0 ? (dTotal / bTotal) * 100 : null,
+            };
+          });
+
+        const ai = aiMap.get(c.id);
+        const aiEff = ai?.effects?.map((eff) => ({
+          type: eff.name,
+          label: eff.name,
+          amount: eff.amount,
+          contributionPercent: Math.abs(eff.amount) / (Math.abs(ai.totalVariance) || 1) * 100,
+          description: eff.explanation,
+        })) ?? [];
+
+        return {
+          name: c.name,
+          nameEn: CAT_EN[c.name] ?? c.name,
+          budgetTotal: cBudget,
+          actualTotal: cActual,
+          variance: cVar,
+          variancePercent: cVarPct,
+          monthlyData: cMonthly,
+          parameters: cActiveParams,
+          aiAnalysis: ai ? {
+            summary: ai.summary,
+            effects: aiEff,
+            monthlyTrend: ai.monthlyTrend,
+            recommendations: ai.recommendations,
+            interRelations: ai.interRelations,
+            departmentInsights: ai.departmentInsights ?? '',
+            monthlyInsights: ai.monthlyInsights ?? '',
+            karmaEffect: ai.karmaEffect ?? null,
+          } : undefined,
+        };
+      });
+
+      const pdfData: PDFReportData = {
+        companyName: companyLabel,
+        companyCode: company,
+        period: '2025 Yili Butce Karsilastirmasi',
+        generatedAt: new Date().toLocaleString('tr-TR'),
+        categories: pdfCategories,
+      };
+      await generateBudgetPDF(pdfData);
+    } finally {
+      setIsPdfLoading(false);
+    }
+  }, [importedModelData, monthlyData, companyLabel, company, varDrawerResult, isPdfLoading]);
+
   // ── render ──
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
@@ -759,11 +940,73 @@ export default function Home() {
 
             {/* category table */}
             <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100">
-                  Kategori Bazlı 2025 Özeti — {companyLabel}
-                </h2>
-                <span className="text-xs text-gray-400 dark:text-gray-500">Detay için kategoriye tıklayın</span>
+              <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                    Kategori Bazlı 2025 Özeti — {companyLabel}
+                  </h2>
+                  <span className="text-xs text-gray-400 dark:text-gray-500">Detay için kategoriye tıklayın</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {/* Tüm Kategoriler Sapma Raporu */}
+                  <button
+                    onClick={async () => {
+                      if (!importedModelData) {
+                        alert('Önce Model Excel dosyasını yükleyin.');
+                        return;
+                      }
+                      setVarDrawerOpen(true);
+                      setVarDrawerResult(null);
+                      setVarDrawerError(null);
+                      setVarDrawerLoading(true);
+                      const firstCat = CATEGORIES[0];
+                      const cRange = CAT_ROW_RANGES[firstCat.id];
+                      const cRows = cRange ? importedModelData.filter((r) => r.rowNum >= cRange[0] && r.rowNum <= cRange[1]) : [];
+                      const mainRow = cRows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName)) ?? cRows.find((r) => /^TL/i.test(r.unitType));
+                      const monthly = MONTH_LABELS.map((m, mi) => ({ month: m, budget: mainRow?.budget[mi] ?? 0, actual: mainRow?.actual[mi] ?? 0 }));
+                      const activeIdxs = monthly.map((m, i) => i).filter((i) => monthly[i].actual > 0);
+                      const activeBudget = activeIdxs.reduce((s, i) => s + monthly[i].budget, 0);
+                      const activeActual = activeIdxs.reduce((s, i) => s + monthly[i].actual, 0);
+                      const activeVar = activeActual - activeBudget;
+                      const activeVarPct = activeBudget > 0 ? (activeVar / activeBudget) * 100 : 0;
+                      const monthBreakdown = monthly.map((m) => { const vv = m.actual - m.budget; return { month: m.month, budget: m.budget, actual: m.actual, variance: vv, variancePct: m.budget > 0 ? (vv / m.budget) * 100 : 0 }; });
+                      const params = cRows.slice(0, 20).map((r) => { const bv = activeIdxs.reduce((s, i) => s + r.budget[i], 0); const av = activeIdxs.reduce((s, i) => s + r.actual[i], 0); const dv = av - bv; return { paramName: r.paramName, unitType: r.unitType, budget: bv, actual: av, diff: dv, diffPct: bv > 0 ? (dv / bv) * 100 : null }; });
+                      fetch('/api/analyze-variance', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ mode: 'category', categoryName: firstCat.name, budgetTotal: activeBudget, actualTotal: activeActual, varianceAmount: activeVar, variancePercent: activeVarPct, monthlyData: monthly, parameters: params, monthBreakdown, activeMonths: activeIdxs, analysisScope: 'full' }),
+                      })
+                        .then((r) => r.json())
+                        .then((d) => { if (d.error) setVarDrawerError(d.error); else setVarDrawerResult(d); })
+                        .catch((err) => setVarDrawerError(err.message))
+                        .finally(() => setVarDrawerLoading(false));
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="M12 8v4l3 3"/></svg>
+                    Sapma Raporu
+                  </button>
+
+                  {/* Tüm Kategoriler PDF */}
+                  <button
+                    disabled={isPdfLoading}
+                    onClick={async () => {
+                      if (!importedModelData) {
+                        alert('Önce Model Excel dosyasını yükleyin.');
+                        return;
+                      }
+                      await handleFullPdf();
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-[#1e2a4a] hover:bg-[#263461] disabled:opacity-50 text-white shadow-sm transition-colors"
+                  >
+                    {isPdfLoading ? (
+                      <svg className="animate-spin" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    )}
+                    {isPdfLoading ? 'AI Analiz Ediliyor...' : 'PDF Raporu İndir'}
+                  </button>
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[480px] text-sm">
@@ -1464,174 +1707,7 @@ export default function Home() {
                                               {/* PDF Raporu İndir */}
                                               <button
                                                 disabled={isPdfLoading}
-                                                onClick={async (e) => {
-                                                  e.stopPropagation();
-                                                  setIsPdfLoading(true);
-
-                                                  const CAT_EN: Record<string, string> = {
-                                                    'Güvenlik': 'Security', 'Temizlik': 'Cleaning',
-                                                    'Yemek': 'Food/Catering', 'Servis/Ulaşım': 'Transportation',
-                                                    'Araç Kira': 'Vehicle Rental', 'HGS': 'HGS/Toll',
-                                                    'Araç Yakıt': 'Vehicle Fuel', 'Araç Bakım': 'Vehicle Maintenance',
-                                                    'Su': 'Water', 'Diğer Hizmet': 'Other Services',
-                                                    'Diğer Çeşitli': 'Miscellaneous',
-                                                  };
-
-                                                  try {
-                                                    // Tüm kategoriler için paralel AI analizi yap
-                                                    const aiResults = await Promise.allSettled(
-                                                      CATEGORIES.map(async (c) => {
-                                                        const cRange = CAT_ROW_RANGES[c.id];
-                                                        const cRows = importedModelData
-                                                          ? (cRange ? importedModelData.filter((r) => r.rowNum >= cRange[0] && r.rowNum <= cRange[1]) : [])
-                                                          : [];
-                                                        const cTLRow = cRows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName))
-                                                          ?? cRows.find((r) => /^TL/i.test(r.unitType));
-
-                                                        const monthly = MONTH_LABELS.map((m, mi) => ({
-                                                          month: m,
-                                                          budget: cTLRow?.budget[mi] ?? 0,
-                                                          actual: cTLRow?.actual[mi] ?? 0,
-                                                        }));
-
-                                                        // Aktif ayları tespit et (fiili > 0 olan aylar)
-                                                        const activeMonthIndices = monthly
-                                                          .map((m, i) => ({ ...m, i }))
-                                                          .filter((m) => m.actual > 0)
-                                                          .map((m) => m.i);
-
-                                                        // Bütçe ve fiiliyi YALNIZCA aktif aylar üzerinden hesapla
-                                                        const cActual = activeMonthIndices.reduce((s, i) => s + (cTLRow?.actual[i] ?? 0), 0);
-                                                        const cBudget = activeMonthIndices.length > 0
-                                                          ? activeMonthIndices.reduce((s, i) => s + (cTLRow?.budget[i] ?? 0), 0)
-                                                          : (cTLRow ? cTLRow.budget.reduce((s, v) => s + v, 0) : categoryAnnual(monthlyData, c.id));
-                                                        const cVar = cActual - cBudget;
-                                                        const cVarPct = cBudget > 0 ? (cVar / cBudget) * 100 : 0;
-
-                                                        // monthBreakdown da aktif ay bazlı
-                                                        const monthBreakdown = monthly.map((m, mi) => {
-                                                          const bv = m.budget;
-                                                          const av = m.actual;
-                                                          const vv = av - bv;
-                                                          return {
-                                                            month: m.month,
-                                                            budget: bv,
-                                                            actual: av,
-                                                            variance: vv,
-                                                            variancePct: bv > 0 ? (vv / bv) * 100 : 0,
-                                                          };
-                                                        });
-
-                                                        const deptRowAI = ICA_DEPT.find((r) => r.categoryId === c.id);
-                                                        const departmentBreakdown = deptRowAI
-                                                          ? DEPARTMENTS.map((d) => ({ department: d, budget: deptRowAI[d] ?? 0, actual: deptRowAI[d] ?? 0, variance: 0, variancePct: 0 })).filter((d) => d.budget > 0)
-                                                          : [];
-
-                                                        const params = cRows.slice(0, 20).map((r) => {
-                                                          const bv = r.budget.reduce((s, v) => s + v, 0);
-                                                          const av = r.actual.reduce((s, v) => s + v, 0);
-                                                          const dv = av - bv;
-                                                          return { paramName: r.paramName, unitType: r.unitType, budget: bv, actual: av, diff: dv, diffPct: bv > 0 ? (dv / bv) * 100 : null };
-                                                        });
-
-                                                        const res = await fetch('/api/analyze-variance', {
-                                                          method: 'POST',
-                                                          headers: { 'Content-Type': 'application/json' },
-                                                          body: JSON.stringify({
-                                                            mode: 'category',
-                                                            categoryName: c.name,
-                                                            budgetTotal: cBudget,
-                                                            actualTotal: cActual,
-                                                            varianceAmount: cVar,
-                                                            variancePercent: cVarPct,
-                                                            monthlyData: monthly,
-                                                            parameters: params,
-                                                            monthBreakdown,
-                                                            departmentBreakdown,
-                                                            analysisScope: 'full',
-                                                            activeMonths: activeMonthIndices,
-                                                          }),
-                                                        });
-                                                        const d = await res.json();
-                                                        return { catId: c.id, result: d };
-                                                      })
-                                                    );
-
-                                                    // Sonuçları map'e al
-                                                    const aiMap = new Map<string, typeof varDrawerResult>();
-                                                    aiResults.forEach((r, i) => {
-                                                      if (r.status === 'fulfilled' && !r.value.result.error) {
-                                                        aiMap.set(CATEGORIES[i].id, r.value.result);
-                                                      }
-                                                    });
-
-                                                    // PDF kategorilerini oluştur
-                                                    const pdfCategories: CategoryPDFData[] = CATEGORIES.map((c) => {
-                                                      const cRange = CAT_ROW_RANGES[c.id];
-                                                      const cRows = importedModelData
-                                                        ? (cRange ? importedModelData.filter((r) => r.rowNum >= cRange[0] && r.rowNum <= cRange[1]) : [])
-                                                        : [];
-                                                      const cTLRow = cRows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName))
-                                                        ?? cRows.find((r) => /^TL/i.test(r.unitType));
-                                                      const cMonthly = Array.from({ length: 12 }, (_, mi) => ({
-                                                        month: mi + 1,
-                                                        budget: cTLRow?.budget[mi] ?? 0,
-                                                        actual: cTLRow?.actual[mi] ?? 0,
-                                                      }));
-
-                                                      // Aktif ayları tespit et (fiili > 0)
-                                                      const cActiveIndices = cMonthly.map((m, i) => i).filter((i) => cMonthly[i].actual > 0);
-
-                                                      // Bütçe ve fiiliyi YALNIZCA aktif aylar üzerinden hesapla
-                                                      const cActual = cActiveIndices.reduce((s, i) => s + cMonthly[i].actual, 0);
-                                                      const cBudget = cActiveIndices.length > 0
-                                                        ? cActiveIndices.reduce((s, i) => s + cMonthly[i].budget, 0)
-                                                        : (cTLRow ? cTLRow.budget.reduce((s, v) => s + v, 0) : categoryAnnual(monthlyData, c.id));
-                                                      const cVar = cActual - cBudget;
-                                                      const cVarPct = cBudget > 0 ? (cVar / cBudget) * 100 : 0;
-
-                                                      const ai = aiMap.get(c.id);
-                                                      const aiEff = ai?.effects?.map((eff) => ({
-                                                        type: eff.name,
-                                                        label: eff.name,
-                                                        amount: eff.amount,
-                                                        contributionPercent: Math.abs(eff.amount) / (Math.abs(ai.totalVariance) || 1) * 100,
-                                                        description: eff.explanation,
-                                                      })) ?? [];
-
-                                                      return {
-                                                        name: c.name,
-                                                        nameEn: CAT_EN[c.name] ?? c.name,
-                                                        budgetTotal: cBudget,
-                                                        actualTotal: cActual,
-                                                        variance: cVar,
-                                                        variancePercent: cVarPct,
-                                                        monthlyData: cMonthly,
-                                                        aiAnalysis: ai ? {
-                                                          summary: ai.summary,
-                                                          effects: aiEff,
-                                                          monthlyTrend: ai.monthlyTrend,
-                                                          recommendations: ai.recommendations,
-                                                          interRelations: ai.interRelations,
-                                                          departmentInsights: ai.departmentInsights ?? '',
-                                                          monthlyInsights: ai.monthlyInsights ?? '',
-                                                          karmaEffect: ai.karmaEffect ?? null,
-                                                        } : undefined,
-                                                      };
-                                                    });
-
-                                                    const pdfData: PDFReportData = {
-                                                      companyName: companyLabel,
-                                                      companyCode: company,
-                                                      period: '2025 Yili Butce Karsilastirmasi',
-                                                      generatedAt: new Date().toLocaleString('tr-TR'),
-                                                      categories: pdfCategories,
-                                                    };
-                                                    await generateBudgetPDF(pdfData);
-                                                  } finally {
-                                                    setIsPdfLoading(false);
-                                                  }
-                                                }}
+                                                onClick={async (e) => { e.stopPropagation(); await handleFullPdf(); }}
                                                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-[#1e2a4a] hover:bg-[#263461] disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm transition-colors"
                                               >
                                                 {isPdfLoading ? (
