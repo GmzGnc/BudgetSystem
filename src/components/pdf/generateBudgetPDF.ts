@@ -287,6 +287,7 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
   addPageHeader(doc, data.companyName, pageNum, totalPages, logoBase64);
   addPageFooter(doc, data.generatedAt);
 
+  // Kategori başlık bandı
   doc.setFillColor(...BLUE);
   doc.rect(14, 22, 269, 12, 'F');
   doc.setTextColor(...WHITE);
@@ -297,6 +298,7 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
   doc.setFont('helvetica', 'normal');
   doc.text(tr(cat.nameEn), 18, 31.5);
 
+  // Özet kartlar (sağ üst)
   const summaryItems = [
     tr(`Butce: ${formatTL(cat.budgetTotal)}`),
     tr(`Fiili: ${formatTL(cat.actualTotal)}`),
@@ -306,6 +308,7 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
   doc.setTextColor(...WHITE);
   summaryItems.forEach((s, i) => doc.text(s, 130 + i * 52, 29));
 
+  // Aylık karşılaştırma tablosu
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...NAVY);
@@ -344,21 +347,19 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
     doc.setTextColor(...BLACK);
     doc.text(row.label, 16, rowY + 5.5);
     row.values.forEach((v, i) => {
-      const noActual = cat.monthlyData[i]?.actual === 0;
+      const hasActual = (cat.monthlyData[i]?.actual ?? 0) > 0;
       if (row.isVariance) {
-        if (noActual) {
-          doc.setTextColor(...BLACK);
-        } else {
-          doc.setTextColor(...(v > 0 ? RED : v < 0 ? GREEN : BLACK));
-        }
+        if (!hasActual) { doc.setTextColor(...BLACK); doc.text('-', 42 + i * colW, rowY + 5.5); return; }
+        doc.setTextColor(...(v > 0 ? RED : v < 0 ? GREEN : BLACK));
       } else {
         doc.setTextColor(...BLACK);
       }
-      const formatted = (v === 0 || (row.isVariance && noActual)) ? '-' : new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(v);
+      const formatted = v === 0 ? '-' : new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(v);
       doc.text(formatted, 42 + i * colW, rowY + 5.5);
     });
   });
 
+  // Toplam satırı
   const totY = tblY + 32;
   doc.setFillColor(...NAVY);
   doc.rect(14, totY, 269, 8, 'F');
@@ -380,7 +381,7 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
     doc.setTextColor(...NAVY);
     doc.text(tr('Parametre Detayi / Parameter Detail'), 14, prmY);
 
-    const pCols = [14, 100, 140, 180, 220, 252];
+    const pCols = [14, 110, 148, 186, 224, 256];
     const pHeaders = [tr('Parametre'), tr('Tip'), tr('Butce'), tr('Fiili'), tr('Fark'), tr('Oran')];
     doc.setFillColor(...NAVY);
     doc.rect(14, prmY + 3, 269, 7, 'F');
@@ -390,62 +391,74 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
     pHeaders.forEach((h, i) => doc.text(h, pCols[i] + 2, prmY + 7.5));
 
     let pCurY = prmY + 10;
-    const visibleParams = cat.parameters.slice(0, 12);
-    visibleParams.forEach((p, pi) => {
-      if (pCurY > 130) return;
+    cat.parameters.forEach((p, pi) => {
+      if (pCurY > 192) return;
       doc.setFillColor(...(pi % 2 === 0 ? GRAY_LIGHT : WHITE));
       doc.rect(14, pCurY, 269, 6.5, 'F');
-      doc.setFontSize(5);
+      doc.setFontSize(5.2);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(...BLACK);
-      const pName = p.paramName.length > 28 ? p.paramName.slice(0, 28) + '...' : p.paramName;
+      const pName = p.paramName.length > 35 ? p.paramName.slice(0, 35) + '...' : p.paramName;
       doc.text(tr(pName), pCols[0] + 2, pCurY + 4.5);
       doc.text(tr(p.unitType || 'adet'), pCols[1] + 2, pCurY + 4.5);
       doc.text(new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(p.budgetTotal), pCols[2] + 2, pCurY + 4.5);
       doc.text(p.actualTotal > 0 ? new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(p.actualTotal) : '-', pCols[3] + 2, pCurY + 4.5);
       doc.setTextColor(...(p.diff > 0 ? RED : p.diff < 0 ? GREEN : BLACK));
       doc.text(p.diff !== 0 ? (p.diff > 0 ? '+' : '') + new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(p.diff) : '-', pCols[4] + 2, pCurY + 4.5);
-      doc.setTextColor(...(p.diff > 0 ? RED : p.diff < 0 ? GREEN : BLACK));
       doc.text(p.diffPct !== null ? (p.diffPct > 0 ? '+' : '') + p.diffPct.toFixed(1) + '%' : '-', pCols[5] + 2, pCurY + 4.5);
       pCurY += 6.5;
     });
   }
+}
 
-  if (cat.aiAnalysis) {
-    const paramCount = cat.parameters?.length ?? 0;
-    const paramTableHeight = paramCount > 0 ? 14 + Math.min(paramCount, 12) * 6.5 + 8 : 0;
-    const aiY = totY + 14 + paramTableHeight;
-    doc.setFillColor(235, 242, 255);
-    doc.roundedRect(14, aiY, 269, 6, 1, 1, 'F');
-    doc.setFontSize(8);
+function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, pageNum: number, totalPages: number, logoBase64: string) {
+  if (!cat.aiAnalysis) return;
+
+  addPageHeader(doc, data.companyName, pageNum, totalPages, logoBase64);
+  addPageFooter(doc, data.generatedAt);
+
+  // Başlık
+  doc.setFillColor(235, 242, 255);
+  doc.rect(14, 22, 269, 10, 'F');
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...NAVY);
+  doc.text(tr(`${cat.name} — Yapay Zeka Sapma Analizi / AI Variance Analysis`), 18, 29);
+
+  let curY = 38;
+  const LINE_H = 4.5;
+  const MAX_Y = 193;
+
+  function section(title: string, text: string, maxLines: number) {
+    if (!text || curY > MAX_Y - 15) return;
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...NAVY);
-    doc.text(tr('Yapay Zeka Sapma Analizi / AI Variance Analysis'), 18, aiY + 4.5);
-
-    let curY = aiY + 10;
-
     doc.setFontSize(7);
-    doc.setFont('helvetica', 'bold');
     doc.setTextColor(...NAVY);
-    doc.text(tr('Ozet / Summary:'), 14, curY);
-    curY += 5;
+    doc.text(tr(title), 14, curY);
+    curY += LINE_H;
     doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.2);
     doc.setTextColor(...BLACK);
-    const summaryLines = doc.splitTextToSize(tr(cat.aiAnalysis.summary), 265);
-    summaryLines.slice(0, 5).forEach((line: string) => {
-      doc.text(line, 14, curY);
-      curY += 4;
+    const lines = doc.splitTextToSize(tr(text), 265);
+    lines.slice(0, maxLines).forEach((line: string) => {
+      if (curY < MAX_Y) { doc.text(line, 14, curY); curY += LINE_H; }
     });
+    curY += 2;
+  }
 
-    curY += 3;
+  // Özet
+  section('Ozet / Summary:', cat.aiAnalysis.summary, 6);
+
+  // Etki Dağılımı tablosu
+  if (cat.aiAnalysis.effects.length > 0 && curY < MAX_Y - 20) {
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...NAVY);
     doc.setFontSize(7);
+    doc.setTextColor(...NAVY);
     doc.text(tr('Etki Dagilimi / Variance Decomposition:'), 14, curY);
     curY += 4;
 
-    const effCols = [14, 60, 115, 150, 190];
-    const effHeaders = [tr('Etki Turu/Type'), tr('Tutar/Amount'), tr('Katki/Contribution'), tr('Aciklama/Description')];
+    const effCols = [14, 65, 120, 158, 205];
+    const effHeaders = [tr('Etki Turu'), tr('Tutar'), tr('Katki%'), tr('Aciklama'), tr('Suruco')];
     doc.setFillColor(...NAVY);
     doc.rect(14, curY, 269, 7, 'F');
     doc.setTextColor(...WHITE);
@@ -454,150 +467,96 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
     curY += 7;
 
     cat.aiAnalysis.effects.forEach((eff, ei) => {
+      if (curY > MAX_Y - 8) return;
       doc.setFillColor(...(ei % 2 === 0 ? GRAY_LIGHT : WHITE));
-      doc.rect(14, curY, 269, 7, 'F');
-      doc.setFontSize(6);
+      doc.rect(14, curY, 269, 7.5, 'F');
+      doc.setFontSize(5.8);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(...BLACK);
-      doc.text(tr(eff.label), effCols[0] + 2, curY + 4.5);
+      doc.text(tr(eff.label), effCols[0] + 2, curY + 5);
       doc.setTextColor(...(eff.amount > 0 ? RED : GREEN));
-      doc.text(formatTL(eff.amount), effCols[1] + 2, curY + 4.5);
-      doc.text('%' + Math.abs(eff.contributionPercent).toFixed(1), effCols[2] + 2, curY + 4.5);
+      doc.text(formatTL(eff.amount), effCols[1] + 2, curY + 5);
+      doc.text('%' + Math.abs(eff.contributionPercent).toFixed(1), effCols[2] + 2, curY + 5);
       doc.setTextColor(...BLACK);
-      const descLines = doc.splitTextToSize(tr(eff.description), 76);
-      doc.text(descLines[0] || '', effCols[3] + 2, curY + 4.5);
-      curY += 7;
+      const descLines = doc.splitTextToSize(tr(eff.description), 44);
+      doc.text(descLines[0] || '', effCols[3] + 2, curY + 5);
+      const drvLines = doc.splitTextToSize(tr((eff as unknown as { driver?: string }).driver ?? ''), 52);
+      doc.text(drvLines[0] || '', effCols[4] + 2, curY + 5);
+      curY += 7.5;
     });
+    curY += 3;
+  }
 
-    // Aylık trend
-    if (cat.aiAnalysis.monthlyTrend && curY < 182) {
-      curY += 4;
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7);
-      doc.setTextColor(...NAVY);
-      doc.text(tr('Aylik Trend:'), 14, curY);
-      curY += 4;
+  // Aylık Trend
+  section('Aylik Trend:', cat.aiAnalysis.monthlyTrend, 5);
+
+  // Etki İlişkileri
+  section('Etki Iliskileri:', cat.aiAnalysis.interRelations, 5);
+
+  // Karma Etki
+  if (cat.aiAnalysis.karmaEffect && curY < MAX_Y - 20) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(...NAVY);
+    doc.text(tr('Karma Etki Analizi:'), 14, curY);
+    curY += 5;
+
+    doc.setFillColor(254, 226, 226);
+    doc.roundedRect(14, curY, 128, 14, 1, 1, 'F');
+    doc.setFontSize(5.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(185, 28, 28);
+    doc.text(tr('BASKIN ETKEN'), 18, curY + 5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(153, 27, 27);
+    const domLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.dominantFactor), 118);
+    domLines.slice(0, 2).forEach((l: string, i: number) => doc.text(l, 18, curY + 9.5 + i * 4));
+
+    doc.setFillColor(254, 243, 199);
+    doc.roundedRect(148, curY, 135, 14, 1, 1, 'F');
+    doc.setFontSize(5.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(180, 83, 9);
+    doc.text(tr('IKINCIL ETKEN'), 152, curY + 5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(146, 64, 14);
+    const secLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.secondaryFactor), 125);
+    secLines.slice(0, 2).forEach((l: string, i: number) => doc.text(l, 152, curY + 9.5 + i * 4));
+    curY += 18;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6);
+    doc.setTextColor(...BLACK);
+    const karmaLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.description), 265);
+    karmaLines.slice(0, 3).forEach((line: string) => {
+      if (curY < MAX_Y) { doc.text(line, 14, curY); curY += LINE_H; }
+    });
+    curY += 2;
+  }
+
+  // Departman Analizi
+  section('Departman Analizi:', cat.aiAnalysis.departmentInsights ?? '', 4);
+
+  // Aylık Yoğunlaşma
+  section('Aylik Yogunlasma:', cat.aiAnalysis.monthlyInsights ?? '', 5);
+
+  // Öneriler
+  if (cat.aiAnalysis.recommendations.length > 0 && curY < MAX_Y - 15) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(...NAVY);
+    doc.text(tr('Oneriler / Recommendations:'), 14, curY);
+    curY += LINE_H;
+    cat.aiAnalysis.recommendations.slice(0, 6).forEach((rec, ri) => {
+      if (curY > MAX_Y - 6) return;
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6);
+      doc.setFontSize(6.2);
       doc.setTextColor(...BLACK);
-      const trendLines = doc.splitTextToSize(tr(cat.aiAnalysis.monthlyTrend), 265);
-      trendLines.slice(0, 4).forEach((line: string) => {
-        if (curY < 190) { doc.text(line, 14, curY); curY += 4; }
+      const recLines = doc.splitTextToSize(tr(`${ri + 1}. ${rec}`), 265);
+      recLines.slice(0, 3).forEach((line: string) => {
+        if (curY < MAX_Y) { doc.text(line, 14, curY); curY += LINE_H; }
       });
-    }
-
-    // Etki ilişkileri
-    if (cat.aiAnalysis.interRelations && curY < 182) {
-      curY += 4;
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7);
-      doc.setTextColor(...NAVY);
-      doc.text(tr('Etki Iliskileri:'), 14, curY);
-      curY += 4;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6);
-      doc.setTextColor(...BLACK);
-      const interLines = doc.splitTextToSize(tr(cat.aiAnalysis.interRelations), 265);
-      interLines.slice(0, 4).forEach((line: string) => {
-        if (curY < 190) { doc.text(line, 14, curY); curY += 4; }
-      });
-    }
-
-    // Karma etki bölümü
-    if (cat.aiAnalysis?.karmaEffect && curY < 175) {
-      curY += 4;
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7);
-      doc.setTextColor(...NAVY);
-      doc.text(tr('Karma Etki Ozeti:'), 14, curY);
-      curY += 5;
-
-      // Baskın etken kutusu
-      doc.setFillColor(254, 226, 226);
-      doc.roundedRect(14, curY, 128, 12, 1, 1, 'F');
-      doc.setFontSize(5.5);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(185, 28, 28);
-      doc.text(tr('BASKIN ETKEN'), 18, curY + 4.5);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(153, 27, 27);
-      const domLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.dominantFactor), 118);
-      doc.text(domLines[0] ?? '', 18, curY + 9);
-
-      // İkincil etken kutusu
-      doc.setFillColor(254, 243, 199);
-      doc.roundedRect(148, curY, 135, 12, 1, 1, 'F');
-      doc.setFontSize(5.5);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(180, 83, 9);
-      doc.text(tr('IKINCIL ETKEN'), 152, curY + 4.5);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(146, 64, 14);
-      const secLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.secondaryFactor), 125);
-      doc.text(secLines[0] ?? '', 152, curY + 9);
-      curY += 16;
-
-      // Karma etki açıklaması
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6);
-      doc.setTextColor(...BLACK);
-      const karmaLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.description), 265);
-      karmaLines.slice(0, 3).forEach((line: string) => {
-        if (curY < 190) { doc.text(line, 14, curY); curY += 4; }
-      });
-    }
-
-    // Departman insights
-    if (cat.aiAnalysis?.departmentInsights && curY < 182) {
-      curY += 3;
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6.5);
-      doc.setTextColor(...NAVY);
-      doc.text(tr('Departman Analizi:'), 14, curY);
-      curY += 4;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6);
-      doc.setTextColor(...BLACK);
-      const deptLines = doc.splitTextToSize(tr(cat.aiAnalysis.departmentInsights), 265);
-      deptLines.slice(0, 4).forEach((line: string) => {
-        if (curY < 190) { doc.text(line, 14, curY); curY += 4; }
-      });
-    }
-
-    // Aylık insights
-    if (cat.aiAnalysis?.monthlyInsights && curY < 185) {
-      curY += 3;
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6.5);
-      doc.setTextColor(...NAVY);
-      doc.text(tr('Aylik Yogunlasma:'), 14, curY);
-      curY += 4;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6);
-      doc.setTextColor(...BLACK);
-      const monthlyLines2 = doc.splitTextToSize(tr(cat.aiAnalysis.monthlyInsights), 265);
-      monthlyLines2.slice(0, 4).forEach((line: string) => {
-        if (curY < 192) { doc.text(line, 14, curY); curY += 4; }
-      });
-    }
-
-    if (curY < 185) {
-      curY += 4;
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7);
-      doc.setTextColor(...NAVY);
-      doc.text(tr('Oneriler / Recommendations:'), 14, curY);
-      curY += 5;
-      cat.aiAnalysis.recommendations.slice(0, 5).forEach((rec, ri) => {
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(6.5);
-        doc.setTextColor(...BLACK);
-        const recLines = doc.splitTextToSize(tr(`${ri + 1}. ${rec}`), 265);
-        recLines.slice(0, 3).forEach((line: string) => {
-          if (curY < 195) { doc.text(line, 14, curY); curY += 4; }
-        });
-      });
-    }
+    });
   }
 }
 
@@ -665,18 +624,35 @@ export async function generateBudgetPDF(data: PDFReportData): Promise<void> {
   const logoBase64 = await loadLogo();
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
-  const totalPages = 2 + data.categories.length + (data.departments && data.departments.length > 0 ? 1 : 0);
+  // Her kategorinin 2 sayfası var (veri + AI analizi)
+  const totalCatPages = data.categories.reduce((s, c) => s + (c.aiAnalysis ? 2 : 1), 0);
+  const deptPages = data.departments && data.departments.length > 0 ? 1 : 0;
+  const totalPages = 2 + totalCatPages + deptPages;
 
+  // Kapak
   addCoverPage(doc, data, logoBase64);
+
+  // Yönetici özeti
   doc.addPage();
   addExecutiveSummaryPage(doc, data, 2, totalPages, logoBase64);
-  data.categories.forEach((cat, i) => {
+
+  // Kategoriler — her biri 2 sayfa
+  let pageNum = 3;
+  data.categories.forEach((cat) => {
     doc.addPage();
-    addCategoryPage(doc, cat, data, 3 + i, totalPages, logoBase64);
+    addCategoryPage(doc, cat, data, pageNum, totalPages, logoBase64);
+    pageNum++;
+    if (cat.aiAnalysis) {
+      doc.addPage();
+      addCategoryAiPage(doc, cat, data, pageNum, totalPages, logoBase64);
+      pageNum++;
+    }
   });
+
+  // Departman sayfası
   if (data.departments && data.departments.length > 0) {
     doc.addPage();
-    addDepartmentPage(doc, data, totalPages, totalPages, logoBase64);
+    addDepartmentPage(doc, data, pageNum, totalPages, logoBase64);
   }
 
   const fileName = `${data.companyCode}_Idari_Isler_Butce_${tr(data.period.replace(/\s/g, '_'))}.pdf`;
