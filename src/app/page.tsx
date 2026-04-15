@@ -479,25 +479,30 @@ export default function Home() {
 
           const entries: BudgetEntry[] = [];
           for (const [catCode, range] of Object.entries(CAT_ROW_RANGES)) {
-            const catRows  = parsed.filter((r) => r.rowNum >= range[0] && r.rowNum <= range[1]);
-            const mainRow  = catRows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName))
-              ?? catRows.find((r) => /^TL/i.test(r.unitType))
-              ?? catRows[0];
+            const catRows = parsed.filter((r) => r.rowNum >= range[0] && r.rowNum <= range[1]);
+            const tlRows  = catRows.filter((r) => /^TL/i.test(r.unitType));
+            const mainRow = catRows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName))
+              ?? catRows.find((r) => /^TL/i.test(r.unitType));
             if (!mainRow) continue;
             const dbCat = dbCats.find((c) => (CATEGORY_CODE_MAP[c.name] ?? c.name) === catCode);
             if (!dbCat) continue;
             for (let m = 0; m < 12; m++) {
-              if (mainRow.budget[m] === 0 && (mainRow.actual[m] ?? 0) === 0) continue;
-              console.log('[excel] pushing entry budget_amount:', mainRow.budget[m], 'actual:', mainRow.actual[m]);
+              const budgetFromToplam = mainRow.budget[m] ?? 0;
+              const budgetAmount = budgetFromToplam > 0
+                ? budgetFromToplam
+                : tlRows
+                    .filter((r) => !/TOPLAM/i.test(r.paramName))
+                    .reduce((s, r) => s + (r.budget[m] ?? 0), 0);
+              console.log('[excel] pushing entry budget_amount:', budgetAmount, 'actual:', mainRow.actual[m]);
               entries.push({
-                company_id:    dbCompany.id,
+                company_id:     dbCompany.id,
                 fiscal_year_id: dbYear.id,
-                category_id:   dbCat.id,
-                department_id: null,
-                month:         m + 1,
-                budget_amount: mainRow.budget[m],
-                actual_amount: mainRow.actual[m] ?? 0,
-                unit_type:     mainRow.unitType,
+                category_id:    dbCat.id,
+                department_id:  null,
+                month:          m + 1,
+                budget_amount:  budgetAmount,
+                actual_amount:  mainRow.actual[m] ?? 0,
+                unit_type:      mainRow.unitType,
               });
             }
           }
