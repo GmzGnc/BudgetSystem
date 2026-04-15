@@ -46,6 +46,27 @@ interface ModelRow {
   actual: number[];    // 12 months  AC–AN
 }
 
+const CAT_KEY_PARAMS: Record<string, string[]> = {
+  guvenlik:      ['Kişi Sayısı', 'Proje Müdürü', 'Vardiya Amiri', 'Güvenlik Personeli', 'Ücret', 'Toplam'],
+  temizlik:      ['Kişi Sayısı', 'Ekip Sorumlusu', 'Personel', 'Ücret', 'Toplam'],
+  yemek:         ['Birim fiyat', 'Öğün Sayısı', 'Gün Sayısı', 'Asgari ücret', 'TÜFE', 'ÜFE', 'Gıda Endeksi', 'Toplam'],
+  servis:        ['Birim Fiyat', 'TÜFE', 'ÜFE', 'Asgari Ücret', 'Uygulanacak Oran', 'Yakıt artışı', 'Toplam'],
+  arac_kira:     ['Araç Sayısı', 'Kira Giderleri', 'Toplam'],
+  hgs:           ['Araç Sayısı', 'HGS Giderleri', 'Toplam'],
+  arac_yakit:    ['Birim Fiyat', 'Miktar/Litre', 'Araç Sayısı', 'Toplam'],
+  arac_bakim:    ['Araç Sayısı', 'Bakım Giderleri', 'Toplam'],
+  diger_hizmet:  ['Birim Fiyat', 'Sefer Sayısı', 'Ton', 'Araç Sayısı', 'Litre', 'Toplam'],
+  diger_cesitli: ['Toplam'],
+};
+
+function isKeyParam(paramName: string, catId: string): boolean {
+  const keywords = CAT_KEY_PARAMS[catId];
+  if (!keywords) return true;
+  const name = paramName.trim();
+  if (/Toplam$/i.test(name) && name !== 'Toplam' && !/^TOPLAM$/i.test(name)) return false;
+  return keywords.some((kw) => name.toLowerCase().includes(kw.toLowerCase()));
+}
+
 /** Excel row ranges for each category (1-based) */
 const CAT_ROW_RANGES: Record<string, [number, number]> = {
   guvenlik:      [20,   123],
@@ -658,12 +679,27 @@ export default function Home() {
             ? DEPARTMENTS.map((d) => ({ department: d, budget: deptRowAI[d] ?? 0, actual: deptRowAI[d] ?? 0, variance: 0, variancePct: 0 })).filter((d) => d.budget > 0)
             : [];
 
-          const params = cRows.slice(0, 20).map((r) => {
-            const bv = r.budget.reduce((s, v) => s + v, 0);
-            const av = r.actual.reduce((s, v) => s + v, 0);
-            const dv = av - bv;
-            return { paramName: r.paramName, unitType: r.unitType, budget: bv, actual: av, diff: dv, diffPct: bv > 0 ? (dv / bv) * 100 : null };
-          });
+          const params = cRows
+            .filter((r) => {
+              const bv = activeMonthIndices.length > 0
+                ? activeMonthIndices.reduce((s, i) => s + r.budget[i], 0)
+                : r.budget.reduce((s, v) => s + v, 0);
+              const av = activeMonthIndices.reduce((s, i) => s + r.actual[i], 0);
+              if (bv === 0 && av === 0) return false;
+              const name = r.paramName.trim();
+              if (/Toplam$/i.test(name) && name !== 'Toplam' && !/^TOPLAM$/i.test(name)) return false;
+              return true;
+            })
+            .sort((a, b) => (isKeyParam(a.paramName, c.id) ? 0 : 1) - (isKeyParam(b.paramName, c.id) ? 0 : 1))
+            .slice(0, 50)
+            .map((r) => {
+              const bv = activeMonthIndices.length > 0
+                ? activeMonthIndices.reduce((s, i) => s + r.budget[i], 0)
+                : r.budget.reduce((s, v) => s + v, 0);
+              const av = activeMonthIndices.reduce((s, i) => s + r.actual[i], 0);
+              const dv = av - bv;
+              return { paramName: r.paramName, unitType: r.unitType, budget: bv, actual: av, diff: dv, diffPct: bv > 0 ? (dv / bv) * 100 : null };
+            });
 
           const res = await fetch('/api/analyze-variance', {
             method: 'POST',
@@ -723,8 +759,13 @@ export default function Home() {
             const aTotal = cActiveIndices.reduce((s, i) => s + r.actual[i], 0);
             if (bTotal === 0 && aTotal === 0) return false;
             const name = r.paramName.trim();
-            const isDeptTotal = /Toplam$/i.test(name) && name !== 'Toplam' && !/^TOPLAM$/i.test(name);
-            return !isDeptTotal;
+            if (/Toplam$/i.test(name) && name !== 'Toplam' && !/^TOPLAM$/i.test(name)) return false;
+            return true;
+          })
+          .sort((a, b) => {
+            const aKey = isKeyParam(a.paramName, c.id) ? 0 : 1;
+            const bKey = isKeyParam(b.paramName, c.id) ? 0 : 1;
+            return aKey - bKey;
           })
           .map((r) => {
             const bTotal = cActiveIndices.length > 0
@@ -739,6 +780,7 @@ export default function Home() {
               actualTotal: aTotal,
               diff: dTotal,
               diffPct: bTotal > 0 ? (dTotal / bTotal) * 100 : null,
+              isKey: isKeyParam(r.paramName, c.id),
             };
           });
 
@@ -981,11 +1023,22 @@ export default function Home() {
                             const activeActual = activeIdxs.reduce((s, i) => s + cMonthly[i].actual, 0);
                             const activeVar = activeActual - activeBudget;
                             const activeVarPct = activeBudget > 0 ? (activeVar / activeBudget) * 100 : 0;
-                            const params = cRows.slice(0, 20).map((r) => {
-                              const bv = activeIdxs.length > 0 ? activeIdxs.reduce((s, i) => s + r.budget[i], 0) : r.budget.reduce((s, v) => s + v, 0);
-                              const av = activeIdxs.reduce((s, i) => s + r.actual[i], 0);
-                              return { paramName: r.paramName, unitType: r.unitType, budget: bv, actual: av, diff: av - bv, diffPct: bv > 0 ? ((av - bv) / bv) * 100 : null };
-                            });
+                            const params = cRows
+                              .filter((r) => {
+                                const bv = activeIdxs.length > 0 ? activeIdxs.reduce((s, i) => s + r.budget[i], 0) : r.budget.reduce((s, v) => s + v, 0);
+                                const av = activeIdxs.reduce((s, i) => s + r.actual[i], 0);
+                                if (bv === 0 && av === 0) return false;
+                                const name = r.paramName.trim();
+                                if (/Toplam$/i.test(name) && name !== 'Toplam' && !/^TOPLAM$/i.test(name)) return false;
+                                return true;
+                              })
+                              .sort((a, b) => (isKeyParam(a.paramName, c.id) ? 0 : 1) - (isKeyParam(b.paramName, c.id) ? 0 : 1))
+                              .slice(0, 50)
+                              .map((r) => {
+                                const bv = activeIdxs.length > 0 ? activeIdxs.reduce((s, i) => s + r.budget[i], 0) : r.budget.reduce((s, v) => s + v, 0);
+                                const av = activeIdxs.reduce((s, i) => s + r.actual[i], 0);
+                                return { paramName: r.paramName, unitType: r.unitType, budget: bv, actual: av, diff: av - bv, diffPct: bv > 0 ? ((av - bv) / bv) * 100 : null };
+                              });
                             const res = await fetch('/api/analyze-variance', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
@@ -1017,13 +1070,19 @@ export default function Home() {
                               const aTotal = cActiveIndices.reduce((s, i) => s + r.actual[i], 0);
                               if (bTotal === 0 && aTotal === 0) return false;
                               const name = r.paramName.trim();
-                              return !(/Toplam$/i.test(name) && name !== 'Toplam' && !/^TOPLAM$/i.test(name));
+                              if (/Toplam$/i.test(name) && name !== 'Toplam' && !/^TOPLAM$/i.test(name)) return false;
+                              return true;
+                            })
+                            .sort((a, b) => {
+                              const aKey = isKeyParam(a.paramName, c.id) ? 0 : 1;
+                              const bKey = isKeyParam(b.paramName, c.id) ? 0 : 1;
+                              return aKey - bKey;
                             })
                             .map((r) => {
                               const bTotal = cActiveIndices.length > 0 ? cActiveIndices.reduce((s, i) => s + r.budget[i], 0) : r.budget.reduce((s, v) => s + v, 0);
                               const aTotal = cActiveIndices.reduce((s, i) => s + r.actual[i], 0);
                               const dTotal = aTotal - bTotal;
-                              return { paramName: r.paramName, unitType: r.unitType, budgetTotal: bTotal, actualTotal: aTotal, diff: dTotal, diffPct: bTotal > 0 ? (dTotal / bTotal) * 100 : null };
+                              return { paramName: r.paramName, unitType: r.unitType, budgetTotal: bTotal, actualTotal: aTotal, diff: dTotal, diffPct: bTotal > 0 ? (dTotal / bTotal) * 100 : null, isKey: isKeyParam(r.paramName, c.id) };
                             });
                           const ai = aiMap.get(c.id);
                           const aiEff = ai?.effects?.map((eff) => ({ type: eff.name, label: eff.name, amount: eff.amount, contributionPercent: Math.abs(eff.amount) / (Math.abs(ai.totalVariance) || 1) * 100, description: eff.explanation, driver: eff.driver })) ?? [];
@@ -1691,14 +1750,25 @@ export default function Home() {
                                                   setVarDrawerResult(null);
                                                   setVarDrawerError(null);
                                                   setVarDrawerLoading(true);
-                                                  const params = catRows.map((r) => {
-                                                    const bv = r.budget[safeMonth];
-                                                    const av = r.actual[safeMonth];
-                                                    const dv = av - bv;
-                                                    const isTL = /^TL/i.test(r.unitType);
-                                                    const dp = (isTL && bv > 0) ? (dv / bv) * 100 : null;
-                                                    return { paramName: r.paramName, unitType: r.unitType, budget: bv, actual: av, diff: dv, diffPct: dp };
-                                                  });
+                                                  const params = catRows
+                                                    .filter((r) => {
+                                                      const bv = r.budget[safeMonth];
+                                                      const av = r.actual[safeMonth];
+                                                      if (bv === 0 && av === 0) return false;
+                                                      const name = r.paramName.trim();
+                                                      if (/Toplam$/i.test(name) && name !== 'Toplam' && !/^TOPLAM$/i.test(name)) return false;
+                                                      return true;
+                                                    })
+                                                    .sort((a, b) => (isKeyParam(a.paramName, cat.id) ? 0 : 1) - (isKeyParam(b.paramName, cat.id) ? 0 : 1))
+                                                    .slice(0, 50)
+                                                    .map((r) => {
+                                                      const bv = r.budget[safeMonth];
+                                                      const av = r.actual[safeMonth];
+                                                      const dv = av - bv;
+                                                      const isTL = /^TL/i.test(r.unitType);
+                                                      const dp = (isTL && bv > 0) ? (dv / bv) * 100 : null;
+                                                      return { paramName: r.paramName, unitType: r.unitType, budget: bv, actual: av, diff: dv, diffPct: dp };
+                                                    });
                                                   const monthly = MONTH_LABELS.map((m, mi) => ({
                                                     month: m,
                                                     budget: mainTotalRow?.budget[mi] ?? 0,
@@ -1815,19 +1885,30 @@ export default function Home() {
                                                       ? DEPARTMENTS.map((d) => ({ department: d, budget: deptRow[d] ?? 0, actual: deptRow[d] ?? 0, variance: 0, variancePct: 0 })).filter((d) => d.budget > 0)
                                                       : [];
 
-                                                    const allParams = catRows.map((r) => {
-                                                      const bv = activeIdxs.length > 0
-                                                        ? activeIdxs.reduce((s, i) => s + r.budget[i], 0)
-                                                        : r.budget.reduce((s, v) => s + v, 0);
-                                                      const av = activeIdxs.reduce((s, i) => s + r.actual[i], 0);
-                                                      const dv = av - bv;
-                                                      return { paramName: r.paramName, unitType: r.unitType, budget: bv, actual: av, diff: dv, diffPct: bv > 0 ? (dv / bv) * 100 : null };
-                                                    }).filter((p) => {
-                                                      if (p.budget === 0 && p.actual === 0) return false;
-                                                      const name = p.paramName.trim();
-                                                      const isDeptTotal = /Toplam$/i.test(name) && name !== 'Toplam' && !/^TOPLAM$/i.test(name);
-                                                      return !isDeptTotal;
-                                                    });
+                                                    const allParams = catRows
+                                                      .filter((r) => {
+                                                        const bv = activeIdxs.length > 0
+                                                          ? activeIdxs.reduce((s, i) => s + r.budget[i], 0)
+                                                          : r.budget.reduce((s, v) => s + v, 0);
+                                                        const av = activeIdxs.reduce((s, i) => s + r.actual[i], 0);
+                                                        if (bv === 0 && av === 0) return false;
+                                                        const name = r.paramName.trim();
+                                                        if (/Toplam$/i.test(name) && name !== 'Toplam' && !/^TOPLAM$/i.test(name)) return false;
+                                                        return true;
+                                                      })
+                                                      .sort((a, b) => {
+                                                        const aKey = isKeyParam(a.paramName, cat.id) ? 0 : 1;
+                                                        const bKey = isKeyParam(b.paramName, cat.id) ? 0 : 1;
+                                                        return aKey - bKey;
+                                                      })
+                                                      .map((r) => {
+                                                        const bv = activeIdxs.length > 0
+                                                          ? activeIdxs.reduce((s, i) => s + r.budget[i], 0)
+                                                          : r.budget.reduce((s, v) => s + v, 0);
+                                                        const av = activeIdxs.reduce((s, i) => s + r.actual[i], 0);
+                                                        const dv = av - bv;
+                                                        return { paramName: r.paramName, unitType: r.unitType, budget: bv, actual: av, diff: dv, diffPct: bv > 0 ? (dv / bv) * 100 : null, isKey: isKeyParam(r.paramName, cat.id) };
+                                                      });
 
                                                     const res = await fetch('/api/analyze-variance', {
                                                       method: 'POST',
@@ -1840,7 +1921,10 @@ export default function Home() {
                                                         varianceAmount: activeVar,
                                                         variancePercent: activeVarPct,
                                                         monthlyData: monthly,
-                                                        parameters: allParams,
+                                                        parameters: allParams
+                                                          .sort((a, b) => (b.isKey ? 1 : 0) - (a.isKey ? 1 : 0))
+                                                          .slice(0, 50)
+                                                          .map((p) => ({ paramName: p.paramName, unitType: p.unitType, budget: p.budget, actual: p.actual, diff: p.diff, diffPct: p.diffPct })),
                                                         monthBreakdown,
                                                         departmentBreakdown,
                                                         activeMonths: activeIdxs,
@@ -1857,6 +1941,7 @@ export default function Home() {
                                                       actualTotal: p.actual,
                                                       diff: p.diff,
                                                       diffPct: p.diffPct,
+                                                      isKey: p.isKey,
                                                     }));
 
                                                     const cMonthly = Array.from({ length: 12 }, (_, mi) => ({

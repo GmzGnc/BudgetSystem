@@ -51,6 +51,7 @@ export interface CategoryPDFData {
     actualTotal: number;
     diff: number;
     diffPct: number | null;
+    isKey?: boolean;
   }>;
   aiAnalysis?: {
     summary: string;
@@ -412,7 +413,11 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
         pCurY = drawParamHeader(PAGE_START_Y + 5);
       }
 
-      doc.setFillColor(...(pi % 2 === 0 ? GRAY_LIGHT : WHITE));
+      if (p.isKey) {
+        doc.setFillColor(235, 242, 255);
+      } else {
+        doc.setFillColor(...(pi % 2 === 0 ? GRAY_LIGHT : WHITE));
+      }
       doc.rect(14, pCurY, 269, ROW_H, 'F');
       doc.setFontSize(5);
       doc.setFont('helvetica', 'normal');
@@ -744,9 +749,12 @@ function addCategoryExecutivePage(doc: jsPDF, cat: CategoryPDFData, data: PDFRep
 
   // Üst 5 parametre (TL olanlar, fark büyükten küçüğe)
   const topParams = (cat.parameters ?? [])
-    .filter((p) => /TL/i.test(p.unitType) && p.diff !== 0)
-    .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
-    .slice(0, 5);
+    .filter((p) => p.diff !== 0 || p.isKey)
+    .sort((a, b) => {
+      if ((b.isKey ? 1 : 0) !== (a.isKey ? 1 : 0)) return (b.isKey ? 1 : 0) - (a.isKey ? 1 : 0);
+      return Math.abs(b.diff) - Math.abs(a.diff);
+    })
+    .slice(0, 8);
 
   let pCurY = totY + 12;
 
