@@ -383,7 +383,7 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...BLACK);
     const summaryLines = doc.splitTextToSize(tr(cat.aiAnalysis.summary), 265);
-    summaryLines.slice(0, 3).forEach((line: string) => {
+    summaryLines.slice(0, 5).forEach((line: string) => {
       doc.text(line, 14, curY);
       curY += 4;
     });
@@ -421,7 +421,7 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
     });
 
     // Aylık trend
-    if (cat.aiAnalysis.monthlyTrend && curY < 170) {
+    if (cat.aiAnalysis.monthlyTrend && curY < 182) {
       curY += 4;
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(7);
@@ -432,13 +432,13 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
       doc.setFontSize(6);
       doc.setTextColor(...BLACK);
       const trendLines = doc.splitTextToSize(tr(cat.aiAnalysis.monthlyTrend), 265);
-      trendLines.slice(0, 2).forEach((line: string) => {
-        if (curY < 180) { doc.text(line, 14, curY); curY += 4; }
+      trendLines.slice(0, 4).forEach((line: string) => {
+        if (curY < 190) { doc.text(line, 14, curY); curY += 4; }
       });
     }
 
     // Etki ilişkileri
-    if (cat.aiAnalysis.interRelations && curY < 170) {
+    if (cat.aiAnalysis.interRelations && curY < 182) {
       curY += 4;
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(7);
@@ -449,13 +449,13 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
       doc.setFontSize(6);
       doc.setTextColor(...BLACK);
       const interLines = doc.splitTextToSize(tr(cat.aiAnalysis.interRelations), 265);
-      interLines.slice(0, 2).forEach((line: string) => {
-        if (curY < 180) { doc.text(line, 14, curY); curY += 4; }
+      interLines.slice(0, 4).forEach((line: string) => {
+        if (curY < 190) { doc.text(line, 14, curY); curY += 4; }
       });
     }
 
     // Karma etki bölümü
-    if (cat.aiAnalysis?.karmaEffect && curY < 165) {
+    if (cat.aiAnalysis?.karmaEffect && curY < 175) {
       curY += 4;
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(7);
@@ -493,13 +493,13 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
       doc.setFontSize(6);
       doc.setTextColor(...BLACK);
       const karmaLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.description), 265);
-      karmaLines.slice(0, 2).forEach((line: string) => {
-        if (curY < 180) { doc.text(line, 14, curY); curY += 4; }
+      karmaLines.slice(0, 3).forEach((line: string) => {
+        if (curY < 190) { doc.text(line, 14, curY); curY += 4; }
       });
     }
 
     // Departman insights
-    if (cat.aiAnalysis?.departmentInsights && curY < 170) {
+    if (cat.aiAnalysis?.departmentInsights && curY < 182) {
       curY += 3;
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(6.5);
@@ -510,13 +510,13 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
       doc.setFontSize(6);
       doc.setTextColor(...BLACK);
       const deptLines = doc.splitTextToSize(tr(cat.aiAnalysis.departmentInsights), 265);
-      deptLines.slice(0, 2).forEach((line: string) => {
-        if (curY < 180) { doc.text(line, 14, curY); curY += 4; }
+      deptLines.slice(0, 4).forEach((line: string) => {
+        if (curY < 190) { doc.text(line, 14, curY); curY += 4; }
       });
     }
 
     // Aylık insights
-    if (cat.aiAnalysis?.monthlyInsights && curY < 175) {
+    if (cat.aiAnalysis?.monthlyInsights && curY < 185) {
       curY += 3;
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(6.5);
@@ -527,25 +527,25 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
       doc.setFontSize(6);
       doc.setTextColor(...BLACK);
       const monthlyLines2 = doc.splitTextToSize(tr(cat.aiAnalysis.monthlyInsights), 265);
-      monthlyLines2.slice(0, 2).forEach((line: string) => {
-        if (curY < 183) { doc.text(line, 14, curY); curY += 4; }
+      monthlyLines2.slice(0, 4).forEach((line: string) => {
+        if (curY < 192) { doc.text(line, 14, curY); curY += 4; }
       });
     }
 
-    if (curY < 175) {
+    if (curY < 185) {
       curY += 4;
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(7);
       doc.setTextColor(...NAVY);
       doc.text(tr('Oneriler / Recommendations:'), 14, curY);
       curY += 5;
-      cat.aiAnalysis.recommendations.slice(0, 3).forEach((rec, ri) => {
+      cat.aiAnalysis.recommendations.slice(0, 5).forEach((rec, ri) => {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(6.5);
         doc.setTextColor(...BLACK);
         const recLines = doc.splitTextToSize(tr(`${ri + 1}. ${rec}`), 265);
-        recLines.slice(0, 2).forEach((line: string) => {
-          if (curY < 185) { doc.text(line, 14, curY); curY += 4; }
+        recLines.slice(0, 3).forEach((line: string) => {
+          if (curY < 195) { doc.text(line, 14, curY); curY += 4; }
         });
       });
     }

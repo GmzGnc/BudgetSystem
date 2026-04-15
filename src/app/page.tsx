@@ -1573,15 +1573,22 @@ export default function Home() {
                                                         : [];
                                                       const cTLRow = cRows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName))
                                                         ?? cRows.find((r) => /^TL/i.test(r.unitType));
-                                                      const cBudget = cTLRow ? cTLRow.budget.reduce((s, v) => s + v, 0) : categoryAnnual(monthlyData, c.id);
-                                                      const cActual = cTLRow ? cTLRow.actual.reduce((s, v) => s + v, 0) : 0;
-                                                      const cVar = cActual - cBudget;
-                                                      const cVarPct = cBudget > 0 ? (cVar / cBudget) * 100 : 0;
                                                       const cMonthly = Array.from({ length: 12 }, (_, mi) => ({
                                                         month: mi + 1,
                                                         budget: cTLRow?.budget[mi] ?? 0,
                                                         actual: cTLRow?.actual[mi] ?? 0,
                                                       }));
+
+                                                      // Aktif ayları tespit et (fiili > 0)
+                                                      const cActiveIndices = cMonthly.map((m, i) => i).filter((i) => cMonthly[i].actual > 0);
+
+                                                      // Bütçe ve fiiliyi YALNIZCA aktif aylar üzerinden hesapla
+                                                      const cActual = cActiveIndices.reduce((s, i) => s + cMonthly[i].actual, 0);
+                                                      const cBudget = cActiveIndices.length > 0
+                                                        ? cActiveIndices.reduce((s, i) => s + cMonthly[i].budget, 0)
+                                                        : (cTLRow ? cTLRow.budget.reduce((s, v) => s + v, 0) : categoryAnnual(monthlyData, c.id));
+                                                      const cVar = cActual - cBudget;
+                                                      const cVarPct = cBudget > 0 ? (cVar / cBudget) * 100 : 0;
 
                                                       const ai = aiMap.get(c.id);
                                                       const aiEff = ai?.effects?.map((eff) => ({

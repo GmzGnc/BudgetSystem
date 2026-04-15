@@ -114,8 +114,10 @@ Eğer aylık breakdown varsa, zamansal karma etkiyi analiz et:
 Önemli kurallar:
 - Tüm metin Türkçe olacak
 - Analizde YALNIZCA fiili verisi olan ayları (activeMonths) dikkate al. [FİİLİ YOK] etiketli aylar bütçe karşılaştırmasına dahil edilmez; yalnızca tamamlanan dönem üzerinden yorum yap.
-- effects dizisinde yalnızca 0'dan büyük tutarda etkileri dahil et (en az 1, en fazla 4 etki)
+- effects dizisinde tum anlamli etkileri dahil et (en az 2, en fazla 6 etki). Her etki icin driver alani mumkun oldugunca somut ve olcumlenebilir olsun (yuzde, adet, TL).
 - Sayısal değerler kesinlikle TL cinsinden olacak (yüzde değil)
+- monthlyTrend: Her aktif ay icin ayri ayri yorum yap. Ocak, Subat, Mart gibi ay isimlerini kullanarak sapma miktarini ve yuzdesini belirt. Trend yukseliyor mu, dusuyor mu, sabit mi?
+- recommendations: En az 4, en fazla 6 oneri ver. Her oneri somut ve olcumlenebilir olmali.
 - departmentInsights ve monthlyInsights: veri yoksa boş string ("") döndür
 - karmaEffect: her zaman doldur; veri yetersizse genel değerlendirme yap
 - Veri yetersizse "Yeterli parametre verisi bulunamadı, genel degerlendirme yapiliyor" gibi bir not ekle
@@ -230,7 +232,7 @@ Lütfen bu varyansı analiz et ve JSON formatında yanıt ver.`;
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 4000,
+        max_tokens: 6000,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userMessage }],
       }),
