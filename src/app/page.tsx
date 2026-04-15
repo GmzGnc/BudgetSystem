@@ -174,8 +174,9 @@ export default function Home() {
   useEffect(() => {
     async function loadFromDb() {
       setDbLoading(true);
+      const companyCode = company === 'GRUP' ? 'ICA' : company;
+      console.log('[debug] loadFromDb started, company:', companyCode);
       try {
-        const companyCode = company === 'GRUP' ? 'ICA' : company;
         const [monthlyRes, sapRes, budgetRowsRes] = await Promise.all([
           getBudgetMonthlyData(companyCode),
           getSapMonthlyData(companyCode),
@@ -190,7 +191,8 @@ export default function Home() {
           setDbModelRows(map);
           console.log('[debug] dbModelRows map:', map);
         }
-      } catch {
+      } catch (e) {
+        console.error('[debug] loadFromDb error:', e);
         // DB erişilemiyorsa statik JSON kullan
       } finally {
         setDbLoading(false);
