@@ -27,6 +27,7 @@ import type { DrillDownGroup } from '@/data/drill-down-data';
 import {
   getCompanies, getFiscalYears, getCategories,
   upsertBudgetEntries, upsertSapEntries, logExcelImport,
+  getBudgetMonthlyData, getSapMonthlyData,
 } from '@/lib/db';
 import type { BudgetEntry, SapEntry as DbSapEntry } from '@/lib/db';
 import {
@@ -114,6 +115,11 @@ export default function Home() {
   const [varDrawerError, setVarDrawerError] = useState<string | null>(null);
   const [isPdfLoading,   setIsPdfLoading]   = useState(false);
 
+  // ── DB / Supabase state ──
+  const [dbMonthlyData, setDbMonthlyData] = useState<MonthlyEntry[] | null>(null);
+  const [dbSapData,     setDbSapData]     = useState<SapEntry[] | null>(null);
+  const [dbLoading,     setDbLoading]     = useState(true);
+
   // ── excel import state ──
   const [importOpen,      setImportOpen]      = useState(false);
   const [dragOver,        setDragOver]        = useState(false);
@@ -141,12 +147,36 @@ export default function Home() {
     });
   }, []);
 
+  // ── DB okuma: company değiştiğinde Supabase'den yükle, yoksa statik JSON kullan ──
+  useEffect(() => {
+    async function loadFromDb() {
+      setDbLoading(true);
+      try {
+        const companyCode = company === 'GRUP' ? 'ICA' : company;
+        const [monthlyRes, sapRes] = await Promise.all([
+          getBudgetMonthlyData(companyCode),
+          getSapMonthlyData(companyCode),
+        ]);
+        setDbMonthlyData(monthlyRes);
+        setDbSapData(sapRes);
+      } catch {
+        // DB erişilemiyorsa statik JSON kullan
+      } finally {
+        setDbLoading(false);
+      }
+    }
+    loadFromDb();
+  }, [company]);
+
   // ── derived data ──
   const monthlyData: MonthlyEntry[] = useMemo(() => {
+    // DB'den veri geldiyse onu kullan
+    if (dbMonthlyData && dbMonthlyData.length > 0) return dbMonthlyData;
+    // Fallback: statik JSON
     if (company === 'ICA')  return ICA_BUDGET.monthlyData;
     if (company === 'ICE')  return ICE_BUDGET.monthlyData;
     return GROUP_MONTHLY;
-  }, [company]);
+  }, [company, dbMonthlyData]);
 
   const projection2026 = useMemo(
     () => buildProjection2026(monthlyData, coefficients),
@@ -178,10 +208,10 @@ export default function Home() {
     }).sort((a, b) => b.pct - a.pct),
   [monthlyData, projection2026]);
 
-  // ── SAP data (imported overrides static) ──
+  // ── SAP data: imported > DB > static ──
   const sapData = useMemo(
-    () => importedSapData ?? getSapData(company),
-    [importedSapData, company],
+    () => importedSapData ?? dbSapData ?? getSapData(company),
+    [importedSapData, dbSapData, company],
   );
 
   const sapSummary = useMemo(() => {
@@ -630,7 +660,7 @@ export default function Home() {
       <main className="max-w-7xl mx-auto px-2 sm:px-4 py-3 sm:py-6 space-y-3 sm:space-y-6">
 
         {/* ── COMPANY SELECTOR ── */}
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {(['ICA', 'ICE', 'GRUP'] as Company[]).map((c) => (
             <button
               key={c}
@@ -644,6 +674,18 @@ export default function Home() {
               {c === 'GRUP' ? <span><span className="sm:hidden">Grup</span><span className="hidden sm:inline">Grup Konsolide</span></span> : c}
             </button>
           ))}
+          {dbLoading && (
+            <span className="flex items-center gap-1 text-[10px] text-indigo-500 dark:text-indigo-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse inline-block" />
+              DB senkronize ediliyor
+            </span>
+          )}
+          {!dbLoading && dbMonthlyData && (
+            <span className="flex items-center gap-1 text-[10px] text-green-600 dark:text-green-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+              Supabase
+            </span>
+          )}
         </div>
 
         {/* ── METRIC CARDS ── */}

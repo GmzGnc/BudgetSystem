@@ -286,3 +286,84 @@ export async function logExcelImport(log: ExcelImportLog): Promise<void> {
     // Non-critical — silently ignore if table doesn't exist yet
   }
 }
+
+// ─── 11. getBudgetMonthlyData ─────────────────────────────────────────────────
+// budget_entries'den MonthlyEntry[] formatına dönüştürür.
+// Veri yoksa null döner (statik JSON fallback için).
+
+import type { MonthlyEntry } from '@/types';
+
+export async function getBudgetMonthlyData(
+  companyCode: string,
+  year: number = 2025,
+): Promise<MonthlyEntry[] | null> {
+  try {
+    const [companiesRes, yearsRes] = await Promise.all([
+      getCompanies(),
+      getFiscalYears(),
+    ]);
+    const company = companiesRes.data?.find((c) => c.code === companyCode);
+    const fiscalYear = yearsRes.data?.find((y) => y.year === year && !y.is_projection);
+    if (!company || !fiscalYear) return null;
+
+    const entriesRes = await getBudgetEntries(company.id, fiscalYear.id);
+    if (!entriesRes.data || entriesRes.data.length === 0) return null;
+
+    const catsRes = await getCategories();
+    const cats = catsRes.data ?? [];
+
+    // MonthlyEntry formatına çevir: her ay için {monthLabel, cat1: val, cat2: val, ...}
+    const MONTH_LABELS_SHORT = ['Oca 25', 'Sub 25', 'Mar 25', 'Nis 25', 'May 25', 'Haz 25', 'Tem 25', 'Agu 25', 'Eyl 25', 'Eki 25', 'Kas 25', 'Ara 25'];
+    const months: MonthlyEntry[] = MONTH_LABELS_SHORT.map((label, mi) => {
+      const entry: MonthlyEntry = { month: String(mi + 1), monthLabel: label };
+      for (const cat of cats) {
+        const rows = entriesRes.data!.filter(
+          (e) => e.category_id === cat.id && e.month === mi + 1,
+        );
+        (entry as Record<string, unknown>)[cat.code] = rows.reduce((s, r) => s + r.amount, 0);
+      }
+      return entry;
+    });
+
+    return months;
+  } catch {
+    return null;
+  }
+}
+
+// ─── 12. getSapMonthlyData ────────────────────────────────────────────────────
+// sap_entries'den SapEntry[] formatına dönüştürür.
+// Veri yoksa null döner.
+
+import type { SapEntry as SapDataEntry } from '@/data/sap-data';
+
+export async function getSapMonthlyData(
+  companyCode: string,
+  year: number = 2025,
+): Promise<SapDataEntry[] | null> {
+  try {
+    const [companiesRes, yearsRes] = await Promise.all([
+      getCompanies(),
+      getFiscalYears(),
+    ]);
+    const company = companiesRes.data?.find((c) => c.code === companyCode);
+    const fiscalYear = yearsRes.data?.find((y) => y.year === year && !y.is_projection);
+    if (!company || !fiscalYear) return null;
+
+    const entriesRes = await getSapEntries(company.id, fiscalYear.id);
+    if (!entriesRes.data || entriesRes.data.length === 0) return null;
+
+    const companyTyped = (companyCode === 'ICE' ? 'ICE' : 'ICA') as 'ICA' | 'ICE';
+    return entriesRes.data.map((e) => ({
+      code:      e.sap_code,
+      name:      e.name,
+      category:  e.category,
+      budget:    e.budget,
+      used:      e.used,
+      remaining: e.remaining,
+      company:   companyTyped,
+    }));
+  } catch {
+    return null;
+  }
+}
