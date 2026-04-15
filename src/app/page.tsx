@@ -434,6 +434,10 @@ export default function Home() {
         const budget: number[] = [];
         const actual: number[] = [];
         if (i < 3) console.log('[excel] row sample:', row[13], row[14], row[15], 'unitType:', row[11], 'paramName:', row[10]);
+        if (parsed.length === 0) {
+          console.log('[excel] full row sample (first TL row):', JSON.stringify(row));
+          console.log('[excel] row length:', row.length);
+        }
         for (let m = 0; m < 12; m++) {
           budget.push(toNum(row[13 + m]));
           actual.push(toNum(row[28 + m]));
