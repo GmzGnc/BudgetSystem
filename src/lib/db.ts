@@ -209,12 +209,14 @@ export async function getBudgetEntries(
   fiscalYearId: string,
 ): Promise<DbResult<BudgetEntry[]>> {
   try {
+    console.log('[db] getBudgetEntries called with:', companyId, fiscalYearId);
     const { data, error } = await supabase
       .from('budget_entries')
       .select('*')
       .eq('company_id', companyId)
       .eq('fiscal_year_id', fiscalYearId)
       .order('month');
+    console.log('[db] getBudgetEntries result count:', data?.length, 'error:', error?.message);
     if (error) return fail(error.message);
     return ok(data as BudgetEntry[]);
   } catch (e) {
