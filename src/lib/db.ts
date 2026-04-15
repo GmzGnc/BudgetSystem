@@ -399,18 +399,21 @@ export async function getBudgetEntriesAsModelRows(
       getFiscalYears(),
     ]);
     const company    = companiesRes.data?.find((c) => c.code === companyCode);
+    console.log('[db] company:', company);
     const fiscalYear = yearsRes.data?.find((y) => y.year === year && y.status === 'active');
+    console.log('[db] fiscalYear:', fiscalYear);
     if (!company || !fiscalYear) return null;
 
     const [entriesRes, catsRes] = await Promise.all([
       getBudgetEntries(company.id, fiscalYear.id),
       getCategories(),
     ]);
+    console.log('[db] entries count:', entriesRes.data?.length);
     if (!entriesRes.data || entriesRes.data.length === 0) return null;
 
     const cats = catsRes.data ?? [];
 
-    return cats.map((cat) => {
+    const result = cats.map((cat) => {
       const budget = Array.from({ length: 12 }, (_, mi) => {
         const rows = entriesRes.data!.filter(
           (e) => e.category_id === cat.id && e.month === mi + 1,
@@ -429,6 +432,8 @@ export async function getBudgetEntriesAsModelRows(
         }],
       };
     });
+    console.log('[db] result:', JSON.stringify(result).slice(0, 200));
+    return result;
   } catch {
     return null;
   }

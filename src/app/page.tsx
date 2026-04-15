@@ -183,10 +183,12 @@ export default function Home() {
         ]);
         setDbMonthlyData(monthlyRes);
         setDbSapData(sapRes);
+        console.log('[debug] budgetRowsRes:', budgetRowsRes);
         if (budgetRowsRes) {
           const map = new Map<string, ModelRow[]>();
           budgetRowsRes.forEach(({ categoryCode, rows }) => map.set(categoryCode, rows));
           setDbModelRows(map);
+          console.log('[debug] dbModelRows map:', map);
         }
       } catch {
         // DB erişilemiyorsa statik JSON kullan
