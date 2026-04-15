@@ -12,6 +12,11 @@ import * as XLSX from 'xlsx';
 import { CATEGORIES, CATEGORY_COLORS, INDEX_BADGE_COLORS } from '@/data/categories';
 import { generateBudgetPDF } from '@/components/pdf/generateBudgetPDF';
 import type { CategoryPDFData, PDFReportData } from '@/components/pdf/generateBudgetPDF';
+import ProjectionTab from '@/components/tabs/ProjectionTab';
+import SapmaTab from '@/components/tabs/SapmaTab';
+import SapTab from '@/components/tabs/SapTab';
+import DeptTab from '@/components/tabs/DeptTab';
+import { fmt, fmtShort, fmtFull, pctTextColor, sapamaColor, sapamaStatus } from '@/lib/utils';
 import { ICA_BUDGET, ICE_BUDGET, GROUP_MONTHLY } from '@/data/budget-data';
 import { getSapData, SAP_CATEGORY_COLORS } from '@/data/sap-data';
 import type { SapEntry } from '@/data/sap-data';
@@ -29,41 +34,6 @@ import {
   buildProjection2026, variancePct, categoryShare, aggregateMonthly,
 } from '@/lib/calculations';
 import type { Company, MonthlyEntry, ProjectionCoefficients } from '@/types';
-
-// ─── helpers ────────────────────────────────────────────────────────────────
-
-function fmt(n: number): string {
-  if (n >= 1_000_000) return `₺${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000)     return `₺${(n / 1_000).toFixed(0)}K`;
-  return `₺${n.toFixed(0)}`;
-}
-
-function fmtShort(n: number): string {
-  if (n === 0) return '—';
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000)     return `${(n / 1_000).toFixed(0)}B`;
-  return n.toFixed(0);
-}
-
-function fmtFull(n: number): string {
-  return '₺' + n.toLocaleString('tr-TR');
-}
-
-function pctTextColor(pct: number): string {
-  return pct > 0 ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400';
-}
-
-function sapamaColor(pct: number): string {
-  if (pct < 20)  return '#22c55e';
-  if (pct < 25)  return '#f59e0b';
-  return '#ef4444';
-}
-
-function sapamaStatus(pct: number): { label: string; cls: string } {
-  if (pct < 20)  return { label: 'Normal',  cls: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' };
-  if (pct < 25)  return { label: 'Dikkat',  cls: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300' };
-  return           { label: 'Kritik',  cls: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' };
-}
 
 // ─── model gider types & row ranges ─────────────────────────────────────────
 
@@ -1582,687 +1552,61 @@ export default function Home() {
 
         {/* ══════════ PROJECTION TAB ══════════ */}
         {tab === 'projection' && (
-          <div className="space-y-6">
-
-            {/* sliders */}
-            <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100">
-                  2026 Projeksiyon Katsayıları — {companyLabel}
-                </h2>
-                <button
-                  onClick={() => setCoefficients(DEFAULT_COEFFICIENTS)}
-                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium"
-                >
-                  Sıfırla
-                </button>
-              </div>
-              <div className="grid gap-5 sm:grid-cols-2">
-                {CATEGORIES.map((cat) => {
-                  const coeff       = coefficients[cat.id] ?? 1.2;
-                  const catTotal25  = categoryAnnual(monthlyData, cat.id);
-                  const catTotal26  = categoryAnnual(projection2026, cat.id);
-                  return (
-                    <div key={cat.id} className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="flex items-center gap-1.5 font-medium text-gray-700 dark:text-gray-300">
-                          <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: CATEGORY_COLORS[cat.id] }} />
-                          {cat.name}
-                          <span className={`ml-1 px-1.5 py-0.5 rounded-full ${INDEX_BADGE_COLORS[cat.indexType]}`}>
-                            {cat.indexType}
-                          </span>
-                        </span>
-                        <span className="font-semibold text-indigo-600 dark:text-indigo-400">
-                          ×{coeff.toFixed(2)} (+{((coeff - 1) * 100).toFixed(1)}%)
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min={1.00} max={2.00} step={0.01}
-                        value={coeff}
-                        onChange={(e) =>
-                          setCoefficients((prev) => ({ ...prev, [cat.id]: parseFloat(e.target.value) }))
-                        }
-                        className="w-full h-1.5 rounded-full accent-indigo-600 cursor-pointer"
-                      />
-                      <div className="flex justify-between text-xs text-gray-400 dark:text-gray-500">
-                        <span>{fmt(catTotal25)} (2025)</span>
-                        <span className="text-indigo-500 dark:text-indigo-400 font-medium">→ {fmt(catTotal26)} (2026)</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* summary cards */}
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-indigo-50 dark:bg-indigo-950 border border-indigo-100 dark:border-indigo-800 rounded-xl p-4">
-                <p className="text-xs font-medium text-indigo-500 dark:text-indigo-400 uppercase">2025 Toplam</p>
-                <p className="text-xl font-bold text-indigo-900 dark:text-indigo-200 mt-1">{fmt(total2025)}</p>
-              </div>
-              <div className="bg-indigo-600 rounded-xl p-4">
-                <p className="text-xs font-medium text-indigo-200 uppercase">2026 Projeksiyon</p>
-                <p className="text-xl font-bold text-white mt-1">{fmt(total2026)}</p>
-              </div>
-              <div className={`rounded-xl p-4 ${diffPct > 0 ? 'bg-red-50 dark:bg-red-950 border border-red-100 dark:border-red-800' : 'bg-green-50 dark:bg-green-950 border border-green-100 dark:border-green-800'}`}>
-                <p className={`text-xs font-medium uppercase ${diffPct > 0 ? 'text-red-500' : 'text-green-500'}`}>
-                  Artış / Azalış
-                </p>
-                <p className={`text-xl font-bold mt-1 ${pctTextColor(diffPct)}`}>
-                  {diffPct > 0 ? '+' : ''}{diffPct.toFixed(1)}%
-                </p>
-              </div>
-            </div>
-
-            {/* trend line chart */}
-            <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-3 sm:p-5 shadow-sm">
-              <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">
-                2025 Gerçekleşen vs 2026 Projeksiyon — Aylık Trend
-              </h2>
-              <div className="h-44 sm:h-64 lg:h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={trendData} margin={{ top: 4, right: 8, bottom: 4, left: 16 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
-                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: axisColor }} axisLine={false} tickLine={false} />
-                  <YAxis tickFormatter={fmt} tick={{ fontSize: 11, fill: axisColor }} axisLine={false} tickLine={false} width={68} />
-                  <Tooltip content={<LineTooltip />} />
-                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 8, color: axisColor }} />
-                  <Line type="monotone" dataKey="2025 Gerçekleşen" stroke="#6366f1" strokeWidth={2} dot={{ r: 3, fill: '#6366f1' }} activeDot={{ r: 5 }} />
-                  <Line type="monotone" dataKey="2026 Projeksiyon" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3, fill: '#f59e0b' }} activeDot={{ r: 5 }} />
-                </LineChart>
-              </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* projection comparison table */}
-            <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-              <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-gray-100 dark:border-gray-700">
-                <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100">Kategori Bazlı Projeksiyon Karşılaştırması</h2>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[480px] text-sm">
-                  <thead className="bg-gray-50 dark:bg-gray-800">
-                    <tr>
-                      {['Kategori','2025','2026 Proj.','Fark %','Katsayı'].map((h, i) => (
-                        <th key={h} className={`px-5 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide ${i === 0 ? 'text-left' : i === 4 ? 'text-center' : 'text-right'}`}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                    {CATEGORIES.map((cat) => {
-                      const t25 = categoryAnnual(monthlyData, cat.id);
-                      const t26 = categoryAnnual(projection2026, cat.id);
-                      const pct = variancePct(t25, t26);
-                      return (
-                        <tr key={cat.id} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                          <td className="px-5 py-3 flex items-center gap-2">
-                            <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: CATEGORY_COLORS[cat.id] }} />
-                            <span className="font-medium text-gray-800 dark:text-gray-200">{cat.name}</span>
-                          </td>
-                          <td className="px-5 py-3 text-right font-mono text-gray-600 dark:text-gray-400">{fmt(t25)}</td>
-                          <td className="px-5 py-3 text-right font-mono font-semibold text-gray-900 dark:text-white">{fmt(t26)}</td>
-                          <td className={`px-5 py-3 text-right font-semibold ${pctTextColor(pct)}`}>
-                            {pct > 0 ? '+' : ''}{pct.toFixed(1)}%
-                          </td>
-                          <td className="px-5 py-3 text-center">
-                            <span className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded font-mono text-xs">
-                              ×{(coefficients[cat.id] ?? 1.2).toFixed(2)}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot className="bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-                    <tr>
-                      <td className="px-5 py-3 font-semibold text-gray-800 dark:text-gray-100">Toplam</td>
-                      <td className="px-5 py-3 text-right font-semibold font-mono text-gray-700 dark:text-gray-300">{fmt(total2025)}</td>
-                      <td className="px-5 py-3 text-right font-semibold font-mono text-indigo-700 dark:text-indigo-400">{fmt(total2026)}</td>
-                      <td className={`px-5 py-3 text-right font-bold ${pctTextColor(diffPct)}`}>
-                        {diffPct > 0 ? '+' : ''}{diffPct.toFixed(1)}%
-                      </td>
-                      <td />
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          </div>
+          <ProjectionTab
+            monthlyData={monthlyData}
+            projection2026={projection2026}
+            coefficients={coefficients}
+            setCoefficients={setCoefficients}
+            total2025={total2025}
+            total2026={total2026}
+            diffPct={diffPct}
+            trendData={trendData}
+            companyLabel={companyLabel}
+            axisColor={axisColor}
+            gridColor={gridColor}
+            LineTooltip={LineTooltip as React.ComponentType<Record<string, unknown>>}
+          />
         )}
 
         {/* ══════════ SAPMA ANALİZİ TAB ══════════ */}
         {tab === 'sapma' && (
-          <div className="space-y-6">
-
-            {/* horizontal bar chart */}
-            <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-3 sm:p-5 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 mb-4">
-                <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100">
-                  Kategori Artış Oranları — 2025→2026 ({companyLabel})
-                </h2>
-                <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-green-500 inline-block" /> Normal (&lt;20%)</span>
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-amber-500 inline-block" /> Dikkat (20–25%)</span>
-                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-red-500 inline-block" /> Kritik (&gt;25%)</span>
-                </div>
-              </div>
-              <div className="h-64 sm:h-80 lg:h-[360px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart layout="vertical" data={sapamaData} margin={{ top: 4, right: 48, bottom: 4, left: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridColor} />
-                  <XAxis
-                    type="number"
-                    tickFormatter={(v) => `${v.toFixed(0)}%`}
-                    tick={{ fontSize: 11, fill: axisColor }}
-                    axisLine={false}
-                    tickLine={false}
-                    domain={[0, 'dataMax + 5']}
-                  />
-                  <YAxis
-                    type="category"
-                    dataKey="name"
-                    tick={{ fontSize: 11, fill: axisColor }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={110}
-                  />
-                  <Tooltip content={<SapamaTooltip />} />
-                  <Bar dataKey="pct" name="Artış %" radius={[0, 4, 4, 0]} label={{ position: 'right', formatter: (v: unknown) => `${(v as number).toFixed(1)}%`, fontSize: 11, fill: axisColor }}>
-                    {sapamaData.map((entry) => (
-                      <Cell key={entry.id} fill={sapamaColor(entry.pct)} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* sapma table */}
-            <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-              <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-gray-100 dark:border-gray-700">
-                <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100">
-                  Detaylı Sapma Tablosu — {companyLabel}
-                </h2>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[560px] text-sm">
-                  <thead className="bg-gray-50 dark:bg-gray-800">
-                    <tr>
-                      {['Kategori','2025','2026 Proj.','Fark (TL)','Fark %','Durum'].map((h, i) => (
-                        <th key={h} className={`px-5 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide ${i === 0 || i === 5 ? 'text-left' : 'text-right'}`}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                    {sapamaData.map((row) => {
-                      const status = sapamaStatus(row.pct);
-                      return (
-                        <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                          <td className="px-5 py-3 flex items-center gap-2">
-                            <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: CATEGORY_COLORS[row.id] }} />
-                            <span className="font-medium text-gray-800 dark:text-gray-200">{row.name}</span>
-                          </td>
-                          <td className="px-5 py-3 text-right font-mono text-gray-600 dark:text-gray-400">{fmt(row.t25)}</td>
-                          <td className="px-5 py-3 text-right font-mono font-semibold text-gray-900 dark:text-white">{fmt(row.t26)}</td>
-                          <td className="px-5 py-3 text-right font-mono text-red-500 dark:text-red-400">
-                            +{fmtFull(row.diff)}
-                          </td>
-                          <td className="px-5 py-3 text-right">
-                            <span className="font-semibold" style={{ color: sapamaColor(row.pct) }}>
-                              +{row.pct.toFixed(1)}%
-                            </span>
-                          </td>
-                          <td className="px-5 py-3">
-                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${status.cls}`}>
-                              {status.label}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot className="bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-                    <tr>
-                      <td className="px-5 py-3 font-semibold text-gray-800 dark:text-gray-100">Toplam</td>
-                      <td className="px-5 py-3 text-right font-semibold font-mono text-gray-700 dark:text-gray-300">{fmt(total2025)}</td>
-                      <td className="px-5 py-3 text-right font-semibold font-mono text-indigo-600 dark:text-indigo-400">{fmt(total2026)}</td>
-                      <td className="px-5 py-3 text-right font-semibold font-mono text-red-500 dark:text-red-400">
-                        +{fmtFull(total2026 - total2025)}
-                      </td>
-                      <td className={`px-5 py-3 text-right font-bold ${pctTextColor(diffPct)}`}>
-                        +{diffPct.toFixed(1)}%
-                      </td>
-                      <td />
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          </div>
+          <SapmaTab
+            sapamaData={sapamaData}
+            total2025={total2025}
+            total2026={total2026}
+            diffPct={diffPct}
+            companyLabel={companyLabel}
+            axisColor={axisColor}
+            gridColor={gridColor}
+            SapamaTooltip={SapamaTooltip as React.ComponentType<Record<string, unknown>>}
+          />
         )}
 
         {/* ══════════ SAP BÜTÇE TAKİBİ TAB ══════════ */}
         {tab === 'sap' && (
-          <div className="space-y-6">
-
-            {/* yüklenen veri bildirimi */}
-            {importedSapData && (
-              <div className="flex items-center justify-between px-4 py-2.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl text-sm">
-                <span className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
-                  <FileSpreadsheet size={15} />
-                  <span className="font-medium">Yüklenen Excel verisi gösteriliyor</span>
-                  <span className="text-blue-500 dark:text-blue-400">({importedSapData.length} SAP kodu)</span>
-                </span>
-                <button
-                  onClick={() => setImportedSapData(null)}
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 font-semibold underline underline-offset-2"
-                >
-                  Statik Veriye Dön
-                </button>
-              </div>
-            )}
-
-            {/* özet kartlar */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {[
-                { label: 'Toplam Bütçe',    value: fmtFull(sapSummary.totalBudget),    cls: 'text-gray-900 dark:text-white' },
-                { label: 'Kullanılan',       value: fmtFull(sapSummary.totalUsed),      cls: 'text-amber-600 dark:text-amber-400' },
-                { label: 'Kalan',            value: fmtFull(sapSummary.totalRemaining), cls: 'text-emerald-600 dark:text-emerald-400' },
-                { label: 'Kullanım Oranı',   value: `${sapSummary.usagePct.toFixed(1)}%`,
-                  cls: sapSummary.usagePct >= 90 ? 'text-red-600 dark:text-red-400'
-                     : sapSummary.usagePct >= 70 ? 'text-amber-600 dark:text-amber-400'
-                     : 'text-emerald-600 dark:text-emerald-400' },
-              ].map(({ label, value, cls }) => (
-                <div key={label} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 shadow-sm">
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">{label}</p>
-                  <p className={`text-xl font-bold mt-1 font-mono ${cls}`}>{value}</p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{companyLabel} · Ocak 2026</p>
-                </div>
-              ))}
-            </div>
-
-            {/* renk açıklaması */}
-            <div className="flex items-center gap-5 text-xs text-gray-500 dark:text-gray-400 px-1">
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-emerald-500 inline-block" /> Normal (0–70%)</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-amber-500 inline-block" /> Dikkat (70–90%)</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-red-500 inline-block" /> Kritik (%90+)</span>
-            </div>
-
-            {/* kategori gruplu tablo */}
-            {sapByCategory.map(({ category, rows, budget, used, remaining }) => {
-              const catPct = budget > 0 ? (used / budget) * 100 : 0;
-              const catColor = SAP_CATEGORY_COLORS[category] ?? '#94a3b8';
-              const barColor = catPct >= 90 ? '#ef4444' : catPct >= 70 ? '#f59e0b' : '#22c55e';
-
-              return (
-                <div key={category} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-
-                  {/* kategori başlığı */}
-                  <div className="px-3 sm:px-5 py-3 border-b border-gray-100 dark:border-gray-700">
-                    <div className="flex items-center justify-between mb-2 sm:mb-0">
-                      <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: catColor }} />
-                        <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100">{category}</h3>
-                        <span className="text-xs text-gray-400 dark:text-gray-500">({rows.length} kod)</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 sm:w-24 bg-gray-100 dark:bg-gray-700 rounded-full h-2">
-                          <div className="h-2 rounded-full transition-all" style={{ width: `${Math.min(catPct, 100)}%`, backgroundColor: barColor }} />
-                        </div>
-                        <span className="text-xs font-bold w-10 text-right" style={{ color: barColor }}>{catPct.toFixed(1)}%</span>
-                      </div>
-                    </div>
-                    {/* mobilde sadece özet, masaüstünde tam */}
-                    <div className="hidden sm:flex items-center gap-6 text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      <span>Bütçe: <span className="font-semibold text-gray-700 dark:text-gray-300 font-mono">{fmtFull(budget)}</span></span>
-                      <span>Kullanılan: <span className="font-semibold font-mono" style={{ color: barColor }}>{fmtFull(used)}</span></span>
-                      <span>Kalan: <span className="font-semibold text-emerald-600 dark:text-emerald-400 font-mono">{fmtFull(remaining)}</span></span>
-                    </div>
-                    <div className="flex sm:hidden items-center gap-3 text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      <span>Bütçe: <span className="font-mono font-medium text-gray-700 dark:text-gray-300">{fmt(budget)}</span></span>
-                      <span>Kalan: <span className="font-mono font-medium text-emerald-600 dark:text-emerald-400">{fmt(remaining)}</span></span>
-                    </div>
-                  </div>
-
-                  {/* SAP kodu satırları — mobil kart görünümü */}
-                  <div className="sm:hidden divide-y divide-gray-100 dark:divide-gray-800">
-                    {rows.map((row) => {
-                      const pct    = row.budget > 0 ? (row.used / row.budget) * 100 : 0;
-                      const rowBar = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#22c55e';
-                      return (
-                        <div key={row.code} className="p-3 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="font-mono text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded">
-                              {row.code}
-                            </span>
-                            <span className="text-xs font-bold" style={{ color: rowBar }}>{pct.toFixed(1)}%</span>
-                          </div>
-                          <p className="text-sm font-medium text-gray-800 dark:text-gray-200 leading-tight">{row.name}</p>
-                          <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
-                            <div className="h-1.5 rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: rowBar }} />
-                          </div>
-                          <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
-                            <span>Bütçe: <span className="font-mono font-medium text-gray-700 dark:text-gray-300">{fmtFull(row.budget)}</span></span>
-                            <span>Kullanılan: <span className="font-mono font-semibold" style={{ color: rowBar }}>{fmtFull(row.used)}</span></span>
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            Kalan: <span className="font-mono font-medium text-emerald-600 dark:text-emerald-400">{fmtFull(row.remaining)}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {/* mobil alt toplam */}
-                    <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800 flex justify-between text-xs font-semibold text-gray-700 dark:text-gray-300">
-                      <span>{category} Toplamı</span>
-                      <span style={{ color: barColor }}>{fmtFull(used)} / {fmtFull(budget)}</span>
-                    </div>
-                  </div>
-
-                  {/* SAP kodu satırları — masaüstü tablo */}
-                  <div className="hidden sm:block overflow-x-auto">
-                    <table className="w-full min-w-[560px] text-sm">
-                      <thead className="bg-gray-50 dark:bg-gray-800">
-                        <tr>
-                          {['SAP Kodu', 'Açıklama', 'Bütçe (₺)', 'Kullanılan (₺)', 'Kalan (₺)', 'Kullanım %'].map((h, i) => (
-                            <th key={h} className={`px-5 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide ${i < 2 ? 'text-left' : 'text-right'}`}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                        {rows.map((row) => {
-                          const pct      = row.budget > 0 ? (row.used / row.budget) * 100 : 0;
-                          const rowBar   = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#22c55e';
-                          const rowBg    = pct >= 90
-                            ? 'hover:bg-red-50 dark:hover:bg-red-950/30'
-                            : pct >= 70
-                            ? 'hover:bg-amber-50 dark:hover:bg-amber-950/30'
-                            : 'hover:bg-gray-50 dark:hover:bg-gray-800';
-
-                          return (
-                            <tr key={row.code} className={`transition-colors ${rowBg}`}>
-                              <td className="px-5 py-3">
-                                <span className="font-mono text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded">
-                                  {row.code}
-                                </span>
-                              </td>
-                              <td className="px-5 py-3 font-medium text-gray-800 dark:text-gray-200">{row.name}</td>
-                              <td className="px-5 py-3 text-right font-mono text-gray-600 dark:text-gray-400">{fmtFull(row.budget)}</td>
-                              <td className="px-5 py-3 text-right font-mono font-semibold" style={{ color: rowBar }}>{fmtFull(row.used)}</td>
-                              <td className="px-5 py-3 text-right font-mono text-emerald-600 dark:text-emerald-400">{fmtFull(row.remaining)}</td>
-                              <td className="px-5 py-3 text-right">
-                                <div className="flex items-center justify-end gap-2">
-                                  <div className="w-20 bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
-                                    <div className="h-1.5 rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: rowBar }} />
-                                  </div>
-                                  <span className="font-semibold w-10 text-right text-xs" style={{ color: rowBar }}>{pct.toFixed(1)}%</span>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      {/* kategori alt toplamı */}
-                      <tfoot className="bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-                        <tr>
-                          <td colSpan={2} className="px-5 py-2.5 font-semibold text-gray-700 dark:text-gray-300 text-xs uppercase tracking-wide">
-                            {category} Toplamı
-                          </td>
-                          <td className="px-5 py-2.5 text-right font-semibold font-mono text-gray-700 dark:text-gray-300">{fmtFull(budget)}</td>
-                          <td className="px-5 py-2.5 text-right font-semibold font-mono" style={{ color: barColor }}>{fmtFull(used)}</td>
-                          <td className="px-5 py-2.5 text-right font-semibold font-mono text-emerald-600 dark:text-emerald-400">{fmtFull(remaining)}</td>
-                          <td className="px-5 py-2.5 text-right">
-                            <span className="font-bold text-xs" style={{ color: barColor }}>{catPct.toFixed(1)}%</span>
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-              );
-            })}
-
-          </div>
+          <SapTab
+            importedSapData={importedSapData}
+            setImportedSapData={setImportedSapData}
+            sapSummary={sapSummary}
+            sapByCategory={sapByCategory}
+            companyLabel={companyLabel}
+          />
         )}
 
         {/* ══════════ DEPARTMAN KIRILIMI TAB ══════════ */}
         {tab === 'dept' && (
-          <div className="space-y-6">
-
-            {/* ICE uyarısı */}
-            {company === 'ICE' ? (
-              <div className="flex flex-col items-center justify-center py-20 text-center">
-                <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
-                  <span className="text-3xl">🏢</span>
-                </div>
-                <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">ICE&apos;de departman kırılımı bulunmamaktadır</p>
-                <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">Bu analiz yalnızca ICA verisi için hazırlanmıştır.</p>
-              </div>
-            ) : (
-              <>
-                {/* GRUP notu */}
-                {company === 'GRUP' && (
-                  <div className="px-4 py-2.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl text-sm text-amber-700 dark:text-amber-300">
-                    Grup Konsolide seçili — departman kırılımı yalnızca <span className="font-semibold">ICA</span> verisi üzerinden gösterilmektedir.
-                  </div>
-                )}
-
-                {/* departman seçici */}
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => setSelectedDept('ALL')}
-                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                      selectedDept === 'ALL'
-                        ? 'bg-gray-800 dark:bg-gray-100 text-white dark:text-gray-900 shadow'
-                        : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-                    }`}
-                  >
-                    Tüm Departmanlar
-                  </button>
-                  {DEPARTMENTS.map((dept) => {
-                    const total = ICA_DEPT.reduce((s, r) => s + r[dept], 0);
-                    if (total === 0) return null;
-                    return (
-                      <button
-                        key={dept}
-                        onClick={() => setSelectedDept(dept)}
-                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                          selectedDept === dept
-                            ? 'text-white shadow'
-                            : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-                        }`}
-                        style={selectedDept === dept ? { backgroundColor: DEPT_COLORS[dept] } : {}}
-                      >
-                        {dept}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* grafikler */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-                  {/* pasta grafik — departman payları */}
-                  <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-3 sm:p-5 shadow-sm">
-                    <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">
-                      Departman Payları — ICA 2025
-                    </h3>
-                    <div className="h-48 sm:h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={deptPieData}
-                          dataKey="value"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={100}
-                          innerRadius={52}
-                          paddingAngle={2}
-                        >
-                          {deptPieData.map((d) => (
-                            <Cell key={d.name} fill={d.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          formatter={(value) => [fmtFull(Number(value)), '']}
-                          contentStyle={{ background: dark ? '#1f2937' : '#fff', border: `1px solid ${dark ? '#374151' : '#e5e7eb'}`, borderRadius: 8, fontSize: 12 }}
-                          labelStyle={{ color: dark ? '#f9fafb' : '#111827', fontWeight: 600 }}
-                        />
-                        <Legend
-                          formatter={(value) => <span style={{ fontSize: 11, color: dark ? '#9ca3af' : '#6b7280' }}>{value}</span>}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    </div>
-                  </div>
-
-                  {/* bar chart — seçilen departman veya tüm kategoriler */}
-                  <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-3 sm:p-5 shadow-sm">
-                    <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">
-                      {selectedDept === 'ALL'
-                        ? 'Kategori Bazlı Dağılım — Tüm Departmanlar'
-                        : `${selectedDept} — Kategori Dağılımı`}
-                    </h3>
-                    <div className="h-48 sm:h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      {selectedDept === 'ALL' ? (
-                        <BarChart data={deptBarData} margin={{ top: 4, right: 8, bottom: 4, left: 16 }}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={dark ? '#374151' : '#f0f0f0'} />
-                          <XAxis dataKey="name" tick={{ fontSize: 10, fill: dark ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} />
-                          <YAxis tickFormatter={fmt} tick={{ fontSize: 10, fill: dark ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} width={60} />
-                          <Tooltip
-                            formatter={(v) => fmtFull(Number(v))}
-                            contentStyle={{ background: dark ? '#1f2937' : '#fff', border: `1px solid ${dark ? '#374151' : '#e5e7eb'}`, borderRadius: 8, fontSize: 11 }}
-                          />
-                          <Legend iconType="square" iconSize={9} wrapperStyle={{ fontSize: 10, paddingTop: 8, color: dark ? '#9ca3af' : '#6b7280' }} />
-                          {DEPARTMENTS.map((dept) => (
-                            <Bar key={dept} dataKey={dept} name={dept} stackId="a" fill={DEPT_COLORS[dept]} />
-                          ))}
-                        </BarChart>
-                      ) : (
-                        <BarChart data={deptBarData} layout="vertical" margin={{ top: 4, right: 48, bottom: 4, left: 8 }}>
-                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={dark ? '#374151' : '#f0f0f0'} />
-                          <XAxis type="number" tickFormatter={fmt} tick={{ fontSize: 10, fill: dark ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} />
-                          <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: dark ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} width={100} />
-                          <Tooltip
-                            formatter={(v) => [fmtFull(Number(v)), selectedDept]}
-                            contentStyle={{ background: dark ? '#1f2937' : '#fff', border: `1px solid ${dark ? '#374151' : '#e5e7eb'}`, borderRadius: 8, fontSize: 11 }}
-                          />
-                          <Bar dataKey="value" name={selectedDept} fill={DEPT_COLORS[selectedDept as Department]} radius={[0, 4, 4, 0]}
-                            label={{ position: 'right', formatter: (v: unknown) => fmt(v as number), fontSize: 10, fill: dark ? '#9ca3af' : '#6b7280' }}
-                          />
-                        </BarChart>
-                      )}
-                    </ResponsiveContainer>
-                    </div>
-                  </div>
-                </div>
-
-                {/* matris tablo */}
-                <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
-                    <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">
-                      Departman × Kategori Matris — ICA 2025 Yıllık (₺)
-                    </h3>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[640px] text-sm">
-                      <thead className="bg-gray-50 dark:bg-gray-800">
-                        <tr>
-                          <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide sticky left-0 bg-gray-50 dark:bg-gray-800">
-                            Kategori
-                          </th>
-                          {DEPARTMENTS.map((dept) => (
-                            <th
-                              key={dept}
-                              className={`px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide whitespace-nowrap ${
-                                selectedDept === dept
-                                  ? 'text-white'
-                                  : 'text-gray-500 dark:text-gray-400'
-                              }`}
-                              style={selectedDept === dept ? { backgroundColor: DEPT_COLORS[dept] } : {}}
-                            >
-                              {dept}
-                            </th>
-                          ))}
-                          <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide bg-gray-100 dark:bg-gray-700">
-                            TOPLAM
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                        {ICA_DEPT.map((row) => {
-                          const rowTotal = DEPARTMENTS.reduce((s, d) => s + row[d], 0);
-                          return (
-                            <tr key={row.categoryId} className={`transition-colors ${
-                              selectedDept !== 'ALL' ? 'hover:bg-gray-50 dark:hover:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800'
-                            }`}>
-                              <td className="px-5 py-3 font-medium text-gray-800 dark:text-gray-200 sticky left-0 bg-white dark:bg-gray-900 flex items-center gap-2">
-                                <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: CATEGORY_COLORS[row.categoryId] }} />
-                                {row.categoryName}
-                              </td>
-                              {DEPARTMENTS.map((dept) => {
-                                const val = row[dept];
-                                const isSelected = selectedDept === dept;
-                                return (
-                                  <td
-                                    key={dept}
-                                    className={`px-4 py-3 text-right font-mono text-xs ${
-                                      val === 0
-                                        ? 'text-gray-300 dark:text-gray-600'
-                                        : isSelected
-                                        ? 'font-bold'
-                                        : 'text-gray-700 dark:text-gray-300'
-                                    }`}
-                                    style={isSelected && val > 0 ? { color: DEPT_COLORS[dept] } : {}}
-                                  >
-                                    {val === 0 ? '—' : fmtFull(val)}
-                                  </td>
-                                );
-                              })}
-                              <td className="px-4 py-3 text-right font-mono text-xs font-semibold text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-800">
-                                {fmtFull(rowTotal)}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      <tfoot className="bg-gray-100 dark:bg-gray-700 border-t-2 border-gray-200 dark:border-gray-600">
-                        <tr>
-                          <td className="px-5 py-3 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wide sticky left-0 bg-gray-100 dark:bg-gray-700">
-                            Genel Toplam
-                          </td>
-                          {DEPARTMENTS.map((dept) => {
-                            const colTotal = ICA_DEPT.reduce((s, r) => s + r[dept], 0);
-                            const isSelected = selectedDept === dept;
-                            return (
-                              <td
-                                key={dept}
-                                className={`px-4 py-3 text-right font-mono text-xs font-bold ${
-                                  colTotal === 0
-                                    ? 'text-gray-400 dark:text-gray-500'
-                                    : isSelected
-                                    ? 'text-white'
-                                    : 'text-gray-700 dark:text-gray-300'
-                                }`}
-                                style={isSelected && colTotal > 0 ? { backgroundColor: DEPT_COLORS[dept] } : {}}
-                              >
-                                {colTotal === 0 ? '—' : fmtFull(colTotal)}
-                              </td>
-                            );
-                          })}
-                          <td className="px-4 py-3 text-right font-mono text-xs font-bold text-gray-900 dark:text-white">
-                            {fmtFull(deptGrandTotal)}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
+          <DeptTab
+            deptPieData={deptPieData}
+            deptBarData={deptBarData}
+            deptGrandTotal={deptGrandTotal}
+            selectedDept={selectedDept}
+            setSelectedDept={setSelectedDept}
+            companyLabel={companyLabel}
+            axisColor={axisColor}
+            gridColor={gridColor}
+            company={company}
+            dark={dark}
+          />
         )}
 
       </main>
