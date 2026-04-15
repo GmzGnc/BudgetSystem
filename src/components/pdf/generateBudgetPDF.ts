@@ -28,18 +28,18 @@ async function loadLogo(): Promise<string> {
 async function registerNotoSans(doc: jsPDF): Promise<void> {
   try {
     const [regularData, boldData] = await Promise.all([
-      fetchAsBase64('/noto-sans-regular.woff'),
-      fetchAsBase64('/noto-sans-bold.woff'),
+      fetchAsBase64('https://fonts.gstatic.com/s/notosans/v36/o-0IIpQlx3QUlC5A4PNb4j5Ba_2c7A.ttf'),
+      fetchAsBase64('https://fonts.gstatic.com/s/notosans/v36/o-0NIpQlx3QUlC5A4PNjXhFVadyBx2pqPIif.ttf'),
     ]);
     if (regularData) {
-      const regularB64 = regularData.replace(/^data:[^;]+;base64,/, '');
-      doc.addFileToVFS('NotoSans-Regular.woff', regularB64);
-      doc.addFont('NotoSans-Regular.woff', 'NotoSans', 'normal');
+      const b64 = regularData.replace(/^data:[^;]+;base64,/, '');
+      doc.addFileToVFS('NotoSans-Regular.ttf', b64);
+      doc.addFont('NotoSans-Regular.ttf', 'NotoSans', 'normal');
     }
     if (boldData) {
-      const boldB64 = boldData.replace(/^data:[^;]+;base64,/, '');
-      doc.addFileToVFS('NotoSans-Bold.woff', boldB64);
-      doc.addFont('NotoSans-Bold.woff', 'NotoSans', 'bold');
+      const b64 = boldData.replace(/^data:[^;]+;base64,/, '');
+      doc.addFileToVFS('NotoSans-Bold.ttf', b64);
+      doc.addFont('NotoSans-Bold.ttf', 'NotoSans', 'bold');
     }
   } catch {
     // helvetica fallback
