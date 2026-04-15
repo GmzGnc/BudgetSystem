@@ -25,28 +25,16 @@ async function loadLogo(): Promise<string> {
   return '';
 }
 
-async function registerNotoSans(doc: jsPDF): Promise<void> {
-  try {
-    const [regularData, boldData] = await Promise.all([
-      fetchAsBase64('https://fonts.gstatic.com/s/notosans/v36/o-0IIpQlx3QUlC5A4PNb4j5Ba_2c7A.ttf'),
-      fetchAsBase64('https://fonts.gstatic.com/s/notosans/v36/o-0NIpQlx3QUlC5A4PNjXhFVadyBx2pqPIif.ttf'),
-    ]);
-    if (regularData) {
-      const b64 = regularData.replace(/^data:[^;]+;base64,/, '');
-      doc.addFileToVFS('NotoSans-Regular.ttf', b64);
-      doc.addFont('NotoSans-Regular.ttf', 'NotoSans', 'normal', 'Identity-H');
-    }
-    if (boldData) {
-      const b64 = boldData.replace(/^data:[^;]+;base64,/, '');
-      doc.addFileToVFS('NotoSans-Bold.ttf', b64);
-      doc.addFont('NotoSans-Bold.ttf', 'NotoSans', 'bold', 'Identity-H');
-    }
-  } catch {
-    // helvetica fallback
-  }
+function tr(text: string): string {
+  return text
+    .replace(/İ/g, 'I').replace(/ı/g, 'i')
+    .replace(/Ğ/g, 'G').replace(/ğ/g, 'g')
+    .replace(/Ü/g, 'U').replace(/ü/g, 'u')
+    .replace(/Ş/g, 'S').replace(/ş/g, 's')
+    .replace(/Ö/g, 'O').replace(/ö/g, 'o')
+    .replace(/Ç/g, 'C').replace(/ç/g, 'c')
+    .replace(/Â/g, 'A').replace(/â/g, 'a');
 }
-
-let font = 'helvetica';
 
 export interface CategoryPDFData {
   name: string;
@@ -92,7 +80,7 @@ const GRAY_DARK  = [75, 85, 99]    as [number, number, number];
 const WHITE      = [255, 255, 255] as [number, number, number];
 const BLACK      = [17, 24, 39]    as [number, number, number];
 
-const MONTHS_TR = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+const MONTHS_TR = ['Oca','Sub','Mar','Nis','May','Haz','Tem','Agu','Eyl','Eki','Kas','Ara'];
 const MONTHS_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function formatTL(val: number): string {
@@ -113,11 +101,11 @@ function addPageHeader(doc: jsPDF, companyName: string, pageNum: number, totalPa
 
   doc.setTextColor(...WHITE);
   doc.setFontSize(8);
-  doc.setFont(font, 'bold');
-  doc.text(companyName, 30, 10);
-  doc.setFont(font, 'normal');
+  doc.setFont('helvetica', 'bold');
+  doc.text(tr(companyName), 30, 10);
+  doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
-  doc.text('İdari İşler Bütçe Raporu / Administrative Affairs Budget Report', 30, 15);
+  doc.text(tr('Idari Isler Butce Raporu / Administrative Affairs Budget Report'), 30, 15);
   doc.text(`${pageNum} / ${totalPages}`, 285, 10, { align: 'right' });
 }
 
@@ -126,9 +114,9 @@ function addPageFooter(doc: jsPDF, generatedAt: string) {
   doc.rect(0, 196, 297, 5, 'F');
   doc.setTextColor(...GRAY_DARK);
   doc.setFontSize(6);
-  doc.setFont(font, 'normal');
-  doc.text(`Gizli - Yalnızca İç Kullanım / Confidential - Internal Use Only | ${generatedAt}`, 8, 199);
-  doc.text('Claude AI ile analiz edildi / Analyzed with Claude AI', 289, 199, { align: 'right' });
+  doc.setFont('helvetica', 'normal');
+  doc.text(tr(`Gizli - Yalnizca Ic Kullanim / Confidential - Internal Use Only | ${generatedAt}`), 8, 199);
+  doc.text(tr('Claude AI ile analiz edildi / Analyzed with Claude AI'), 289, 199, { align: 'right' });
 }
 
 function addCoverPage(doc: jsPDF, data: PDFReportData, logoBase64: string) {
@@ -145,27 +133,27 @@ function addCoverPage(doc: jsPDF, data: PDFReportData, logoBase64: string) {
 
   doc.setTextColor(...WHITE);
   doc.setFontSize(22);
-  doc.setFont(font, 'bold');
-  doc.text('İDARİ İŞLER BÜTÇE RAPORU', 148, 112, { align: 'center' });
+  doc.setFont('helvetica', 'bold');
+  doc.text(tr('IDARI ISLER BUTCE RAPORU'), 148, 112, { align: 'center' });
   doc.setFontSize(14);
-  doc.setFont(font, 'normal');
-  doc.text('Administrative Affairs Budget Report', 148, 122, { align: 'center' });
+  doc.setFont('helvetica', 'normal');
+  doc.text(tr('Administrative Affairs Budget Report'), 148, 122, { align: 'center' });
 
   doc.setFontSize(11);
-  doc.setFont(font, 'bold');
-  doc.text(data.period, 148, 140, { align: 'center' });
+  doc.setFont('helvetica', 'bold');
+  doc.text(tr(data.period), 148, 140, { align: 'center' });
 
   doc.setFontSize(9);
-  doc.setFont(font, 'normal');
+  doc.setFont('helvetica', 'normal');
   doc.setTextColor(180, 200, 230);
-  doc.text(`Oluşturulma Tarihi / Generated: ${data.generatedAt}`, 148, 152, { align: 'center' });
-  doc.text(`Şirket / Company: ${data.companyName} (${data.companyCode})`, 148, 160, { align: 'center' });
+  doc.text(tr(`Olusturulma Tarihi / Generated: ${data.generatedAt}`), 148, 152, { align: 'center' });
+  doc.text(tr(`Sirket / Company: ${data.companyName} (${data.companyCode})`), 148, 160, { align: 'center' });
 
   doc.setFillColor(...BLUE);
   doc.rect(0, 198, 297, 12, 'F');
   doc.setTextColor(...WHITE);
   doc.setFontSize(7);
-  doc.text('Yavuz Sultan Selim Köprüsü ve Kuzey Çevre Otoyolu İşletmesi', 148, 205, { align: 'center' });
+  doc.text(tr('Yavuz Sultan Selim Koprusu ve Kuzey Cevre Otoyolu Isletmesi'), 148, 205, { align: 'center' });
 }
 
 function addExecutiveSummaryPage(doc: jsPDF, data: PDFReportData, pageNum: number, totalPages: number, logoBase64: string) {
@@ -178,23 +166,23 @@ function addExecutiveSummaryPage(doc: jsPDF, data: PDFReportData, pageNum: numbe
   const totalPct      = totalBudget > 0 ? (totalVariance / totalBudget) * 100 : 0;
 
   doc.setFontSize(13);
-  doc.setFont(font, 'bold');
+  doc.setFont('helvetica', 'bold');
   doc.setTextColor(...NAVY);
-  doc.text('Yönetici Özeti', 14, 28);
+  doc.text(tr('Yonetici Ozeti'), 14, 28);
   doc.setFontSize(9);
-  doc.setFont(font, 'normal');
+  doc.setFont('helvetica', 'normal');
   doc.setTextColor(...GRAY_DARK);
-  doc.text('Executive Summary', 14, 34);
+  doc.text(tr('Executive Summary'), 14, 34);
 
   doc.setDrawColor(...BLUE);
   doc.setLineWidth(0.5);
   doc.line(14, 36, 283, 36);
 
   const metrics = [
-    { labelTr: 'Toplam Bütçe',  labelEn: 'Total Budget',  value: formatTL(totalBudget),   color: NAVY },
-    { labelTr: 'Toplam Fiili',  labelEn: 'Total Actual',  value: formatTL(totalActual),   color: NAVY },
-    { labelTr: 'Net Sapma',     labelEn: 'Net Variance',  value: formatTL(totalVariance), color: totalVariance > 0 ? RED : GREEN },
-    { labelTr: 'Sapma Yüzdesi', labelEn: 'Variance %',    value: formatPct(totalPct),     color: totalPct > 0 ? RED : GREEN },
+    { labelTr: tr('Toplam Butce'),  labelEn: tr('Total Budget'),  value: formatTL(totalBudget),   color: NAVY },
+    { labelTr: tr('Toplam Fiili'),  labelEn: tr('Total Actual'),  value: formatTL(totalActual),   color: NAVY },
+    { labelTr: tr('Net Sapma'),     labelEn: tr('Net Variance'),  value: formatTL(totalVariance), color: totalVariance > 0 ? RED : GREEN },
+    { labelTr: tr('Sapma Yuzdesi'), labelEn: tr('Variance %'),    value: formatPct(totalPct),     color: totalPct > 0 ? RED : GREEN },
   ];
 
   metrics.forEach((m, i) => {
@@ -205,47 +193,47 @@ function addExecutiveSummaryPage(doc: jsPDF, data: PDFReportData, pageNum: numbe
     doc.setLineWidth(0.3);
     doc.roundedRect(x, 40, 64, 28, 2, 2, 'S');
     doc.setFontSize(7);
-    doc.setFont(font, 'bold');
+    doc.setFont('helvetica', 'bold');
     doc.setTextColor(...NAVY);
     doc.text(m.labelTr, x + 32, 47, { align: 'center' });
-    doc.setFont(font, 'normal');
+    doc.setFont('helvetica', 'normal');
     doc.setTextColor(...GRAY_DARK);
     doc.setFontSize(6);
     doc.text(m.labelEn, x + 32, 51, { align: 'center' });
     doc.setFontSize(11);
-    doc.setFont(font, 'bold');
+    doc.setFont('helvetica', 'bold');
     doc.setTextColor(...m.color);
     doc.text(m.value, x + 32, 61, { align: 'center' });
   });
 
   doc.setFontSize(10);
-  doc.setFont(font, 'bold');
+  doc.setFont('helvetica', 'bold');
   doc.setTextColor(...NAVY);
-  doc.text('Kategori Bazlı Özet / Category Summary', 14, 78);
+  doc.text(tr('Kategori Bazli Ozet / Category Summary'), 14, 78);
 
   const tableY = 82;
   const cols   = [14, 90, 140, 190, 232, 260];
   const headers = [
-    ['Kategori', 'Category'],
-    ['Bütçe (TL)', 'Budget'],
-    ['Fiili (TL)', 'Actual'],
-    ['Fark (TL)', 'Variance'],
+    [tr('Kategori'), tr('Category')],
+    [tr('Butce (TL)'), tr('Budget')],
+    [tr('Fiili (TL)'), tr('Actual')],
+    [tr('Fark (TL)'), tr('Variance')],
     ['%', '%'],
-    ['Durum', 'Status'],
+    [tr('Durum'), tr('Status')],
   ];
 
   doc.setFillColor(...NAVY);
   doc.rect(14, tableY, 269, 10, 'F');
   doc.setTextColor(...WHITE);
   doc.setFontSize(7);
-  doc.setFont(font, 'bold');
+  doc.setFont('helvetica', 'bold');
   headers.forEach((h, i) => {
     doc.text(h[0], cols[i] + 2, tableY + 5);
     doc.setFontSize(5.5);
-    doc.setFont(font, 'normal');
+    doc.setFont('helvetica', 'normal');
     doc.text(h[1], cols[i] + 2, tableY + 8.5);
     doc.setFontSize(7);
-    doc.setFont(font, 'bold');
+    doc.setFont('helvetica', 'bold');
   });
 
   data.categories.forEach((cat, idx) => {
@@ -256,10 +244,10 @@ function addExecutiveSummaryPage(doc: jsPDF, data: PDFReportData, pageNum: numbe
     doc.setLineWidth(0.1);
     doc.line(14, rowY + 9, 283, rowY + 9);
 
-    doc.setFont(font, 'normal');
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
     doc.setTextColor(...BLACK);
-    doc.text(cat.name, cols[0] + 2, rowY + 6);
+    doc.text(tr(cat.name), cols[0] + 2, rowY + 6);
     doc.text(formatTL(cat.budgetTotal), cols[1] + 2, rowY + 6);
     doc.text(formatTL(cat.actualTotal), cols[2] + 2, rowY + 6);
 
@@ -267,13 +255,13 @@ function addExecutiveSummaryPage(doc: jsPDF, data: PDFReportData, pageNum: numbe
     doc.text(formatTL(cat.variance), cols[3] + 2, rowY + 6);
     doc.text(formatPct(cat.variancePercent), cols[4] + 2, rowY + 6);
 
-    const statusText   = cat.variance > 0 ? 'AŞIM'     : 'TASARRUF';
-    const statusTextEn = cat.variance > 0 ? 'OVER'     : 'SAVING';
+    const statusText   = cat.variance > 0 ? tr('ASIM')     : tr('TASARRUF');
+    const statusTextEn = cat.variance > 0 ? tr('OVER')     : tr('SAVING');
     doc.setFillColor(...(cat.variance > 0 ? RED : GREEN));
     doc.roundedRect(cols[5] + 2, rowY + 1, 22, 7, 1, 1, 'F');
     doc.setTextColor(...WHITE);
     doc.setFontSize(5.5);
-    doc.setFont(font, 'bold');
+    doc.setFont('helvetica', 'bold');
     doc.text(statusText,   cols[5] + 13, rowY + 4.5, { align: 'center' });
     doc.setFontSize(4.5);
     doc.text(statusTextEn, cols[5] + 13, rowY + 7,   { align: 'center' });
@@ -288,25 +276,25 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
   doc.rect(14, 22, 269, 12, 'F');
   doc.setTextColor(...WHITE);
   doc.setFontSize(11);
-  doc.setFont(font, 'bold');
-  doc.text(cat.name, 18, 30);
+  doc.setFont('helvetica', 'bold');
+  doc.text(tr(cat.name), 18, 30);
   doc.setFontSize(7);
-  doc.setFont(font, 'normal');
-  doc.text(cat.nameEn, 18, 31.5);
+  doc.setFont('helvetica', 'normal');
+  doc.text(tr(cat.nameEn), 18, 31.5);
 
   const summaryItems = [
-    `Bütçe: ${formatTL(cat.budgetTotal)}`,
-    `Fiili: ${formatTL(cat.actualTotal)}`,
-    `Fark: ${formatTL(cat.variance)}`,
+    tr(`Butce: ${formatTL(cat.budgetTotal)}`),
+    tr(`Fiili: ${formatTL(cat.actualTotal)}`),
+    tr(`Fark: ${formatTL(cat.variance)}`),
   ];
   doc.setFontSize(6);
   doc.setTextColor(...WHITE);
   summaryItems.forEach((s, i) => doc.text(s, 130 + i * 52, 29));
 
   doc.setFontSize(8);
-  doc.setFont(font, 'bold');
+  doc.setFont('helvetica', 'bold');
   doc.setTextColor(...NAVY);
-  doc.text('Aylık Karşılaştırma / Monthly Comparison', 14, 42);
+  doc.text(tr('Aylik Karsilastirma / Monthly Comparison'), 14, 42);
 
   const tblY = 45;
   const colW = 21;
@@ -315,21 +303,21 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
   doc.rect(14, tblY, 269, 8, 'F');
   doc.setTextColor(...WHITE);
   doc.setFontSize(6);
-  doc.setFont(font, 'bold');
-  doc.text('Kalem', 16, tblY + 5.5);
+  doc.setFont('helvetica', 'bold');
+  doc.text(tr('Kalem'), 16, tblY + 5.5);
   MONTHS_TR.forEach((m, i) => {
     doc.text(m, 42 + i * colW, tblY + 4);
-    doc.setFont(font, 'normal');
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(5);
     doc.text(MONTHS_EN[i], 42 + i * colW, tblY + 7);
-    doc.setFont(font, 'bold');
+    doc.setFont('helvetica', 'bold');
     doc.setFontSize(6);
   });
 
   const rows: { label: string; values: number[]; isBold: boolean; isVariance?: boolean }[] = [
-    { label: 'Bütçe/Budget',  values: cat.monthlyData.map((m) => m.budget),            isBold: false },
-    { label: 'Fiili/Actual',  values: cat.monthlyData.map((m) => m.actual),            isBold: false },
-    { label: 'Fark/Variance', values: cat.monthlyData.map((m) => m.actual - m.budget), isBold: true, isVariance: true },
+    { label: tr('Butce/Budget'),  values: cat.monthlyData.map((m) => m.budget),            isBold: false },
+    { label: tr('Fiili/Actual'),  values: cat.monthlyData.map((m) => m.actual),            isBold: false },
+    { label: tr('Fark/Variance'), values: cat.monthlyData.map((m) => m.actual - m.budget), isBold: true, isVariance: true },
   ];
 
   rows.forEach((row, ri) => {
@@ -337,7 +325,7 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
     doc.setFillColor(...(ri % 2 === 0 ? GRAY_LIGHT : WHITE));
     doc.rect(14, rowY, 269, 8, 'F');
     doc.setFontSize(6);
-    doc.setFont(font, row.isBold ? 'bold' : 'normal');
+    doc.setFont('helvetica', row.isBold ? 'bold' : 'normal');
     doc.setTextColor(...BLACK);
     doc.text(row.label, 16, rowY + 5.5);
     row.values.forEach((v, i) => {
@@ -356,8 +344,8 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
   doc.rect(14, totY, 269, 8, 'F');
   doc.setTextColor(...WHITE);
   doc.setFontSize(6.5);
-  doc.setFont(font, 'bold');
-  doc.text('TOPLAM / TOTAL', 16, totY + 5.5);
+  doc.setFont('helvetica', 'bold');
+  doc.text(tr('TOPLAM / TOTAL'), 16, totY + 5.5);
   doc.text(formatTL(cat.budgetTotal), 42, totY + 5.5);
   doc.text(formatTL(cat.actualTotal), 42 + colW, totY + 5.5);
   const varColor: [number, number, number] = cat.variance > 0 ? [255, 180, 180] : [180, 255, 180];
@@ -369,34 +357,34 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
     doc.setFillColor(235, 242, 255);
     doc.roundedRect(14, aiY, 269, 6, 1, 1, 'F');
     doc.setFontSize(8);
-    doc.setFont(font, 'bold');
+    doc.setFont('helvetica', 'bold');
     doc.setTextColor(...NAVY);
-    doc.text('Yapay Zeka Sapma Analizi / AI Variance Analysis', 18, aiY + 4.5);
+    doc.text(tr('Yapay Zeka Sapma Analizi / AI Variance Analysis'), 18, aiY + 4.5);
 
     let curY = aiY + 10;
 
     doc.setFontSize(7);
-    doc.setFont(font, 'bold');
+    doc.setFont('helvetica', 'bold');
     doc.setTextColor(...NAVY);
-    doc.text('Özet / Summary:', 14, curY);
+    doc.text(tr('Ozet / Summary:'), 14, curY);
     curY += 5;
-    doc.setFont(font, 'normal');
+    doc.setFont('helvetica', 'normal');
     doc.setTextColor(...BLACK);
-    const summaryLines = doc.splitTextToSize(cat.aiAnalysis.summary, 265);
+    const summaryLines = doc.splitTextToSize(tr(cat.aiAnalysis.summary), 265);
     summaryLines.slice(0, 3).forEach((line: string) => {
       doc.text(line, 14, curY);
       curY += 4;
     });
 
     curY += 3;
-    doc.setFont(font, 'bold');
+    doc.setFont('helvetica', 'bold');
     doc.setTextColor(...NAVY);
     doc.setFontSize(7);
-    doc.text('Etki Dağılımı / Variance Decomposition:', 14, curY);
+    doc.text(tr('Etki Dagilimi / Variance Decomposition:'), 14, curY);
     curY += 4;
 
     const effCols = [14, 60, 115, 150, 190];
-    const effHeaders = ['Etki Türü/Type', 'Tutar/Amount', 'Katkı/Contribution', 'Açıklama/Description'];
+    const effHeaders = [tr('Etki Turu/Type'), tr('Tutar/Amount'), tr('Katki/Contribution'), tr('Aciklama/Description')];
     doc.setFillColor(...NAVY);
     doc.rect(14, curY, 269, 7, 'F');
     doc.setTextColor(...WHITE);
@@ -408,30 +396,30 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
       doc.setFillColor(...(ei % 2 === 0 ? GRAY_LIGHT : WHITE));
       doc.rect(14, curY, 269, 7, 'F');
       doc.setFontSize(6);
-      doc.setFont(font, 'normal');
+      doc.setFont('helvetica', 'normal');
       doc.setTextColor(...BLACK);
-      doc.text(eff.label, effCols[0] + 2, curY + 4.5);
+      doc.text(tr(eff.label), effCols[0] + 2, curY + 4.5);
       doc.setTextColor(...(eff.amount > 0 ? RED : GREEN));
       doc.text(formatTL(eff.amount), effCols[1] + 2, curY + 4.5);
       doc.text('%' + Math.abs(eff.contributionPercent).toFixed(1), effCols[2] + 2, curY + 4.5);
       doc.setTextColor(...BLACK);
-      const descLines = doc.splitTextToSize(eff.description, 76);
+      const descLines = doc.splitTextToSize(tr(eff.description), 76);
       doc.text(descLines[0] || '', effCols[3] + 2, curY + 4.5);
       curY += 7;
     });
 
     if (curY < 175) {
       curY += 4;
-      doc.setFont(font, 'bold');
+      doc.setFont('helvetica', 'bold');
       doc.setFontSize(7);
       doc.setTextColor(...NAVY);
-      doc.text('Öneriler / Recommendations:', 14, curY);
+      doc.text(tr('Oneriler / Recommendations:'), 14, curY);
       curY += 5;
       cat.aiAnalysis.recommendations.slice(0, 3).forEach((rec, ri) => {
-        doc.setFont(font, 'normal');
+        doc.setFont('helvetica', 'normal');
         doc.setFontSize(6.5);
         doc.setTextColor(...BLACK);
-        const recLines = doc.splitTextToSize(`${ri + 1}. ${rec}`, 265);
+        const recLines = doc.splitTextToSize(tr(`${ri + 1}. ${rec}`), 265);
         recLines.slice(0, 2).forEach((line: string) => {
           if (curY < 185) { doc.text(line, 14, curY); curY += 4; }
         });
@@ -447,13 +435,13 @@ function addDepartmentPage(doc: jsPDF, data: PDFReportData, pageNum: number, tot
   addPageFooter(doc, data.generatedAt);
 
   doc.setFontSize(13);
-  doc.setFont(font, 'bold');
+  doc.setFont('helvetica', 'bold');
   doc.setTextColor(...NAVY);
-  doc.text('Departman Kırılımı', 14, 28);
+  doc.text(tr('Departman Kirilimi'), 14, 28);
   doc.setFontSize(9);
-  doc.setFont(font, 'normal');
+  doc.setFont('helvetica', 'normal');
   doc.setTextColor(...GRAY_DARK);
-  doc.text('Department Breakdown', 14, 34);
+  doc.text(tr('Department Breakdown'), 14, 34);
   doc.setDrawColor(...BLUE);
   doc.setLineWidth(0.5);
   doc.line(14, 36, 283, 36);
@@ -461,10 +449,10 @@ function addDepartmentPage(doc: jsPDF, data: PDFReportData, pageNum: number, tot
   const tblY = 42;
   const cols = [14, 80, 140, 196, 240];
   const headers = [
-    ['Departman', 'Department'],
-    ['Bütçe', 'Budget'],
-    ['Fiili', 'Actual'],
-    ['Fark', 'Variance'],
+    [tr('Departman'), tr('Department')],
+    [tr('Butce'), tr('Budget')],
+    [tr('Fiili'), tr('Actual')],
+    [tr('Fark'), tr('Variance')],
     ['%', '%'],
   ];
 
@@ -472,14 +460,14 @@ function addDepartmentPage(doc: jsPDF, data: PDFReportData, pageNum: number, tot
   doc.rect(14, tblY, 269, 10, 'F');
   doc.setTextColor(...WHITE);
   doc.setFontSize(7);
-  doc.setFont(font, 'bold');
+  doc.setFont('helvetica', 'bold');
   headers.forEach((h, i) => {
     doc.text(h[0], cols[i] + 2, tblY + 5);
     doc.setFontSize(5.5);
-    doc.setFont(font, 'normal');
+    doc.setFont('helvetica', 'normal');
     doc.text(h[1], cols[i] + 2, tblY + 8.5);
     doc.setFontSize(7);
-    doc.setFont(font, 'bold');
+    doc.setFont('helvetica', 'bold');
   });
 
   data.departments.forEach((dept, idx) => {
@@ -487,10 +475,10 @@ function addDepartmentPage(doc: jsPDF, data: PDFReportData, pageNum: number, tot
     doc.setFillColor(...(idx % 2 === 0 ? GRAY_LIGHT : WHITE));
     doc.rect(14, rowY, 269, 10, 'F');
     doc.setFontSize(7.5);
-    doc.setFont(font, 'bold');
+    doc.setFont('helvetica', 'bold');
     doc.setTextColor(...NAVY);
-    doc.text(dept.name, cols[0] + 2, rowY + 6.5);
-    doc.setFont(font, 'normal');
+    doc.text(tr(dept.name), cols[0] + 2, rowY + 6.5);
+    doc.setFont('helvetica', 'normal');
     doc.setTextColor(...BLACK);
     doc.text(formatTL(dept.budgetTotal), cols[1] + 2, rowY + 6.5);
     doc.text(formatTL(dept.actualTotal), cols[2] + 2, rowY + 6.5);
@@ -503,10 +491,6 @@ function addDepartmentPage(doc: jsPDF, data: PDFReportData, pageNum: number, tot
 export async function generateBudgetPDF(data: PDFReportData): Promise<void> {
   const logoBase64 = await loadLogo();
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-
-  await registerNotoSans(doc);
-  const available = doc.getFontList();
-  font = available['NotoSans'] ? 'NotoSans' : 'helvetica';
 
   const totalPages = 2 + data.categories.length + (data.departments && data.departments.length > 0 ? 1 : 0);
 
@@ -522,6 +506,6 @@ export async function generateBudgetPDF(data: PDFReportData): Promise<void> {
     addDepartmentPage(doc, data, totalPages, totalPages, logoBase64);
   }
 
-  const fileName = `${data.companyCode}_İdari_İşler_Bütçe_${data.period.replace(/\s/g, '_')}.pdf`;
+  const fileName = `${data.companyCode}_Idari_Isler_Butce_${tr(data.period.replace(/\s/g, '_'))}.pdf`;
   doc.save(fileName);
 }
