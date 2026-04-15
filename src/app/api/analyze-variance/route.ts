@@ -22,6 +22,21 @@ export interface VarianceAnalysisRequest {
     diffPct: number | null;
   }>;
   categoryFormula?: string;
+  monthBreakdown?: Array<{
+    month: string;
+    budget: number;
+    actual: number;
+    variance: number;
+    variancePct: number;
+  }>;
+  departmentBreakdown?: Array<{
+    department: string;
+    budget: number;
+    actual: number;
+    variance: number;
+    variancePct: number;
+  }>;
+  analysisScope?: 'category' | 'department' | 'monthly' | 'full';
 }
 
 export interface VarianceEffect {
@@ -39,6 +54,13 @@ export interface VarianceAnalysisResponse {
   monthlyTrend: string;
   recommendations: string[];
   interRelations: string;
+  departmentInsights: string;
+  monthlyInsights: string;
+  karmaEffect: {
+    description: string;
+    dominantFactor: string;
+    secondaryFactor: string;
+  };
 }
 
 const SYSTEM_PROMPT = `Sen deneyimli bir Türk finans analistisin. Bütçe varyans analizleri konusunda uzmansın.
@@ -70,13 +92,30 @@ Yanıtını MUTLAKA şu JSON formatında ver (başka hiçbir metin ekleme):
     "Kısa, aksiyon odaklı öneri 2",
     "Kısa, aksiyon odaklı öneri 3"
   ],
-  "interRelations": "Etkiler arasındaki ilişkileri açıkla. Örneğin: fiyat artışının kısmen miktar azaltmasıyla dengelenip dengelenmediği gibi."
+  "interRelations": "Etkiler arasındaki ilişkileri açıkla. Örneğin: fiyat artışının kısmen miktar azaltmasıyla dengelenip dengelenmediği gibi.",
+  "departmentInsights": "Departman bazlı bulgu (veri yoksa boş string)",
+  "monthlyInsights": "Ay bazlı bulgu (veri yoksa boş string)",
+  "karmaEffect": {
+    "description": "Fiyat × Miktar × Departman etkilerinin kesişimi",
+    "dominantFactor": "En baskın etken",
+    "secondaryFactor": "İkincil etken"
+  }
 }
+
+Eğer departman verisi varsa, departmanlar arası karma etkiyi de analiz et:
+- Hangi departman bütçeyi en çok aştı?
+- Departmanlar arası dağılım değişimi (karışım etkisi) nedir?
+
+Eğer aylık breakdown varsa, zamansal karma etkiyi analiz et:
+- Sapma hangi aylarda yoğunlaştı?
+- Mevsimsellik veya tek seferlik etki mi?
 
 Önemli kurallar:
 - Tüm metin Türkçe olacak
 - effects dizisinde yalnızca 0'dan büyük tutarda etkileri dahil et (en az 1, en fazla 4 etki)
 - Sayısal değerler kesinlikle TL cinsinden olacak (yüzde değil)
+- departmentInsights ve monthlyInsights: veri yoksa boş string ("") döndür
+- karmaEffect: her zaman doldur; veri yetersizse genel değerlendirme yap
 - Veri yetersizse "Yeterli parametre verisi bulunamadı, genel değerlendirme yapılıyor" gibi bir not ekle`;
 
 export async function POST(req: NextRequest) {
@@ -95,6 +134,7 @@ export async function POST(req: NextRequest) {
   const {
     mode, categoryName, departmentName, budgetTotal, actualTotal,
     varianceAmount, variancePercent, monthlyData, parameters,
+    monthBreakdown, departmentBreakdown,
   } = body;
 
   const subject = mode === 'department' && departmentName
@@ -115,6 +155,18 @@ export async function POST(req: NextRequest) {
     })
     .join('\n');
 
+  const monthBreakdownLines = monthBreakdown && monthBreakdown.length > 0
+    ? '\nAYLIK BREAKDOWN (bütçe vs fiili + varyans):\n' + monthBreakdown
+        .map((m) => `  ${m.month}: Bütçe ${m.budget.toLocaleString('tr-TR')} ₺, Fiili ${m.actual.toLocaleString('tr-TR')} ₺, Varyans ${m.variance >= 0 ? '+' : ''}${m.variance.toLocaleString('tr-TR')} ₺ (${m.variancePct >= 0 ? '+' : ''}${m.variancePct.toFixed(1)}%)`)
+        .join('\n')
+    : '';
+
+  const deptBreakdownLines = departmentBreakdown && departmentBreakdown.length > 0
+    ? '\nDEPARTMAN BREAKDOWN:\n' + departmentBreakdown
+        .map((d) => `  ${d.department}: Bütçe ${d.budget.toLocaleString('tr-TR')} ₺, Fiili ${d.actual.toLocaleString('tr-TR')} ₺, Varyans ${d.variance >= 0 ? '+' : ''}${d.variance.toLocaleString('tr-TR')} ₺`)
+        .join('\n')
+    : '';
+
   const userMessage = `Analiz konusu: ${subject}
 
 ÖZET:
@@ -124,7 +176,8 @@ export async function POST(req: NextRequest) {
 
 AYLIK VERİ:
 ${monthlyLines}
-
+${monthBreakdownLines}
+${deptBreakdownLines}
 PARAMETRE DETAYI:
 ${paramLines}
 

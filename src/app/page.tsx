@@ -107,6 +107,9 @@ export default function Home() {
     monthlyTrend: string;
     recommendations: string[];
     interRelations: string;
+    departmentInsights: string;
+    monthlyInsights: string;
+    karmaEffect: { description: string; dominantFactor: string; secondaryFactor: string };
   } | null>(null);
   const [varDrawerError, setVarDrawerError] = useState<string | null>(null);
   const [isPdfLoading,   setIsPdfLoading]   = useState(false);
@@ -1347,6 +1350,33 @@ export default function Home() {
                                                     budget: mainTotalRow?.budget[mi] ?? 0,
                                                     actual: mainTotalRow?.actual[mi] ?? 0,
                                                   }));
+                                                  // Ay bazlı breakdown
+                                                  const monthBreakdown = MONTH_LABELS.map((m, mi) => {
+                                                    const bv = mainTotalRow?.budget[mi] ?? 0;
+                                                    const av = mainTotalRow?.actual[mi] ?? 0;
+                                                    const vv = av - bv;
+                                                    return {
+                                                      month: m,
+                                                      budget: bv,
+                                                      actual: av,
+                                                      variance: vv,
+                                                      variancePct: bv > 0 ? (vv / bv) * 100 : 0,
+                                                    };
+                                                  });
+                                                  // Departman bazlı breakdown (ICA için ICA_DEPT'ten al)
+                                                  const deptRow = ICA_DEPT.find((r) => r.categoryId === cat.id);
+                                                  const departmentBreakdown = deptRow
+                                                    ? DEPARTMENTS.map((d) => {
+                                                        const bv = deptRow[d] ?? 0;
+                                                        return {
+                                                          department: d,
+                                                          budget: bv,
+                                                          actual: bv,
+                                                          variance: 0,
+                                                          variancePct: 0,
+                                                        };
+                                                      }).filter((d) => d.budget > 0)
+                                                    : [];
                                                   fetch('/api/analyze-variance', {
                                                     method: 'POST',
                                                     headers: { 'Content-Type': 'application/json' },
@@ -1359,6 +1389,9 @@ export default function Home() {
                                                       variancePercent: diffPctVar,
                                                       monthlyData: monthly,
                                                       parameters: params,
+                                                      monthBreakdown,
+                                                      departmentBreakdown,
+                                                      analysisScope: 'full',
                                                     }),
                                                   })
                                                     .then((r) => r.json())
@@ -1832,6 +1865,40 @@ export default function Home() {
                       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                         <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2">Etki İlişkileri</h3>
                         <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{r.interRelations}</p>
+                      </div>
+                    )}
+
+                    {/* karma etki */}
+                    {r.karmaEffect && (
+                      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                        <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-3">Karma Etki Analizi</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-3">{r.karmaEffect.description}</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="bg-red-50 dark:bg-red-950/20 rounded-lg p-2.5 border border-red-100 dark:border-red-900">
+                            <p className="text-[10px] font-bold text-red-500 uppercase mb-1">Baskın Etken</p>
+                            <p className="text-xs font-semibold text-red-700 dark:text-red-300">{r.karmaEffect.dominantFactor}</p>
+                          </div>
+                          <div className="bg-amber-50 dark:bg-amber-950/20 rounded-lg p-2.5 border border-amber-100 dark:border-amber-900">
+                            <p className="text-[10px] font-bold text-amber-500 uppercase mb-1">İkincil Etken</p>
+                            <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">{r.karmaEffect.secondaryFactor}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* departman insights */}
+                    {r.departmentInsights && (
+                      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                        <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2">Departman Analizi</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{r.departmentInsights}</p>
+                      </div>
+                    )}
+
+                    {/* monthly insights */}
+                    {r.monthlyInsights && (
+                      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                        <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2">Aylık Yoğunlaşma</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{r.monthlyInsights}</p>
                       </div>
                     )}
 
