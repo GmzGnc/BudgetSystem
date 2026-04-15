@@ -3,6 +3,12 @@ import { supabase } from './supabase';
 /*
  * ─── Supabase SQL Editor'da çalıştırılacak ────────────────────────────────────
  *
+ * -- department_id NULL içeriyorsa bu index'i kullan:
+ * CREATE UNIQUE INDEX budget_entries_unique_idx
+ * ON budget_entries (company_id, fiscal_year_id, category_id, month)
+ * WHERE department_id IS NULL;
+ *
+ * -- department_id hiç NULL değilse bu constraint'i kullan:
  * ALTER TABLE budget_entries
  * ADD CONSTRAINT budget_entries_unique
  * UNIQUE (company_id, fiscal_year_id, category_id, department_id, month);
@@ -425,10 +431,11 @@ export async function getBudgetEntriesAsModelRows(
     console.log('[db] sample cat id:', cats[0]?.id, 'name:', cats[0]?.name);
 
     const result = cats.map((cat) => {
+      const catEntries = entriesRes.data!.filter((e) => e.category_id === cat.id);
+      console.log(`[db] cat ${cat.name}: ${catEntries.length} entries, sample budget_amount:`, catEntries[0]?.budget_amount);
+
       const budget = Array.from({ length: 12 }, (_, mi) => {
-        const rows = entriesRes.data!.filter(
-          (e) => e.category_id === cat.id && e.month === mi + 1,
-        );
+        const rows = catEntries.filter((e) => e.month === mi + 1);
         return rows.reduce((s, r) => s + (r.budget_amount ?? 0), 0);
       });
 
