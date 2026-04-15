@@ -430,13 +430,30 @@ export default function Home() {
       }
       if (parsed.length === 0) { showToast('Model sheet okunamadı — sütunları kontrol edin'); return; }
 
+      // Bütçe değeri kontrolü — formül cache'i boşsa uyar
+      const hasBudgetValues = parsed.some((r) => r.budget.some((v) => v !== 0));
+      if (!hasBudgetValues) {
+        showToast('⚠️ Bütçe değerleri okunamadı. Excel dosyasını Microsoft Excel\'de bir kez açıp kaydedin, sonra tekrar yükleyin.');
+        // Yine de devam et — fiili veriler okunmuş olabilir
+      }
+
       // ── state güncelle (önce UI, sonra DB) ──
+      const budgetCount = parsed.filter((r) => r.budget.some((v) => v !== 0)).length;
+      const actualCount = parsed.filter((r) => r.actual.some((v) => v !== 0)).length;
       const hasActual = parsed.some((r) => r.actual.some((v) => v !== 0));
       setImportedModelData(parsed);
       setImportOpen(false);
       wbRef.current = null; setSheets([]); setSelectedSheet('');
       if (fileInputRef.current) fileInputRef.current.value = '';
-      showToast(`✓ ${parsed.length} parametre yüklendi${!hasActual ? ' — fiili sütunlar boş' : ''}`);
+
+      let msg = `✓ ${parsed.length} parametre yüklendi`;
+      if (budgetCount === 0) {
+        msg += ' — ⚠️ Bütçe değerleri boş! Excel\'i açıp kaydedin.';
+      } else {
+        msg += ` (${budgetCount} bütçe, ${actualCount} fiili)`;
+      }
+      if (!hasActual) msg += ' — fiili sütunlar boş';
+      showToast(msg);
 
       // ── DB'ye yaz (best-effort, UI'ı bloklamaz) ──
       void (async () => {
