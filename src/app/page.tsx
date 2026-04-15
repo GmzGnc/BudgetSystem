@@ -492,6 +492,7 @@ export default function Home() {
                 ? budgetFromToplam
                 : tlRows
                     .filter((r) => !/TOPLAM/i.test(r.paramName))
+                    .filter((r) => r.budget.some((v) => v > 100))
                     .reduce((s, r) => s + (r.budget[m] ?? 0), 0);
               console.log('[excel] pushing entry budget_amount:', budgetAmount, 'actual:', mainRow.actual[m]);
               entries.push({

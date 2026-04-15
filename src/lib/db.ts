@@ -421,13 +421,15 @@ export async function getBudgetEntriesAsModelRows(
     if (!entriesRes.data || entriesRes.data.length === 0) return null;
 
     const cats = catsRes.data ?? [];
+    console.log('[db] sample entry category_id:', entriesRes.data![0]?.category_id);
+    console.log('[db] sample cat id:', cats[0]?.id, 'name:', cats[0]?.name);
 
     const result = cats.map((cat) => {
       const budget = Array.from({ length: 12 }, (_, mi) => {
         const rows = entriesRes.data!.filter(
           (e) => e.category_id === cat.id && e.month === mi + 1,
         );
-        return rows.reduce((s, r) => s + r.budget_amount, 0);
+        return rows.reduce((s, r) => s + (r.budget_amount ?? 0), 0);
       });
 
       return {
