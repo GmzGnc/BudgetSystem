@@ -433,6 +433,7 @@ export default function Home() {
         };
         const budget: number[] = [];
         const actual: number[] = [];
+        if (i < 3) console.log('[excel] row sample:', row[13], row[14], row[15], 'unitType:', row[11], 'paramName:', row[10]);
         for (let m = 0; m < 12; m++) {
           budget.push(toNum(row[13 + m]));
           actual.push(toNum(row[28 + m]));
@@ -483,6 +484,7 @@ export default function Home() {
             if (!dbCat) continue;
             for (let m = 0; m < 12; m++) {
               if (mainRow.budget[m] === 0 && (mainRow.actual[m] ?? 0) === 0) continue;
+              console.log('[excel] pushing entry budget_amount:', mainRow.budget[m], 'actual:', mainRow.actual[m]);
               entries.push({
                 company_id:    dbCompany.id,
                 fiscal_year_id: dbYear.id,
