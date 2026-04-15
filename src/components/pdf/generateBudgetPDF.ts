@@ -415,6 +415,40 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
       curY += 7;
     });
 
+    // Aylık trend
+    if (cat.aiAnalysis.monthlyTrend && curY < 170) {
+      curY += 4;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(...NAVY);
+      doc.text(tr('Aylik Trend:'), 14, curY);
+      curY += 4;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6);
+      doc.setTextColor(...BLACK);
+      const trendLines = doc.splitTextToSize(tr(cat.aiAnalysis.monthlyTrend), 265);
+      trendLines.slice(0, 2).forEach((line: string) => {
+        if (curY < 180) { doc.text(line, 14, curY); curY += 4; }
+      });
+    }
+
+    // Etki ilişkileri
+    if (cat.aiAnalysis.interRelations && curY < 170) {
+      curY += 4;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(...NAVY);
+      doc.text(tr('Etki Iliskileri:'), 14, curY);
+      curY += 4;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6);
+      doc.setTextColor(...BLACK);
+      const interLines = doc.splitTextToSize(tr(cat.aiAnalysis.interRelations), 265);
+      interLines.slice(0, 2).forEach((line: string) => {
+        if (curY < 180) { doc.text(line, 14, curY); curY += 4; }
+      });
+    }
+
     // Karma etki bölümü
     if (cat.aiAnalysis?.karmaEffect && curY < 165) {
       curY += 4;

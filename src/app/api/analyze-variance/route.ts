@@ -116,7 +116,11 @@ Eğer aylık breakdown varsa, zamansal karma etkiyi analiz et:
 - Sayısal değerler kesinlikle TL cinsinden olacak (yüzde değil)
 - departmentInsights ve monthlyInsights: veri yoksa boş string ("") döndür
 - karmaEffect: her zaman doldur; veri yetersizse genel değerlendirme yap
-- Veri yetersizse "Yeterli parametre verisi bulunamadı, genel değerlendirme yapılıyor" gibi bir not ekle`;
+- Veri yetersizse "Yeterli parametre verisi bulunamadı, genel degerlendirme yapiliyor" gibi bir not ekle
+- Tüm metinlerde Türkçe özel karakterler KULLANMA. Bunların yerine şunları kullan:
+  ş→s, ğ→g, ü→u, ö→o, ç→c, ı→i, İ→I, Ş→S, Ğ→G, Ü→U, Ö→O, Ç→C
+  Örnek: "güvenlik" yerine "guvenlik", "şirket" yerine "sirket" yaz.
+  Bu kural tüm string alanlara uygulanır: summary, explanation, driver, monthlyTrend, recommendations, interRelations, departmentInsights, monthlyInsights, karmaEffect alanları.`;
 
 export async function POST(req: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
