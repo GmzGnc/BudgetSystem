@@ -27,7 +27,7 @@ import type { DrillDownGroup } from '@/data/drill-down-data';
 import {
   getCompanies, getFiscalYears, getCategories,
   upsertBudgetEntries, upsertSapEntries, logExcelImport,
-  getBudgetMonthlyData, getSapMonthlyData,
+  getBudgetMonthlyData, getSapMonthlyData, getBudgetEntriesAsModelRows,
 } from '@/lib/db';
 import type { BudgetEntry, SapEntry as DbSapEntry } from '@/lib/db';
 import {
@@ -140,6 +140,7 @@ export default function Home() {
   // ── DB / Supabase state ──
   const [dbMonthlyData, setDbMonthlyData] = useState<MonthlyEntry[] | null>(null);
   const [dbSapData,     setDbSapData]     = useState<SapEntry[] | null>(null);
+  const [dbModelRows,   setDbModelRows]   = useState<Map<string, ModelRow[]> | null>(null);
   const [dbLoading,     setDbLoading]     = useState(true);
 
   // ── excel import state ──
@@ -175,12 +176,18 @@ export default function Home() {
       setDbLoading(true);
       try {
         const companyCode = company === 'GRUP' ? 'ICA' : company;
-        const [monthlyRes, sapRes] = await Promise.all([
+        const [monthlyRes, sapRes, budgetRowsRes] = await Promise.all([
           getBudgetMonthlyData(companyCode),
           getSapMonthlyData(companyCode),
+          getBudgetEntriesAsModelRows(companyCode),
         ]);
         setDbMonthlyData(monthlyRes);
         setDbSapData(sapRes);
+        if (budgetRowsRes) {
+          const map = new Map<string, ModelRow[]>();
+          budgetRowsRes.forEach(({ categoryCode, rows }) => map.set(categoryCode, rows));
+          setDbModelRows(map);
+        }
       } catch {
         // DB erişilemiyorsa statik JSON kullan
       } finally {
@@ -667,7 +674,7 @@ export default function Home() {
           const cRange = CAT_ROW_RANGES[c.id];
           const cRows = importedModelData
             ? (cRange ? importedModelData.filter((r) => r.rowNum >= cRange[0] && r.rowNum <= cRange[1]) : [])
-            : [];
+            : (dbModelRows?.get(c.id) ?? []);
           const cTLRow = cRows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName))
             ?? cRows.find((r) => /^TL/i.test(r.unitType));
 
@@ -757,7 +764,7 @@ export default function Home() {
         const cRange = CAT_ROW_RANGES[c.id];
         const cRows = importedModelData
           ? (cRange ? importedModelData.filter((r) => r.rowNum >= cRange[0] && r.rowNum <= cRange[1]) : [])
-          : [];
+          : (dbModelRows?.get(c.id) ?? []);
         const cTLRow = cRows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName))
           ?? cRows.find((r) => /^TL/i.test(r.unitType));
         const cMonthly = Array.from({ length: 12 }, (_, mi) => ({
@@ -1037,7 +1044,9 @@ export default function Home() {
                         const aiResults = await Promise.allSettled(
                           CATEGORIES.map(async (c) => {
                             const cRange = CAT_ROW_RANGES[c.id];
-                            const cRows = cRange ? importedModelData.filter((r) => r.rowNum >= cRange[0] && r.rowNum <= cRange[1]) : [];
+                            const cRows = importedModelData
+                              ? (cRange ? importedModelData.filter((r) => r.rowNum >= cRange[0] && r.rowNum <= cRange[1]) : [])
+                              : (dbModelRows?.get(c.id) ?? []);
                             const cTLRow = cRows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName)) ?? cRows.find((r) => /^TL/i.test(r.unitType));
                             const cMonthly = Array.from({ length: 12 }, (_, mi) => ({ month: MONTH_LABELS[mi], budget: cTLRow?.budget[mi] ?? 0, actual: cTLRow?.actual[mi] ?? 0 }));
                             const activeIdxs = cMonthly.map((_, i) => i).filter((i) => cMonthly[i].actual > 0);
@@ -1078,7 +1087,9 @@ export default function Home() {
 
                         const pdfCategories: CategoryPDFData[] = CATEGORIES.map((c) => {
                           const cRange = CAT_ROW_RANGES[c.id];
-                          const cRows = cRange ? importedModelData.filter((r) => r.rowNum >= cRange[0] && r.rowNum <= cRange[1]) : [];
+                          const cRows = importedModelData
+                            ? (cRange ? importedModelData.filter((r) => r.rowNum >= cRange[0] && r.rowNum <= cRange[1]) : [])
+                            : (dbModelRows?.get(c.id) ?? []);
                           const cTLRow = cRows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName)) ?? cRows.find((r) => /^TL/i.test(r.unitType));
                           const cMonthly = Array.from({ length: 12 }, (_, mi) => ({ month: mi + 1, budget: cTLRow?.budget[mi] ?? 0, actual: cTLRow?.actual[mi] ?? 0 }));
                           const cActiveIndices = cMonthly.map((_, i) => i).filter((i) => cMonthly[i].actual > 0);
@@ -1603,9 +1614,9 @@ export default function Home() {
                                       }
 
                                       const range = CAT_ROW_RANGES[cat.id];
-                                      const catRows = range
-                                        ? importedModelData.filter((r) => r.rowNum >= range[0] && r.rowNum <= range[1])
-                                        : importedModelData;
+                                      const catRows = importedModelData
+                                        ? (range ? importedModelData.filter((r) => r.rowNum >= range[0] && r.rowNum <= range[1]) : importedModelData)
+                                        : (dbModelRows?.get(cat.id) ?? []);
 
                                       if (catRows.length === 0) {
                                         return (

@@ -367,3 +367,57 @@ export async function getSapMonthlyData(
     return null;
   }
 }
+
+// ─── 13. getBudgetEntriesAsModelRows ─────────────────────────────────────────
+export interface DbModelRow {
+  rowNum: number;
+  paramName: string;
+  unitType: string;
+  budget: number[];
+  actual: number[];
+}
+
+export async function getBudgetEntriesAsModelRows(
+  companyCode: string,
+  year: number = 2025,
+): Promise<{ categoryCode: string; rows: DbModelRow[] }[] | null> {
+  try {
+    const [companiesRes, yearsRes] = await Promise.all([
+      getCompanies(),
+      getFiscalYears(),
+    ]);
+    const company    = companiesRes.data?.find((c) => c.code === companyCode);
+    const fiscalYear = yearsRes.data?.find((y) => y.year === year && !y.is_projection);
+    if (!company || !fiscalYear) return null;
+
+    const [entriesRes, catsRes] = await Promise.all([
+      getBudgetEntries(company.id, fiscalYear.id),
+      getCategories(),
+    ]);
+    if (!entriesRes.data || entriesRes.data.length === 0) return null;
+
+    const cats = catsRes.data ?? [];
+
+    return cats.map((cat) => {
+      const budget = Array.from({ length: 12 }, (_, mi) => {
+        const rows = entriesRes.data!.filter(
+          (e) => e.category_id === cat.id && e.month === mi + 1,
+        );
+        return rows.reduce((s, r) => s + r.amount, 0);
+      });
+
+      return {
+        categoryCode: cat.code,
+        rows: [{
+          rowNum:    1,
+          paramName: 'Toplam',
+          unitType:  'TL',
+          budget,
+          actual:    Array(12).fill(0),
+        }],
+      };
+    });
+  } catch {
+    return null;
+  }
+}
