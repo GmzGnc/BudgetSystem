@@ -121,7 +121,9 @@ function addPageHeader(doc: jsPDF, companyName: string, pageNum: number, totalPa
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
   doc.text(tr('Idari Isler Butce Raporu / Administrative Affairs Budget Report'), 30, 15);
-  doc.text(`${pageNum} / ${totalPages}`, 285, 10, { align: 'right' });
+  if (pageNum > 0 && totalPages > 0) {
+    doc.text(`${pageNum} / ${totalPages}`, 285, 10, { align: 'right' });
+  }
 }
 
 function addPageFooter(doc: jsPDF, generatedAt: string) {
@@ -373,40 +375,78 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
   doc.setTextColor(...varColor);
   doc.text(formatTL(cat.variance) + ' (' + formatPct(cat.variancePercent) + ')', 42 + colW * 2, totY + 5.5);
 
-  // Parametre detay tablosu
+  // Parametre detay tablosu — otomatik sayfa kırma
   if (cat.parameters && cat.parameters.length > 0) {
-    const prmY = totY + 12;
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...NAVY);
-    doc.text(tr('Parametre Detayi / Parameter Detail'), 14, prmY);
-
+    const ROW_H = 5.5;
+    const PAGE_MAX_Y = 193;
+    const PAGE_START_Y = 22;
     const pCols = [14, 110, 148, 186, 224, 256];
     const pHeaders = [tr('Parametre'), tr('Tip'), tr('Butce'), tr('Fiili'), tr('Fark'), tr('Oran')];
-    doc.setFillColor(...NAVY);
-    doc.rect(14, prmY + 3, 269, 7, 'F');
-    doc.setTextColor(...WHITE);
-    doc.setFontSize(5.5);
-    doc.setFont('helvetica', 'bold');
-    pHeaders.forEach((h, i) => doc.text(h, pCols[i] + 2, prmY + 7.5));
+    let isFirstParamPage = true;
 
-    let pCurY = prmY + 10;
+    function drawParamHeader(y: number): number {
+      if (isFirstParamPage) {
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...NAVY);
+        doc.text(tr('Parametre Detayi / Parameter Detail'), 14, y);
+        y += 3;
+        isFirstParamPage = false;
+      }
+      doc.setFillColor(...NAVY);
+      doc.rect(14, y, 269, 7, 'F');
+      doc.setTextColor(...WHITE);
+      doc.setFontSize(5.5);
+      doc.setFont('helvetica', 'bold');
+      pHeaders.forEach((h, i) => doc.text(h, pCols[i] + 2, y + 4.5));
+      return y + 7;
+    }
+
+    let pCurY = drawParamHeader(totY + 12);
+
     cat.parameters.forEach((p, pi) => {
-      if (pCurY > 192) return;
+      if (pCurY + ROW_H > PAGE_MAX_Y) {
+        doc.addPage();
+        addPageHeader(doc, data.companyName, 0, 0, logoBase64);
+        addPageFooter(doc, data.generatedAt);
+        pCurY = drawParamHeader(PAGE_START_Y + 5);
+      }
+
       doc.setFillColor(...(pi % 2 === 0 ? GRAY_LIGHT : WHITE));
-      doc.rect(14, pCurY, 269, 6.5, 'F');
-      doc.setFontSize(5.2);
+      doc.rect(14, pCurY, 269, ROW_H, 'F');
+      doc.setFontSize(5);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(...BLACK);
-      const pName = p.paramName.length > 35 ? p.paramName.slice(0, 35) + '...' : p.paramName;
-      doc.text(tr(pName), pCols[0] + 2, pCurY + 4.5);
-      doc.text(tr(p.unitType || 'adet'), pCols[1] + 2, pCurY + 4.5);
-      doc.text(new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(p.budgetTotal), pCols[2] + 2, pCurY + 4.5);
-      doc.text(p.actualTotal > 0 ? new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(p.actualTotal) : '-', pCols[3] + 2, pCurY + 4.5);
+
+      const pName = p.paramName.length > 40 ? p.paramName.slice(0, 40) + '...' : p.paramName;
+      doc.text(tr(pName), pCols[0] + 2, pCurY + 3.8);
+      doc.text(tr(p.unitType || 'adet'), pCols[1] + 2, pCurY + 3.8);
+      doc.text(
+        p.budgetTotal !== 0
+          ? new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(p.budgetTotal)
+          : '-',
+        pCols[2] + 2, pCurY + 3.8
+      );
+      doc.text(
+        p.actualTotal > 0
+          ? new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(p.actualTotal)
+          : '-',
+        pCols[3] + 2, pCurY + 3.8
+      );
       doc.setTextColor(...(p.diff > 0 ? RED : p.diff < 0 ? GREEN : BLACK));
-      doc.text(p.diff !== 0 ? (p.diff > 0 ? '+' : '') + new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(p.diff) : '-', pCols[4] + 2, pCurY + 4.5);
-      doc.text(p.diffPct !== null ? (p.diffPct > 0 ? '+' : '') + p.diffPct.toFixed(1) + '%' : '-', pCols[5] + 2, pCurY + 4.5);
-      pCurY += 6.5;
+      doc.text(
+        p.diff !== 0
+          ? (p.diff > 0 ? '+' : '') + new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(p.diff)
+          : '-',
+        pCols[4] + 2, pCurY + 3.8
+      );
+      doc.text(
+        p.diffPct !== null
+          ? (p.diffPct > 0 ? '+' : '') + p.diffPct.toFixed(1) + '%'
+          : '-',
+        pCols[5] + 2, pCurY + 3.8
+      );
+      pCurY += ROW_H;
     });
   }
 }
@@ -624,10 +664,7 @@ export async function generateBudgetPDF(data: PDFReportData): Promise<void> {
   const logoBase64 = await loadLogo();
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
-  // Her kategorinin 2 sayfası var (veri + AI analizi)
-  const totalCatPages = data.categories.reduce((s, c) => s + (c.aiAnalysis ? 2 : 1), 0);
-  const deptPages = data.departments && data.departments.length > 0 ? 1 : 0;
-  const totalPages = 2 + totalCatPages + deptPages;
+  const totalPages = 99;
 
   // Kapak
   addCoverPage(doc, data, logoBase64);

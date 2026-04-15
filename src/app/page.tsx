@@ -722,7 +722,6 @@ export default function Home() {
             const aTotal = cActiveIndices.reduce((s, i) => s + r.actual[i], 0);
             return bTotal > 0 || aTotal > 0;
           })
-          .slice(0, 15)
           .map((r) => {
             const bTotal = cActiveIndices.length > 0
               ? cActiveIndices.reduce((s, i) => s + r.budget[i], 0)
@@ -1766,7 +1765,7 @@ export default function Home() {
                                                         varianceAmount: activeVar,
                                                         variancePercent: activeVarPct,
                                                         monthlyData: monthly,
-                                                        parameters: allParams.slice(0, 50),
+                                                        parameters: allParams,
                                                         monthBreakdown,
                                                         departmentBreakdown,
                                                         activeMonths: activeIdxs,
@@ -1776,7 +1775,7 @@ export default function Home() {
                                                     });
                                                     const aiResult = res.ok ? await res.json() : null;
 
-                                                    const pdfParams = allParams.slice(0, 30).map((p) => ({
+                                                    const pdfParams = allParams.map((p) => ({
                                                       paramName: p.paramName,
                                                       unitType: p.unitType,
                                                       budgetTotal: p.budget,
