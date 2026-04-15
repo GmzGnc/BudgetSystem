@@ -34,12 +34,12 @@ async function registerNotoSans(doc: jsPDF): Promise<void> {
     if (regularData) {
       const b64 = regularData.replace(/^data:[^;]+;base64,/, '');
       doc.addFileToVFS('NotoSans-Regular.ttf', b64);
-      doc.addFont('NotoSans-Regular.ttf', 'NotoSans', 'normal');
+      doc.addFont('NotoSans-Regular.ttf', 'NotoSans', 'normal', 'Identity-H');
     }
     if (boldData) {
       const b64 = boldData.replace(/^data:[^;]+;base64,/, '');
       doc.addFileToVFS('NotoSans-Bold.ttf', b64);
-      doc.addFont('NotoSans-Bold.ttf', 'NotoSans', 'bold');
+      doc.addFont('NotoSans-Bold.ttf', 'NotoSans', 'bold', 'Identity-H');
     }
   } catch {
     // helvetica fallback
