@@ -36,10 +36,10 @@ export interface Company {
 
 export interface Category {
   id: string;
+  order_no: number;
   name: string;
-  code: string;         // e.g. "guvenlik", "temizlik"
-  index_type: string;   // e.g. "Asgari Ücret", "TÜFE"
-  rate: number;         // default projection rate (%)
+  index_type: string;
+  default_rate: number;
   created_at?: string;
 }
 
@@ -54,8 +54,7 @@ export interface Department {
 export interface FiscalYear {
   id: string;
   year: number;
-  label: string;        // e.g. "2025", "2026 Projeksiyon"
-  is_projection: boolean;
+  status: string;       // 'active' | 'projection'
   created_at?: string;
 }
 
@@ -91,6 +90,19 @@ export interface SapEntry {
   remaining: number;
   updated_at?: string;
 }
+
+export const CATEGORY_CODE_MAP: Record<string, string> = {
+  'Güvenlik':      'guvenlik',
+  'Temizlik':      'temizlik',
+  'Yemek':         'yemek',
+  'Servis':        'servis',
+  'Araç Kira':     'arac_kira',
+  'HGS':           'hgs',
+  'Araç Yakıt':    'arac_yakit',
+  'Araç Bakım':    'arac_bakim',
+  'Diğer Hizmet':  'diger_hizmet',
+  'Diğer Çeşitli': 'diger_cesitli',
+};
 
 // ─── Generic result wrapper ───────────────────────────────────────────────────
 
@@ -303,7 +315,7 @@ export async function getBudgetMonthlyData(
       getFiscalYears(),
     ]);
     const company = companiesRes.data?.find((c) => c.code === companyCode);
-    const fiscalYear = yearsRes.data?.find((y) => y.year === year && !y.is_projection);
+    const fiscalYear = yearsRes.data?.find((y) => y.year === year && y.status === 'active');
     if (!company || !fiscalYear) return null;
 
     const entriesRes = await getBudgetEntries(company.id, fiscalYear.id);
@@ -320,7 +332,7 @@ export async function getBudgetMonthlyData(
         const rows = entriesRes.data!.filter(
           (e) => e.category_id === cat.id && e.month === mi + 1,
         );
-        (entry as Record<string, unknown>)[cat.code] = rows.reduce((s, r) => s + r.amount, 0);
+        (entry as Record<string, unknown>)[CATEGORY_CODE_MAP[cat.name] ?? cat.name] = rows.reduce((s, r) => s + r.amount, 0);
       }
       return entry;
     });
@@ -347,7 +359,7 @@ export async function getSapMonthlyData(
       getFiscalYears(),
     ]);
     const company = companiesRes.data?.find((c) => c.code === companyCode);
-    const fiscalYear = yearsRes.data?.find((y) => y.year === year && !y.is_projection);
+    const fiscalYear = yearsRes.data?.find((y) => y.year === year && y.status === 'active');
     if (!company || !fiscalYear) return null;
 
     const entriesRes = await getSapEntries(company.id, fiscalYear.id);
@@ -387,7 +399,7 @@ export async function getBudgetEntriesAsModelRows(
       getFiscalYears(),
     ]);
     const company    = companiesRes.data?.find((c) => c.code === companyCode);
-    const fiscalYear = yearsRes.data?.find((y) => y.year === year && !y.is_projection);
+    const fiscalYear = yearsRes.data?.find((y) => y.year === year && y.status === 'active');
     if (!company || !fiscalYear) return null;
 
     const [entriesRes, catsRes] = await Promise.all([
@@ -407,7 +419,7 @@ export async function getBudgetEntriesAsModelRows(
       });
 
       return {
-        categoryCode: cat.code,
+        categoryCode: CATEGORY_CODE_MAP[cat.name] ?? cat.name,
         rows: [{
           rowNum:    1,
           paramName: 'Toplam',

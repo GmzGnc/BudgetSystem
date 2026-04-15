@@ -27,7 +27,7 @@ import type { DrillDownGroup } from '@/data/drill-down-data';
 import {
   getCompanies, getFiscalYears, getCategories,
   upsertBudgetEntries, upsertSapEntries, logExcelImport,
-  getBudgetMonthlyData, getSapMonthlyData, getBudgetEntriesAsModelRows,
+  getBudgetMonthlyData, getSapMonthlyData, getBudgetEntriesAsModelRows, CATEGORY_CODE_MAP,
 } from '@/lib/db';
 import type { BudgetEntry, SapEntry as DbSapEntry } from '@/lib/db';
 import {
@@ -401,7 +401,7 @@ export default function Home() {
       ]);
       const companyCode = company === 'GRUP' ? 'ICA' : company;
       const dbCompany   = companiesRes.data?.find((c) => c.code === companyCode) ?? null;
-      const dbYear      = yearsRes.data?.find((y) => y.year === 2025 && !y.is_projection) ?? null;
+      const dbYear      = yearsRes.data?.find((y) => y.year === 2025 && y.status === 'active') ?? null;
       const dbCats      = catsRes.data ?? [];
       return { dbCompany, dbYear, dbCats };
     }
@@ -475,7 +475,7 @@ export default function Home() {
               ?? catRows.find((r) => /^TL/i.test(r.unitType))
               ?? catRows[0];
             if (!mainRow) continue;
-            const catId = dbCats.find((c) => c.code === catCode)?.id ?? catCode;
+            const catId = dbCats.find((c) => (CATEGORY_CODE_MAP[c.name] ?? c.name) === catCode)?.id ?? catCode;
             for (let m = 0; m < 12; m++) {
               const amount = mainRow.budget[m];
               if (amount === 0) continue;
