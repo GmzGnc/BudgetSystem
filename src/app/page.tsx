@@ -113,7 +113,8 @@ export default function Home() {
     karmaEffect: { description: string; dominantFactor: string; secondaryFactor: string };
   } | null>(null);
   const [varDrawerError, setVarDrawerError] = useState<string | null>(null);
-  const [isPdfLoading,   setIsPdfLoading]   = useState(false);
+  const [isExecPdfLoading,   setIsExecPdfLoading]   = useState(false);
+  const [isDetailPdfLoading, setIsDetailPdfLoading] = useState(false);
 
   // ── DB / Supabase state ──
   const [dbMonthlyData, setDbMonthlyData] = useState<MonthlyEntry[] | null>(null);
@@ -604,8 +605,8 @@ export default function Home() {
 
   // ── PDF handler ──
   const handleFullPdf = useCallback(async () => {
-    if (isPdfLoading) return;
-    setIsPdfLoading(true);
+    if (isDetailPdfLoading) return;
+    setIsDetailPdfLoading(true);
 
     const CAT_EN: Record<string, string> = {
       'Güvenlik': 'Security', 'Temizlik': 'Cleaning',
@@ -781,9 +782,9 @@ export default function Home() {
       };
       await generateBudgetPDF(pdfData);
     } finally {
-      setIsPdfLoading(false);
+      setIsDetailPdfLoading(false);
     }
-  }, [importedModelData, monthlyData, companyLabel, company, varDrawerResult, isPdfLoading]);
+  }, [importedModelData, monthlyData, companyLabel, company, varDrawerResult, isDetailPdfLoading]);
 
   // ── render ──
   return (
@@ -952,13 +953,13 @@ export default function Home() {
                 <div className="flex items-center gap-2">
                   {/* Yönetici Özeti PDF */}
                   <button
-                    disabled={isPdfLoading}
+                    disabled={isExecPdfLoading || isDetailPdfLoading}
                     onClick={async () => {
                       if (!importedModelData) {
                         alert('Önce Model Excel dosyasını yükleyin.');
                         return;
                       }
-                      setIsPdfLoading(true);
+                      setIsExecPdfLoading(true);
                       try {
                         const CAT_EN: Record<string, string> = {
                           'Güvenlik': 'Security', 'Temizlik': 'Cleaning',
@@ -1042,22 +1043,22 @@ export default function Home() {
                           categories: pdfCategories,
                         });
                       } finally {
-                        setIsPdfLoading(false);
+                        setIsExecPdfLoading(false);
                       }
                     }}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white shadow-sm transition-colors"
                   >
-                    {isPdfLoading ? (
+                    {isExecPdfLoading ? (
                       <svg className="animate-spin" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                     ) : (
                       <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
                     )}
-                    {isPdfLoading ? 'Hazirlaniyor...' : 'Yonetici Ozeti PDF'}
+                    {isExecPdfLoading ? 'Hazirlaniyor...' : 'Yonetici Ozeti PDF'}
                   </button>
 
                   {/* Detay Rapor PDF */}
                   <button
-                    disabled={isPdfLoading}
+                    disabled={isDetailPdfLoading || isExecPdfLoading}
                     onClick={async () => {
                       if (!importedModelData) {
                         alert('Önce Model Excel dosyasını yükleyin.');
@@ -1067,12 +1068,12 @@ export default function Home() {
                     }}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-[#1e2a4a] hover:bg-[#263461] disabled:opacity-50 text-white shadow-sm transition-colors"
                   >
-                    {isPdfLoading ? (
+                    {isDetailPdfLoading ? (
                       <svg className="animate-spin" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                     ) : (
                       <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     )}
-                    {isPdfLoading ? 'Hazirlaniyor...' : 'Detay Rapor PDF'}
+                    {isDetailPdfLoading ? 'Hazirlaniyor...' : 'Detay Rapor PDF'}
                   </button>
                 </div>
               </div>
@@ -1774,10 +1775,10 @@ export default function Home() {
 
                                               {/* PDF Raporu İndir — sadece bu kategori, derin analiz */}
                                               <button
-                                                disabled={isPdfLoading}
+                                                disabled={isDetailPdfLoading}
                                                 onClick={async (e) => {
                                                   e.stopPropagation();
-                                                  setIsPdfLoading(true);
+                                                  setIsDetailPdfLoading(true);
 
                                                   const CAT_EN: Record<string, string> = {
                                                     'Güvenlik': 'Security', 'Temizlik': 'Cleaning',
@@ -1902,12 +1903,12 @@ export default function Home() {
 
                                                     await generateBudgetPDF(pdfData);
                                                   } finally {
-                                                    setIsPdfLoading(false);
+                                                    setIsDetailPdfLoading(false);
                                                   }
                                                 }}
                                                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-[#1e2a4a] hover:bg-[#263461] disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm transition-colors"
                                               >
-                                                {isPdfLoading ? (
+                                                {isDetailPdfLoading ? (
                                                   <>
                                                     <svg className="animate-spin" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                                                     AI Analiz Ediliyor...
