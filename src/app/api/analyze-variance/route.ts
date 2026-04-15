@@ -23,6 +23,7 @@ export interface VarianceAnalysisRequest {
   }>;
   categoryFormula?: string;
   activeMonths?: number[];  // fiili verisi olan ay indeksleri (0-based)
+  deepAnalysis?: boolean;   // tek kategori derin analiz modu
   monthBreakdown?: Array<{
     month: string;
     budget: number;
@@ -200,7 +201,12 @@ export async function POST(req: NextRequest) {
         .join('\n')
     : '';
 
-  const userMessage = `Analiz konusu: ${subject}
+  const isDeep = body.deepAnalysis === true;
+  const depthNote = isDeep
+    ? '\nDERIN ANALIZ MODU: Bu tek bir kategorinin detay raporudur. Mumkun olan en kapsamli analizi yap. Her parametreyi tek tek incele, sapmalarin tam nedenini bul, somut rakamlarla destekle.\n'
+    : '';
+
+  const userMessage = `${depthNote}Analiz konusu: ${subject}
 
 ÖZET (TÜM YIL):
 - Yıllık Bütçe: ${budgetTotal.toLocaleString('tr-TR')} ₺

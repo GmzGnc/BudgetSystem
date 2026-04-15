@@ -1704,10 +1704,134 @@ export default function Home() {
                                                 Sapma Raporu Oluştur
                                               </button>
 
-                                              {/* PDF Raporu İndir */}
+                                              {/* PDF Raporu İndir — sadece bu kategori, derin analiz */}
                                               <button
                                                 disabled={isPdfLoading}
-                                                onClick={async (e) => { e.stopPropagation(); await handleFullPdf(); }}
+                                                onClick={async (e) => {
+                                                  e.stopPropagation();
+                                                  setIsPdfLoading(true);
+
+                                                  const CAT_EN: Record<string, string> = {
+                                                    'Güvenlik': 'Security', 'Temizlik': 'Cleaning',
+                                                    'Yemek': 'Food/Catering', 'Servis/Ulaşım': 'Transportation',
+                                                    'Araç Kira': 'Vehicle Rental', 'HGS': 'HGS/Toll',
+                                                    'Araç Yakıt': 'Vehicle Fuel', 'Araç Bakım': 'Vehicle Maintenance',
+                                                    'Su': 'Water', 'Diğer Hizmet': 'Other Services',
+                                                    'Diğer Çeşitli': 'Miscellaneous',
+                                                  };
+
+                                                  try {
+                                                    const monthly = MONTH_LABELS.map((m, mi) => ({
+                                                      month: m,
+                                                      budget: mainTotalRow?.budget[mi] ?? 0,
+                                                      actual: mainTotalRow?.actual[mi] ?? 0,
+                                                    }));
+
+                                                    const activeIdxs = monthly.map((_, i) => i).filter((i) => monthly[i].actual > 0);
+
+                                                    const activeBudget = activeIdxs.length > 0
+                                                      ? activeIdxs.reduce((s, i) => s + monthly[i].budget, 0)
+                                                      : (mainTotalRow?.budget.reduce((s, v) => s + v, 0) ?? 0);
+                                                    const activeActual = activeIdxs.reduce((s, i) => s + monthly[i].actual, 0);
+                                                    const activeVar = activeActual - activeBudget;
+                                                    const activeVarPct = activeBudget > 0 ? (activeVar / activeBudget) * 100 : 0;
+
+                                                    const monthBreakdown = monthly.map((m) => {
+                                                      const vv = m.actual - m.budget;
+                                                      return { month: m.month, budget: m.budget, actual: m.actual, variance: vv, variancePct: m.budget > 0 ? (vv / m.budget) * 100 : 0 };
+                                                    });
+
+                                                    const deptRow = ICA_DEPT.find((r) => r.categoryId === cat.id);
+                                                    const departmentBreakdown = deptRow
+                                                      ? DEPARTMENTS.map((d) => ({ department: d, budget: deptRow[d] ?? 0, actual: deptRow[d] ?? 0, variance: 0, variancePct: 0 })).filter((d) => d.budget > 0)
+                                                      : [];
+
+                                                    const allParams = catRows.map((r) => {
+                                                      const bv = activeIdxs.length > 0
+                                                        ? activeIdxs.reduce((s, i) => s + r.budget[i], 0)
+                                                        : r.budget.reduce((s, v) => s + v, 0);
+                                                      const av = activeIdxs.reduce((s, i) => s + r.actual[i], 0);
+                                                      const dv = av - bv;
+                                                      return { paramName: r.paramName, unitType: r.unitType, budget: bv, actual: av, diff: dv, diffPct: bv > 0 ? (dv / bv) * 100 : null };
+                                                    }).filter((p) => p.budget > 0 || p.actual > 0);
+
+                                                    const res = await fetch('/api/analyze-variance', {
+                                                      method: 'POST',
+                                                      headers: { 'Content-Type': 'application/json' },
+                                                      body: JSON.stringify({
+                                                        mode: 'category',
+                                                        categoryName: cat.name,
+                                                        budgetTotal: activeBudget,
+                                                        actualTotal: activeActual,
+                                                        varianceAmount: activeVar,
+                                                        variancePercent: activeVarPct,
+                                                        monthlyData: monthly,
+                                                        parameters: allParams.slice(0, 50),
+                                                        monthBreakdown,
+                                                        departmentBreakdown,
+                                                        activeMonths: activeIdxs,
+                                                        analysisScope: 'full',
+                                                        deepAnalysis: true,
+                                                      }),
+                                                    });
+                                                    const aiResult = res.ok ? await res.json() : null;
+
+                                                    const pdfParams = allParams.slice(0, 30).map((p) => ({
+                                                      paramName: p.paramName,
+                                                      unitType: p.unitType,
+                                                      budgetTotal: p.budget,
+                                                      actualTotal: p.actual,
+                                                      diff: p.diff,
+                                                      diffPct: p.diffPct,
+                                                    }));
+
+                                                    const cMonthly = Array.from({ length: 12 }, (_, mi) => ({
+                                                      month: mi + 1,
+                                                      budget: mainTotalRow?.budget[mi] ?? 0,
+                                                      actual: mainTotalRow?.actual[mi] ?? 0,
+                                                    }));
+
+                                                    const aiEff = aiResult?.effects?.map((eff: { name: string; amount: number; explanation: string; driver: string }) => ({
+                                                      type: eff.name,
+                                                      label: eff.name,
+                                                      amount: eff.amount,
+                                                      contributionPercent: Math.abs(eff.amount) / (Math.abs(aiResult.totalVariance) || 1) * 100,
+                                                      description: eff.explanation,
+                                                      driver: eff.driver,
+                                                    })) ?? [];
+
+                                                    const pdfData: PDFReportData = {
+                                                      companyName: companyLabel,
+                                                      companyCode: company,
+                                                      period: `2025 - ${cat.name} Detay Raporu`,
+                                                      generatedAt: new Date().toLocaleString('tr-TR'),
+                                                      categories: [{
+                                                        name: cat.name,
+                                                        nameEn: CAT_EN[cat.name] ?? cat.name,
+                                                        budgetTotal: activeBudget,
+                                                        actualTotal: activeActual,
+                                                        variance: activeVar,
+                                                        variancePercent: activeVarPct,
+                                                        monthlyData: cMonthly,
+                                                        parameters: pdfParams,
+                                                        aiAnalysis: aiResult && !aiResult.error ? {
+                                                          summary: aiResult.summary,
+                                                          effects: aiEff,
+                                                          monthlyTrend: aiResult.monthlyTrend,
+                                                          recommendations: aiResult.recommendations,
+                                                          interRelations: aiResult.interRelations,
+                                                          departmentInsights: aiResult.departmentInsights ?? '',
+                                                          monthlyInsights: aiResult.monthlyInsights ?? '',
+                                                          karmaEffect: aiResult.karmaEffect ?? null,
+                                                        } : undefined,
+                                                      }],
+                                                    };
+
+                                                    await generateBudgetPDF(pdfData);
+                                                  } finally {
+                                                    setIsPdfLoading(false);
+                                                  }
+                                                }}
                                                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-[#1e2a4a] hover:bg-[#263461] disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm transition-colors"
                                               >
                                                 {isPdfLoading ? (
