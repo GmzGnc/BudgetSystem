@@ -361,7 +361,7 @@ export default function Home() {
     reader.onload = (e) => {
       const data = e.target?.result;
       if (!data) return;
-      const wb = XLSX.read(data, { type: 'array', cellFormula: false, cellNF: false });
+      const wb = XLSX.read(data, { type: 'array', cellFormula: true, cellNF: false, cellDates: false });
       wbRef.current = wb;
       setSheets(wb.SheetNames);
       setSelectedSheet(wb.SheetNames[0] ?? '');
@@ -401,7 +401,7 @@ export default function Home() {
 
     // ── Model Gider sheet handler ──
     if (/model/i.test(selectedSheet)) {
-      const rawRows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1 });
+      const rawRows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true });
       const parsed: ModelRow[] = [];
       for (let i = 0; i < rawRows.length; i++) {
         const row = rawRows[i] as unknown[];
@@ -411,6 +411,11 @@ export default function Home() {
         const toNum = (v: unknown): number => {
           if (typeof v === 'number') return isFinite(v) ? v : 0;
           if (v === null || v === undefined || v === '') return 0;
+          // XLSX cell object: { t: 'n', v: 12345, f: '=SUM(...)' }
+          if (typeof v === 'object' && v !== null && 'v' in v) {
+            const cellVal = (v as { v: unknown }).v;
+            if (typeof cellVal === 'number') return isFinite(cellVal) ? cellVal : 0;
+          }
           const s = String(v).trim();
           if (s.startsWith('=') || s === '') return 0;
           return parseFloat(s.replace(/[^\d.-]/g, '')) || 0;
@@ -466,7 +471,7 @@ export default function Home() {
     }
 
     // ── SAP sheet handler ──
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' });
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '', raw: true });
     if (rows.length === 0) return;
 
     const colMap: Record<string, string> = {};
