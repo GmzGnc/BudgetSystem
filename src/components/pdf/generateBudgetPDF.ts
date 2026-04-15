@@ -50,6 +50,13 @@ export interface CategoryPDFData {
     monthlyTrend: string;
     recommendations: string[];
     interRelations: string;
+    departmentInsights?: string;
+    monthlyInsights?: string;
+    karmaEffect?: {
+      description: string;
+      dominantFactor: string;
+      secondaryFactor: string;
+    } | null;
   };
 }
 
@@ -407,6 +414,84 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
       doc.text(descLines[0] || '', effCols[3] + 2, curY + 4.5);
       curY += 7;
     });
+
+    // Karma etki bölümü
+    if (cat.aiAnalysis?.karmaEffect && curY < 165) {
+      curY += 4;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(...NAVY);
+      doc.text(tr('Karma Etki Ozeti:'), 14, curY);
+      curY += 5;
+
+      // Baskın etken kutusu
+      doc.setFillColor(254, 226, 226);
+      doc.roundedRect(14, curY, 128, 12, 1, 1, 'F');
+      doc.setFontSize(5.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(185, 28, 28);
+      doc.text(tr('BASKIN ETKEN'), 18, curY + 4.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(153, 27, 27);
+      const domLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.dominantFactor), 118);
+      doc.text(domLines[0] ?? '', 18, curY + 9);
+
+      // İkincil etken kutusu
+      doc.setFillColor(254, 243, 199);
+      doc.roundedRect(148, curY, 135, 12, 1, 1, 'F');
+      doc.setFontSize(5.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(180, 83, 9);
+      doc.text(tr('IKINCIL ETKEN'), 152, curY + 4.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(146, 64, 14);
+      const secLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.secondaryFactor), 125);
+      doc.text(secLines[0] ?? '', 152, curY + 9);
+      curY += 16;
+
+      // Karma etki açıklaması
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6);
+      doc.setTextColor(...BLACK);
+      const karmaLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.description), 265);
+      karmaLines.slice(0, 2).forEach((line: string) => {
+        if (curY < 180) { doc.text(line, 14, curY); curY += 4; }
+      });
+    }
+
+    // Departman insights
+    if (cat.aiAnalysis?.departmentInsights && curY < 170) {
+      curY += 3;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.5);
+      doc.setTextColor(...NAVY);
+      doc.text(tr('Departman Analizi:'), 14, curY);
+      curY += 4;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6);
+      doc.setTextColor(...BLACK);
+      const deptLines = doc.splitTextToSize(tr(cat.aiAnalysis.departmentInsights), 265);
+      deptLines.slice(0, 2).forEach((line: string) => {
+        if (curY < 180) { doc.text(line, 14, curY); curY += 4; }
+      });
+    }
+
+    // Aylık insights
+    if (cat.aiAnalysis?.monthlyInsights && curY < 175) {
+      curY += 3;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.5);
+      doc.setTextColor(...NAVY);
+      doc.text(tr('Aylik Yogunlasma:'), 14, curY);
+      curY += 4;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6);
+      doc.setTextColor(...BLACK);
+      const monthlyLines2 = doc.splitTextToSize(tr(cat.aiAnalysis.monthlyInsights), 265);
+      monthlyLines2.slice(0, 2).forEach((line: string) => {
+        if (curY < 183) { doc.text(line, 14, curY); curY += 4; }
+      });
+    }
 
     if (curY < 175) {
       curY += 4;
