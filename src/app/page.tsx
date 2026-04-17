@@ -13,6 +13,7 @@ import { CATEGORIES, CATEGORY_COLORS, INDEX_BADGE_COLORS } from '@/data/categori
 import { generateBudgetPDF, generateExecutivePDF } from '@/components/pdf/generateBudgetPDF';
 import type { CategoryPDFData, PDFReportData } from '@/components/pdf/generateBudgetPDF';
 import ProjectionTab from '@/components/tabs/ProjectionTab';
+import GuvenlikDetailPanel from '@/components/tabs/GuvenlikDetailPanel';
 import SapmaTab from '@/components/tabs/SapmaTab';
 import SapTab from '@/components/tabs/SapTab';
 import DeptTab from '@/components/tabs/DeptTab';
@@ -74,6 +75,29 @@ const CAT_ROW_RANGES: Record<string, [number, number]> = {
   diger_cesitli: [1337, 1376],
 };
 
+/**
+ * Pinned Excel row number for each category's TOPLAM / main total row.
+ * Used when paramName does not contain "TOPLAM" (e.g. "Güvenlik Giderleri" for row 20).
+ */
+const CAT_TOTAL_ROWS: Partial<Record<string, number>> = {
+  guvenlik: 20,
+};
+
+/**
+ * Returns the main total ModelRow for a category.
+ * Priority: pinned rowNum → first TL+TOPLAM row → first TL row → first row.
+ */
+function findMainTotalRow(catCode: string, rows: ModelRow[]): ModelRow | undefined {
+  const pinned = CAT_TOTAL_ROWS[catCode];
+  if (pinned !== undefined) {
+    const pinnedRow = rows.find((r) => r.rowNum === pinned);
+    if (pinnedRow) return pinnedRow;
+  }
+  return (
+    rows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName)) ??
+    rows.find((r) => /^TL/i.test(r.unitType))
+  );
+}
 
 // ─── default coefficients ────────────────────────────────────────────────────
 
@@ -222,35 +246,37 @@ export default function Home() {
     return GROUP_MONTHLY;
   }, [company]);
 
+  // projection2026 and totals are always based on staticMonthlyData (budget-data.ts),
+  // never Supabase — Supabase values can be inflated/stale for some categories (e.g. Güvenlik)
   const projection2026 = useMemo(
-    () => buildProjection2026(monthlyData, coefficients),
-    [monthlyData, coefficients],
+    () => buildProjection2026(staticMonthlyData, coefficients),
+    [staticMonthlyData, coefficients],
   );
 
-  const total2025  = useMemo(() => totalAnnual(monthlyData), [monthlyData]);
+  const total2025  = useMemo(() => totalAnnual(staticMonthlyData), [staticMonthlyData]);
   const total2026  = useMemo(() => totalAnnual(projection2026), [projection2026]);
-  const avgMonthly = useMemo(() => monthlyAverage(monthlyData), [monthlyData]);
+  const avgMonthly = useMemo(() => monthlyAverage(staticMonthlyData), [staticMonthlyData]);
   const diffPct    = useMemo(() => variancePct(total2025, total2026), [total2025, total2026]);
 
   const trendData = useMemo(() => {
-    const agg25 = aggregateMonthly(monthlyData);
+    const agg25 = aggregateMonthly(staticMonthlyData);
     const agg26 = aggregateMonthly(projection2026);
     return agg25.map((row, i) => ({
       label: row.monthLabel,
       '2025 Bütçe': row.total,
       '2026 Projeksiyon': agg26[i]?.total ?? 0,
     }));
-  }, [monthlyData, projection2026]);
+  }, [staticMonthlyData, projection2026]);
 
   const sapamaData = useMemo(() =>
     CATEGORIES.map((cat) => {
-      const t25   = categoryAnnual(monthlyData, cat.id);
+      const t25   = categoryAnnual(staticMonthlyData, cat.id);
       const t26   = categoryAnnual(projection2026, cat.id);
       const pct   = variancePct(t25, t26);
       const diff  = t26 - t25;
       return { id: cat.id, name: cat.name, t25, t26, diff, pct };
     }).sort((a, b) => b.pct - a.pct),
-  [monthlyData, projection2026]);
+  [staticMonthlyData, projection2026]);
 
   // ── SAP data: imported > DB > static ──
   const sapData = useMemo(
@@ -494,8 +520,7 @@ export default function Home() {
           for (const [catCode, range] of Object.entries(CAT_ROW_RANGES)) {
             const catRows = parsed.filter((r) => r.rowNum >= range[0] && r.rowNum <= range[1]);
             const tlRows  = catRows.filter((r) => /^TL/i.test(r.unitType));
-            const mainRow = catRows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName))
-              ?? catRows.find((r) => /^TL/i.test(r.unitType));
+            const mainRow = findMainTotalRow(catCode, catRows);
             if (!mainRow) continue;
             const dbCat = dbCats.find((c) => (CATEGORY_CODE_MAP[c.name] ?? c.name) === catCode);
             if (!dbCat) continue;
@@ -727,7 +752,7 @@ export default function Home() {
           const cActual = activeMonthIndices.reduce((s, i) => s + (cTLRow?.actual[i] ?? 0), 0);
           const cBudget = activeMonthIndices.length > 0
             ? activeMonthIndices.reduce((s, i) => s + (cTLRow?.budget[i] ?? 0), 0)
-            : (cTLRow ? cTLRow.budget.reduce((s, v) => s + v, 0) : categoryAnnual(monthlyData, c.id));
+            : (cTLRow ? cTLRow.budget.reduce((s, v) => s + v, 0) : categoryAnnual(staticMonthlyData, c.id));
           const cVar = cActual - cBudget;
           const cVarPct = cBudget > 0 ? (cVar / cBudget) * 100 : 0;
 
@@ -813,7 +838,7 @@ export default function Home() {
         const cActual = cActiveIndices.reduce((s, i) => s + cMonthly[i].actual, 0);
         const cBudget = cActiveIndices.length > 0
           ? cActiveIndices.reduce((s, i) => s + cMonthly[i].budget, 0)
-          : (cTLRow ? cTLRow.budget.reduce((s, v) => s + v, 0) : categoryAnnual(monthlyData, c.id));
+          : (cTLRow ? cTLRow.budget.reduce((s, v) => s + v, 0) : categoryAnnual(staticMonthlyData, c.id));
         const cVar = cActual - cBudget;
         const cVarPct = cBudget > 0 ? (cVar / cBudget) * 100 : 0;
 
@@ -1129,7 +1154,7 @@ export default function Home() {
                           const cMonthly = Array.from({ length: 12 }, (_, mi) => ({ month: mi + 1, budget: cTLRow?.budget[mi] ?? 0, actual: cTLRow?.actual[mi] ?? 0 }));
                           const cActiveIndices = cMonthly.map((_, i) => i).filter((i) => cMonthly[i].actual > 0);
                           const cActual = cActiveIndices.reduce((s, i) => s + cMonthly[i].actual, 0);
-                          const cBudget = cActiveIndices.length > 0 ? cActiveIndices.reduce((s, i) => s + cMonthly[i].budget, 0) : (cTLRow?.budget.reduce((s, v) => s + v, 0) ?? categoryAnnual(monthlyData, c.id));
+                          const cBudget = cActiveIndices.length > 0 ? cActiveIndices.reduce((s, i) => s + cMonthly[i].budget, 0) : (cTLRow?.budget.reduce((s, v) => s + v, 0) ?? categoryAnnual(staticMonthlyData, c.id));
                           const cVar = cActual - cBudget;
                           const cVarPct = cBudget > 0 ? (cVar / cBudget) * 100 : 0;
                           const cActiveParams = cRows
@@ -1216,7 +1241,7 @@ export default function Home() {
                   </thead>
                   <tbody>
                     {CATEGORIES.map((cat) => {
-                      const catTotal    = categoryAnnual(monthlyData, cat.id);
+                      const catTotal    = categoryAnnual(staticMonthlyData, cat.id);
                       const share       = categoryShare(catTotal, total2025);
                       const isOpen      = selectedCategory === cat.id;
                       const catColor    = CATEGORY_COLORS[cat.id];
@@ -1234,8 +1259,7 @@ export default function Home() {
                         const rows = range
                           ? importedModelData.filter((r) => r.rowNum >= range[0] && r.rowNum <= range[1])
                           : [];
-                        const mainRow = rows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName))
-                          ?? rows.find((r) => /^TL/i.test(r.unitType));
+                        const mainRow = findMainTotalRow(cat.id, rows);
                         if (!mainRow) return null;
                         return mainRow.actual.reduce((s, v) => s + v, 0);
                       })();
@@ -1407,6 +1431,11 @@ export default function Home() {
                                         </div>
                                       )}
                                     </div>
+
+                                    {/* ── Güvenlik 3-level panel ── */}
+                                    {cat.id === 'guvenlik' && (
+                                      <GuvenlikDetailPanel dark={dark} />
+                                    )}
 
                                     {/* ── inner tab bar: Aylık Detay / Varyans Analizi ── */}
                                     <div className="flex gap-0 border-b border-gray-200 dark:border-gray-700 -mx-4 sm:-mx-5 px-4 sm:px-5">
@@ -1704,7 +1733,8 @@ export default function Home() {
                                       };
 
                                       // ── ana kategori toplam satırı (özet kartlar + trend için) ──
-                                      const mainTotalRow = catRows.find((r) => isTLRow(r) && isToplam(r)) ?? catRows.find(isTLRow) ?? catRows[0];
+                                      // findMainTotalRow: rowNum pin (CAT_TOTAL_ROWS) takes priority over regex
+                                      const mainTotalRow = findMainTotalRow(cat.id, catRows) ?? catRows[0];
 
                                       // ── departman toplam satırları (top-5 grafik için — ana toplam hariç) ──
                                       const deptTotalRows = catRows.filter((r) => isTLRow(r) && isToplam(r) && r !== mainTotalRow);
