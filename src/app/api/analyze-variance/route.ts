@@ -169,6 +169,19 @@ Yanitini MUTLAKA su JSON formatinda ver (baska hicbir metin ekleme):
     "dominantFactor": "En baskin etken",
     "secondaryFactor": "Ikincil etken"
   },
+KRİTİK: optimization.scenarioA, scenarioB ve scenarioC alanlari MUTLAKA doldurulmalidir.
+Bu alanlar bos veya eksik birakilamaz. Her senaryo icin:
+- title: string (zorunlu)
+- actions: string[] en az 2 madde (zorunlu)
+- items: array en az 2 kalem (zorunlu)
+- newTotal: number (zorunlu, actualTotal - sum(items saving))
+- savings: string 'X.XXX TL tasarruf' formatinda (zorunlu)
+- feasibility: 'Yuksek' | 'Orta' | 'Dusuk' (zorunlu)
+
+Eger miktar bilgisi yoksa Senaryo A icin tahmini adet degerleri kullan.
+Eger birim fiyat bilgisi yoksa Senaryo B icin toplam / tahmini adet ile hesapla.
+Veri yetersiz olsa bile her 3 senaryoyu mutlaka uret.
+
   "optimization": {
     "scenarioA": {
       "title": "Fiyat Sabit — Miktar Optimizasyonu",
@@ -356,7 +369,7 @@ Lütfen bu varyansı analiz et ve JSON formatında yanıt ver.`;
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 6000,
+        max_tokens: 8000,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userMessage }],
       }),
