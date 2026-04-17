@@ -171,60 +171,46 @@ Yanitini MUTLAKA su JSON formatinda ver (baska hicbir metin ekleme):
   },
   "optimization": {
     "scenarioA": {
-      "title": "Senaryo A: Miktar Optimizasyonu",
+      "title": "Fiyat Sabit — Miktar Optimizasyonu",
       "actions": [
-        "Kalem X: 50 kisiden 45 kisiye indir (-5 kisi)",
-        "Kalem Y: 10 aractan 8 araca indir (-2 arac)"
+        "Vardiya Amiri: 3 → 2 kisi (-1 pozisyon)",
+        "CCTV Operatoru: 8 → 6 personel (-2 pozisyon)"
       ],
-      "newTotal": 12345678,
-      "feasibility": "Yuksek | Orta | Dusuk",
-      "savings": "Z TL tasarruf (%P butce asimi azalir)",
       "items": [
-        {
-          "name": "Kalem adi",
-          "currentAdet": 50,
-          "targetAdet": 45,
-          "saving": 123456
-        }
-      ]
+        { "name": "Vardiya Amiri", "currentAdet": 3, "targetAdet": 2, "saving": 450000 },
+        { "name": "CCTV Operatoru", "currentAdet": 8, "targetAdet": 6, "saving": 320000 }
+      ],
+      "newTotal": 31500000,
+      "savings": "770.000 TL tasarruf",
+      "feasibility": "Orta"
     },
     "scenarioB": {
-      "title": "Senaryo B: Fiyat/Sozlesme Optimizasyonu",
+      "title": "Miktar Sabit — Fiyat/Sozlesme Optimizasyonu",
       "actions": [
-        "Kalem X birim ucretini %5 dusur (ABCDE TL -> FGHIJ TL)",
-        "Kalem Y sozlesme bedelini yeniden muzakere et"
+        "Proje Muduru birim ucret: 48.200 → 45.400 TL (%5.8 indirim)",
+        "Vardiya Amiri: 46.500 → 43.500 TL (%6.5 indirim)"
       ],
-      "newTotal": 12345678,
-      "feasibility": "Yuksek | Orta | Dusuk",
-      "savings": "Z TL tasarruf",
       "items": [
-        {
-          "name": "Kalem adi",
-          "currentFiyat": 50000,
-          "targetFiyat": 47500,
-          "saving": 75000
-        }
-      ]
+        { "name": "Proje Muduru", "currentFiyat": 48200, "targetFiyat": 45400, "saving": 100800 },
+        { "name": "Vardiya Amiri", "currentFiyat": 46500, "targetFiyat": 43500, "saving": 270000 }
+      ],
+      "newTotal": 32000000,
+      "savings": "6.044.956 TL tasarruf",
+      "feasibility": "Orta"
     },
     "scenarioC": {
-      "title": "Senaryo C: Dengeli Kombine",
+      "title": "Kombine Optimizasyon",
       "actions": [
-        "Kalem X: 50->47 kisi (-3) VE birim ucreti %3 indir",
-        "Kalem Y: adet sabit, fiyati %5 asagiya cek"
+        "Ucret artisini %3 ile sinirla (sozlesme yenilemede uygulanacak)",
+        "CCTV pozisyonlarinda 2 kisi azalt"
       ],
-      "newTotal": 12345678,
-      "feasibility": "Orta",
-      "savings": "Z TL tasarruf, butce asimi %P'ye dusuyor",
       "items": [
-        {
-          "name": "Kalem adi",
-          "currentAdet": 50,
-          "targetAdet": 47,
-          "currentFiyat": 50000,
-          "targetFiyat": 48500,
-          "saving": 98000
-        }
-      ]
+        { "name": "Birim Ucret Tavani", "saving": 4500000 },
+        { "name": "CCTV Azaltma", "saving": 320000 }
+      ],
+      "newTotal": 31000000,
+      "savings": "4.820.000 TL tasarruf",
+      "feasibility": "Yuksek"
     },
     "optimalPath": "Butceye donmek icin en az direncli yol: hangi senaryo neden tercih edilmeli",
     "riskNote": "Hangi senaryonun riski daha dusuk ve neden; hangi senaryo uygulanamaz olabilir",
@@ -232,16 +218,20 @@ Yanitini MUTLAKA su JSON formatinda ver (baska hicbir metin ekleme):
   }
 }
 
+Matematiksel kurallar (ZORUNLU):
+- newTotal = actualTotal - toplam saving (items[].saving toplami)
+- savings string formati: "X.XXX TL tasarruf" (nokta ile binlik ayrac, harf karakterleri ASCII)
+- items[].saving degerleri somut ve gercekci olmali; rastgele doldurma
+
 Onemli kurallar:
-- Tum metin Turkce olacak (ama Turkce ozel karakter KULLANMA: s/g/u/o/c/i)
+- Tum metin Turkce olacak (ama Turkce ozel karakter KULLANMA)
 - Analizde YALNIZCA fiili verisi olan aylari (activeMonths) dikkate al. [FIILI YOK] etiketli aylar analiz kapsamina dahil edilmez.
 - effects: en az 2, en fazla 6 etki. driver alani somut ve olcumlenebilir (yuzde, adet, TL).
 - Sayisal degerler TL cinsinden olacak (yuzde degil).
 - recommendations: en az 4, en fazla 6 oneri.
-- optimization: subItems verisi varsa her alt kalem icin ayri items satiri olustur. Yoksa makul tahminle doldur.
-- newTotal matematiksel olarak tutarli olmali: miktar x birim fiyat.
+- optimization: subItems verisi varsa her alt kalem icin ayri items satiri olustur. Yoksa mevcut parametrelerden makul tahminle doldur.
 - Yeterli parametre (hem adet hem fiyat) yoksa optimization alani JSON'a dahil edilmez.
-- Turkce ozel karakter yasagi: s,g,u,o,c,i kullan (s=s, g=g, u=u, o=o, c=c, i=i). Hic istisna yok.`;
+- Turkce ozel karakter yasagi: hic istisna yok (s,g,u,o,c,i kullan).`;
 
 
 export async function POST(req: NextRequest) {
