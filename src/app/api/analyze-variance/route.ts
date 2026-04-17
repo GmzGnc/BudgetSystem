@@ -386,6 +386,10 @@ Lütfen bu varyansı analiz et ve JSON formatında yanıt ver.`;
     // Markdown kod bloğunu temizle (```json ... ``` veya ``` ... ```)
     rawText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
+    console.log('[analyze-variance] raw response length:', rawText.length);
+    console.log('[analyze-variance] has scenarioA:', rawText.includes('scenarioA'));
+    console.log('[analyze-variance] optimization snippet:', rawText.substring(rawText.indexOf('optimization'), rawText.indexOf('optimization') + 200));
+
     let analysisResult: VarianceAnalysisResponse;
     try {
       analysisResult = JSON.parse(rawText);
