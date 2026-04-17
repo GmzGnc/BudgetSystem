@@ -2015,29 +2015,33 @@ export default function Home() {
                                                         return { paramName: r.paramName, unitType: r.unitType, budget: bv, actual: av, diff: dv, diffPct: bv > 0 ? (dv / bv) * 100 : null, isKey: isKeyParam(r.paramName, cat.id) };
                                                       });
 
-                                                    const res = await fetch('/api/analyze-variance', {
-                                                      method: 'POST',
-                                                      headers: { 'Content-Type': 'application/json' },
-                                                      body: JSON.stringify({
-                                                        mode: 'category',
-                                                        categoryName: cat.name,
-                                                        budgetTotal: activeBudget,
-                                                        actualTotal: activeActual,
-                                                        varianceAmount: activeVar,
-                                                        variancePercent: activeVarPct,
-                                                        monthlyData: monthly,
-                                                        parameters: allParams
-                                                          .sort((a, b) => (b.isKey ? 1 : 0) - (a.isKey ? 1 : 0))
-                                                          .slice(0, 50)
-                                                          .map((p) => ({ paramName: p.paramName, unitType: p.unitType, budget: p.budget, actual: p.actual, diff: p.diff, diffPct: p.diffPct })),
-                                                        monthBreakdown,
-                                                        departmentBreakdown,
-                                                        activeMonths: activeIdxs,
-                                                        analysisScope: 'full',
-                                                        deepAnalysis: true,
-                                                      }),
-                                                    });
-                                                    const aiResult = res.ok ? await res.json() : null;
+                                                    // Eğer drawer'dan daha önce analiz yapıldıysa yeniden API çağrısı yapmadan kullan
+                                                    let aiResult: typeof varDrawerResult | null = varDrawerResult ?? null;
+                                                    if (!aiResult) {
+                                                      const res = await fetch('/api/analyze-variance', {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({
+                                                          mode: 'category',
+                                                          categoryName: cat.name,
+                                                          budgetTotal: activeBudget,
+                                                          actualTotal: activeActual,
+                                                          varianceAmount: activeVar,
+                                                          variancePercent: activeVarPct,
+                                                          monthlyData: monthly,
+                                                          parameters: allParams
+                                                            .sort((a, b) => (b.isKey ? 1 : 0) - (a.isKey ? 1 : 0))
+                                                            .slice(0, 50)
+                                                            .map((p) => ({ paramName: p.paramName, unitType: p.unitType, budget: p.budget, actual: p.actual, diff: p.diff, diffPct: p.diffPct })),
+                                                          monthBreakdown,
+                                                          departmentBreakdown,
+                                                          activeMonths: activeIdxs,
+                                                          analysisScope: 'full',
+                                                          deepAnalysis: true,
+                                                        }),
+                                                      });
+                                                      aiResult = res.ok ? await res.json() : null;
+                                                    }
 
                                                     const pdfParams = allParams.map((p) => ({
                                                       paramName: p.paramName,
@@ -2078,7 +2082,7 @@ export default function Home() {
                                                         variancePercent: activeVarPct,
                                                         monthlyData: cMonthly,
                                                         parameters: pdfParams,
-                                                        aiAnalysis: aiResult && !aiResult.error ? {
+                                                        aiAnalysis: aiResult && !(aiResult as {error?: string}).error ? {
                                                           summary: aiResult.summary,
                                                           effects: aiEff,
                                                           monthlyTrend: aiResult.monthlyTrend,
@@ -2087,6 +2091,7 @@ export default function Home() {
                                                           departmentInsights: aiResult.departmentInsights ?? '',
                                                           monthlyInsights: aiResult.monthlyInsights ?? '',
                                                           karmaEffect: aiResult.karmaEffect ?? null,
+                                                          optimization: aiResult.optimization ?? undefined,
                                                         } : undefined,
                                                       }],
                                                     };
