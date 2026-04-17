@@ -702,7 +702,8 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
       const savText = tr(s.savings ?? '');
       const feasText = tr(s.feasibility ?? '');
       doc.text(`${savText}  |  ${feasText}`, 190, curY + 4.5);
-      curY += 6.5 + 2; // +2mm nefes payı — ilk bullet başlığa yapışmasın
+      // +5mm padding: jsPDF text baseline ~1.6mm ascender ile ilk bullet bar altından net görsel ayrılma sağlar
+      curY += 6.5 + 5; // bar 6.5 + 5mm padding (jsPDF text baseline ascender 1.6mm sebebi ile +2 yetersiz, +5 güvenli görsel ayrım)
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(5.8);
