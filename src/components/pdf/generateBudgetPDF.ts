@@ -421,7 +421,15 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
       return y + 7;
     }
 
-    let pCurY = drawParamHeader(totY + 12);
+    // Guard: ensure section title (3) + header bar (7) + at least 1 row (5.5) = 15.5mm fit
+    let paramHeaderY = totY + 12;
+    if (paramHeaderY + 15.5 > PAGE_MAX_Y) {
+      doc.addPage();
+      addPageHeader(doc, data.companyName, 0, 0, logoBase64);
+      addPageFooter(doc, data.generatedAt);
+      paramHeaderY = PAGE_START_Y + 5;
+    }
+    let pCurY = drawParamHeader(paramHeaderY);
 
     cat.parameters.forEach((p, pi) => {
       if (pCurY + ROW_H > PAGE_MAX_Y) {
@@ -705,7 +713,8 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
       curY += 1;
 
       if (s.items && s.items.length > 0) {
-        ensureSpace(10);
+        // Ensure header (5.5) + at least 1 data row (5.5) fit before drawing table header
+        ensureSpace(11);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const hasAdet  = s.items.some((it: any) => it.currentAdet  !== undefined);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
