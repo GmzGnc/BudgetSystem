@@ -490,18 +490,27 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
 
   let curY = 38;
   const LINE_H = 4.5;
-  const MAX_Y = 275;
+  const HEADER_RESERVE = 32;
+  const FOOTER_H = 16;
+  const pageH = doc.internal.pageSize.getHeight();
+  const MAX_Y = pageH - FOOTER_H - 4;   // landscape A4: 210 - 16 - 4 = 190
 
   function addPage(d: jsPDF): number {
     d.addPage();
     addPageHeader(d, data.companyName, 0, 0, logoBase64);
     addPageFooter(d, data.generatedAt);
-    return 32;
+    return HEADER_RESERVE;
   }
 
-  function section(title: string, text: string, maxLines: number) {
+  // ensureSpace: en az 'needed' mm kaldıysa devam, yoksa yeni sayfa aç
+  function ensureSpace(needed: number): void {
+    if (curY + needed > MAX_Y) curY = addPage(doc);
+  }
+
+  function section(title: string, text: string) {
     if (!text) return;
-    if (curY > MAX_Y - 15) curY = addPage(doc);
+    // başlık + en az 2 satır birlikte kalsın (orphan önleme)
+    ensureSpace(LINE_H * 3 + 2);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
     doc.setTextColor(...NAVY);
@@ -511,19 +520,19 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
     doc.setFontSize(6.2);
     doc.setTextColor(...BLACK);
     const lines = doc.splitTextToSize(tr(text), 265);
-    lines.slice(0, maxLines).forEach((line: string) => {
-      if (curY >= MAX_Y) curY = addPage(doc);
+    lines.forEach((line: string) => {
+      ensureSpace(LINE_H);
       doc.text(line, 14, curY); curY += LINE_H;
     });
     curY += 2;
   }
 
   // Özet
-  section('Ozet / Summary:', cat.aiAnalysis.summary, 6);
+  section('Ozet / Summary:', cat.aiAnalysis.summary);
 
   // Etki Dağılımı — kart düzeni
   if (cat.aiAnalysis.effects.length > 0) {
-    if (curY > MAX_Y - 20) curY = addPage(doc);
+    ensureSpace(20);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
     doc.setTextColor(...NAVY);
@@ -540,7 +549,7 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
       const drvLines  = doc.splitTextToSize(tr('Sebep: ' + ((eff as unknown as { driver?: string }).driver ?? '')), 240);
       const blockH    = 7 + (descLines.length * 3.8) + (drvLines.length * 3.8) + 4;
 
-      if (curY + blockH > MAX_Y) curY = addPage(doc);
+      ensureSpace(blockH);
 
       doc.setFillColor(...(ei % 2 === 0 ? ([240, 242, 255] as [number, number, number]) : WHITE));
       doc.rect(COL1, curY, EFFECT_WIDTH, blockH, 'F');
@@ -573,14 +582,14 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
   }
 
   // Aylık Trend
-  section('Aylik Trend:', cat.aiAnalysis.monthlyTrend, 5);
+  section('Aylik Trend:', cat.aiAnalysis.monthlyTrend);
 
   // Etki İlişkileri
-  section('Etki Iliskileri:', cat.aiAnalysis.interRelations, 5);
+  section('Etki Iliskileri:', cat.aiAnalysis.interRelations);
 
   // Karma Etki
   if (cat.aiAnalysis.karmaEffect) {
-    if (curY > MAX_Y - 20) curY = addPage(doc);
+    ensureSpace(20);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
     doc.setTextColor(...NAVY);
@@ -619,35 +628,35 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
     doc.setFontSize(6);
     doc.setTextColor(...BLACK);
     const karmaLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.description), 265);
-    karmaLines.slice(0, 3).forEach((line: string) => {
-      if (curY >= MAX_Y) curY = addPage(doc);
+    karmaLines.forEach((line: string) => {
+      ensureSpace(LINE_H);
       doc.text(line, 14, curY); curY += LINE_H;
     });
     curY += 2;
   }
 
   // Departman Analizi
-  section('Departman Analizi:', cat.aiAnalysis.departmentInsights ?? '', 4);
+  section('Departman Analizi:', cat.aiAnalysis.departmentInsights ?? '');
 
   // Aylık Yoğunlaşma
-  section('Aylik Yogunlasma:', cat.aiAnalysis.monthlyInsights ?? '', 5);
+  section('Aylik Yogunlasma:', cat.aiAnalysis.monthlyInsights ?? '');
 
   // Öneriler
   if (cat.aiAnalysis.recommendations.length > 0) {
-    if (curY > MAX_Y - 15) curY = addPage(doc);
+    ensureSpace(LINE_H * 3);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
     doc.setTextColor(...NAVY);
     doc.text(tr('Oneriler / Recommendations:'), 14, curY);
     curY += LINE_H;
-    cat.aiAnalysis.recommendations.slice(0, 6).forEach((rec, ri) => {
-      if (curY > MAX_Y - 6) curY = addPage(doc);
+    cat.aiAnalysis.recommendations.forEach((rec, ri) => {
+      ensureSpace(LINE_H * 2);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(6.2);
       doc.setTextColor(...BLACK);
       const recLines = doc.splitTextToSize(tr(`${ri + 1}. ${rec}`), 265);
-      recLines.slice(0, 3).forEach((line: string) => {
-        if (curY >= MAX_Y) curY = addPage(doc);
+      recLines.forEach((line: string) => {
+        ensureSpace(LINE_H);
         doc.text(line, 14, curY); curY += LINE_H;
       });
     });
@@ -657,7 +666,7 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const opt = (cat.aiAnalysis as any).optimization;
   if (opt) {
-    if (curY > MAX_Y - 20) curY = addPage(doc);
+    ensureSpace(20);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
     doc.setTextColor(...NAVY);
@@ -673,7 +682,7 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
     for (const { key, label } of scenarios) {
       const s = opt[key];
       if (!s) continue;
-      if (curY > MAX_Y - 20) curY = addPage(doc);
+      ensureSpace(20);
 
       doc.setFillColor(...NAVY);
       doc.rect(14, curY, 269, 6.5, 'F');
@@ -689,15 +698,14 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(5.8);
       doc.setTextColor(...BLACK);
-      ((s.actions ?? []) as string[]).slice(0, 4).forEach((action: string) => {
-        if (curY > MAX_Y - 5) curY = addPage(doc);
+      ((s.actions ?? []) as string[]).forEach((action: string) => {
         const aLines = doc.splitTextToSize(tr(`• ${action}`), 255);
-        aLines.slice(0, 2).forEach((l: string) => { doc.text(l, 17, curY); curY += 3.8; });
+        aLines.forEach((l: string) => { ensureSpace(3.8); doc.text(l, 17, curY); curY += 3.8; });
       });
       curY += 1;
 
       if (s.items && s.items.length > 0) {
-        if (curY > MAX_Y - 10) curY = addPage(doc);
+        ensureSpace(10);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const hasAdet  = s.items.some((it: any) => it.currentAdet  !== undefined);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -736,8 +744,8 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
         doc.text('Tasarruf', xEnd, curY + 4, { align: 'right' });
         curY += 5.5;
 
-        ((s.items ?? []) as any[]).slice(0, 6).forEach((item: any, ii: number) => {
-          if (curY > MAX_Y - 5) curY = addPage(doc);
+        ((s.items ?? []) as any[]).forEach((item: any, ii: number) => {
+          ensureSpace(5.5);
           doc.setFillColor(...((ii % 2 === 0 ? GRAY_LIGHT : WHITE) as [number, number, number]));
           doc.rect(margin + 3, curY, cW - 3, 5.5, 'F');
           doc.setFont('helvetica', 'normal');
@@ -762,7 +770,7 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
     }
 
     if (opt.optimalPath) {
-      if (curY > MAX_Y - 12) curY = addPage(doc);
+      ensureSpace(LINE_H * 3);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(6.5);
       doc.setTextColor(...NAVY);
@@ -771,12 +779,12 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
       doc.setFontSize(5.8);
       doc.setTextColor(...BLACK);
       const optLines = doc.splitTextToSize(tr(opt.optimalPath), 265);
-      optLines.slice(0, 3).forEach((l: string) => { if (curY >= MAX_Y) curY = addPage(doc); doc.text(l, 14, curY); curY += LINE_H; });
+      optLines.forEach((l: string) => { ensureSpace(LINE_H); doc.text(l, 14, curY); curY += LINE_H; });
       curY += 1;
     }
 
     if (opt.yearEndForecast) {
-      if (curY > MAX_Y - 12) curY = addPage(doc);
+      ensureSpace(LINE_H * 3);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(6.5);
       doc.setTextColor(...NAVY);
@@ -785,7 +793,7 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
       doc.setFontSize(5.8);
       doc.setTextColor(...BLACK);
       const foreLines = doc.splitTextToSize(tr(opt.yearEndForecast), 265);
-      foreLines.slice(0, 3).forEach((l: string) => { if (curY >= MAX_Y) curY = addPage(doc); doc.text(l, 14, curY); curY += LINE_H; });
+      foreLines.forEach((l: string) => { ensureSpace(LINE_H); doc.text(l, 14, curY); curY += LINE_H; });
     }
   }
 }
