@@ -26,6 +26,7 @@ async function loadLogo(): Promise<string> {
 }
 
 function tr(text: string): string {
+  if (!text) return '';
   return text
     .replace(/İ/g, 'I').replace(/ı/g, 'i')
     .replace(/Ğ/g, 'G').replace(/ğ/g, 'g')
@@ -33,7 +34,13 @@ function tr(text: string): string {
     .replace(/Ş/g, 'S').replace(/ş/g, 's')
     .replace(/Ö/g, 'O').replace(/ö/g, 'o')
     .replace(/Ç/g, 'C').replace(/ç/g, 'c')
-    .replace(/Â/g, 'A').replace(/â/g, 'a');
+    .replace(/Â/g, 'A').replace(/â/g, 'a')
+    .replace(/[\u0080-\u009F]/g, '')       // control characters
+    .replace(/[\u2018\u2019]/g, "'")       // smart single quotes
+    .replace(/[\u201C\u201D]/g, '"')       // smart double quotes
+    .replace(/[\u2013\u2014]/g, '-')       // en/em dash
+    .replace(/[\u2026]/g, '...')           // ellipsis
+    .replace(/[^\x00-\x7F]/g, '?');       // diğer tüm non-ASCII → ?
 }
 
 export interface CategoryPDFData {
@@ -571,31 +578,33 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
     doc.text(tr('Karma Etki Analizi:'), 14, curY);
     curY += 5;
 
-    // Baskın Etken — tam genişlik
+    // Baskın Etken — tam genişlik, dinamik yükseklik
+    const domLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.dominantFactor), 255);
+    const domH = Math.max(12, domLines.length * 4 + 6);
     doc.setFillColor(254, 226, 226);
-    doc.roundedRect(14, curY, 269, 12, 1, 1, 'F');
+    doc.roundedRect(14, curY, 269, domH, 1, 1, 'F');
     doc.setFontSize(5.5);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(185, 28, 28);
     doc.text(tr('BASKIN ETKEN'), 18, curY + 5);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(153, 27, 27);
-    const domLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.dominantFactor), 255);
-    domLines.slice(0, 1).forEach((l: string) => doc.text(l, 18, curY + 9.5));
-    curY += 14;
+    domLines.forEach((l: string, i: number) => doc.text(l, 18, curY + 9.5 + i * 4));
+    curY += domH + 2;
 
-    // İkincil Etken — tam genişlik
+    // İkincil Etken — tam genişlik, dinamik yükseklik
+    const secLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.secondaryFactor), 255);
+    const secH = Math.max(12, secLines.length * 4 + 6);
     doc.setFillColor(254, 243, 199);
-    doc.roundedRect(14, curY, 269, 12, 1, 1, 'F');
+    doc.roundedRect(14, curY, 269, secH, 1, 1, 'F');
     doc.setFontSize(5.5);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(180, 83, 9);
     doc.text(tr('IKINCIL ETKEN'), 18, curY + 5);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(146, 64, 14);
-    const secLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.secondaryFactor), 255);
-    secLines.slice(0, 1).forEach((l: string) => doc.text(l, 18, curY + 9.5));
-    curY += 14;
+    secLines.forEach((l: string, i: number) => doc.text(l, 18, curY + 9.5 + i * 4));
+    curY += secH + 2;
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(6);
@@ -673,8 +682,8 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
       doc.setTextColor(...BLACK);
       ((s.actions ?? []) as string[]).slice(0, 4).forEach((action: string) => {
         if (curY > MAX_Y - 5) curY = addPage(doc);
-        const aLines = doc.splitTextToSize(tr(`• ${action}`), 260);
-        aLines.slice(0, 2).forEach((l: string) => { doc.text(l, 17, curY); curY += 3.5; });
+        const aLines = doc.splitTextToSize(tr(`• ${action}`), 255);
+        aLines.slice(0, 2).forEach((l: string) => { doc.text(l, 17, curY); curY += 3.8; });
       });
       curY += 1;
 
