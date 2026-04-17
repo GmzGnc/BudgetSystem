@@ -237,7 +237,7 @@ export default function Home() {
     const agg26 = aggregateMonthly(projection2026);
     return agg25.map((row, i) => ({
       label: row.monthLabel,
-      '2025 Gerçekleşen': row.total,
+      '2025 Bütçe': row.total,
       '2026 Projeksiyon': agg26[i]?.total ?? 0,
     }));
   }, [monthlyData, projection2026]);
@@ -336,7 +336,7 @@ export default function Home() {
       total2025,
     ];
     const ws25 = XLSX.utils.aoa_to_sheet([header25, ...rows25, grandRow25]);
-    XLSX.utils.book_append_sheet(wb, ws25, '2025 Gerçekleşen');
+    XLSX.utils.book_append_sheet(wb, ws25, '2025 Bütçe');
 
     // Sheet 2: 2026 Projeksiyon
     const months26 = projection2026.map((r) => r.monthLabel as string);
@@ -1322,7 +1322,7 @@ export default function Home() {
                                     {/* 2025 vs 2026 karşılaştırma kartları */}
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                       {[
-                                        { label: '2025 Gerçekleşen', value: fmtFull(t25), cls: 'text-gray-900 dark:text-white' },
+                                        { label: '2025 Bütçe', value: fmtFull(t25), cls: 'text-gray-900 dark:text-white' },
                                         { label: '2026 Projeksiyon', value: fmtFull(t26), cls: 'text-indigo-600 dark:text-indigo-400' },
                                         { label: 'Fark (TL)',        value: `+${fmtFull(diff)}`, cls: 'text-red-500 dark:text-red-400' },
                                         { label: 'Fark (%)',         value: `+${diffPctCat.toFixed(1)}%`, cls: diffPctCat >= 25 ? 'text-red-500 dark:text-red-400' : diffPctCat >= 20 ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400' },

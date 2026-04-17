@@ -25,7 +25,7 @@ interface Props {
   total2025: number;
   total2026: number;
   diffPct: number;
-  trendData: { label: string; '2025 Gerçekleşen': number; '2026 Projeksiyon': number }[];
+  trendData: { label: string; '2025 Bütçe': number; '2026 Projeksiyon': number }[];
   companyLabel: string;
   axisColor: string;
   gridColor: string;
@@ -148,7 +148,7 @@ export default function ProjectionTab({
       {/* trend line chart */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-3 sm:p-5 shadow-sm">
         <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">
-          2025 Gerçekleşen vs 2026 Projeksiyon — Aylık Trend
+          2025 Bütçe vs 2026 Projeksiyon — Aylık Trend
         </h2>
         <div className="h-44 sm:h-64 lg:h-72">
           <ResponsiveContainer width="100%" height="100%">
@@ -158,7 +158,7 @@ export default function ProjectionTab({
               <YAxis tickFormatter={fmt} tick={{ fontSize: 11, fill: axisColor }} axisLine={false} tickLine={false} width={68} />
               <Tooltip content={<LineTooltip />} />
               <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 8, color: axisColor }} />
-              <Line type="monotone" dataKey="2025 Gerçekleşen" stroke="#6366f1" strokeWidth={2} dot={{ r: 3, fill: '#6366f1' }} activeDot={{ r: 5 }} />
+              <Line type="monotone" dataKey="2025 Bütçe" stroke="#6366f1" strokeWidth={2} dot={{ r: 3, fill: '#6366f1' }} activeDot={{ r: 5 }} />
               <Line type="monotone" dataKey="2026 Projeksiyon" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3, fill: '#f59e0b' }} activeDot={{ r: 5 }} />
             </LineChart>
           </ResponsiveContainer>
