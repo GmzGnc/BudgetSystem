@@ -121,6 +121,8 @@ export default function Home() {
   // ── variance analysis drawer state ──
   const [varDrawerOpen,    setVarDrawerOpen]    = useState(false);
   const [varDrawerLoading, setVarDrawerLoading] = useState(false);
+  type OptScenarioItem = { name: string; currentAdet?: number; targetAdet?: number; currentFiyat?: number; targetFiyat?: number; saving: number };
+  type OptScenario = { title: string; actions: string[]; newTotal: number; feasibility: string; savings: string; items?: OptScenarioItem[] };
   const [varDrawerResult,  setVarDrawerResult]  = useState<{
     summary: string;
     totalVariance: number;
@@ -133,16 +135,12 @@ export default function Home() {
     monthlyInsights: string;
     karmaEffect: { description: string; dominantFactor: string; secondaryFactor: string };
     optimization?: {
-      scenarios: Array<{
-        title: string;
-        action: string;
-        impact: string;
-        newTotal: number;
-        feasibility: string;
-        tradeoff: string;
-      }>;
-      optimalTarget: string;
+      scenarioA: OptScenario;
+      scenarioB: OptScenario;
+      scenarioC: OptScenario;
+      optimalPath: string;
       riskNote: string;
+      yearEndForecast: string;
     };
   } | null>(null);
   const [varDrawerError, setVarDrawerError] = useState<string | null>(null);
@@ -1878,12 +1876,34 @@ export default function Home() {
                                                   const activeActualTotal = activeMonthIdxs.reduce((s, mi) => s + (mainTotalRow?.actual[mi] ?? 0), 0);
                                                   const activeVarianceAmount = activeActualTotal - activeBudgetTotal;
                                                   const activeVariancePct = activeBudgetTotal > 0 ? (activeVarianceAmount / activeBudgetTotal) * 100 : 0;
-                                                  const optimizationParams = params.map((p) => ({
-                                                    name: p.paramName,
-                                                    unit: p.unitType || '',
-                                                    budget: p.budget,
-                                                    actual: p.actual,
-                                                  }));
+                                                  // Build subItems: match TL params with corresponding adet params by name similarity
+                                                  const tlParams = params.filter((p) => (p.unitType || '').toUpperCase() === 'TL' && p.actual > 0);
+                                                  const adetParams = params.filter((p) => {
+                                                    const u = (p.unitType || '').toLowerCase();
+                                                    return u === 'adet' || u === 'kisi' || u === 'kişi' || u === 'personel';
+                                                  });
+                                                  const subItems = tlParams.flatMap((tlP) => {
+                                                    // find adet param with similar name (longest common prefix)
+                                                    const tlName = tlP.paramName.toLowerCase();
+                                                    const match = adetParams.find((ap) => {
+                                                      const apName = ap.paramName.toLowerCase();
+                                                      // same name, or one contains the other, or share 5+ char prefix
+                                                      return apName === tlName || apName.includes(tlName) || tlName.includes(apName) ||
+                                                        (tlName.length >= 5 && apName.startsWith(tlName.slice(0, 5)));
+                                                    });
+                                                    if (!match || match.actual === 0) return [];
+                                                    const birimFiyat = Math.round(tlP.actual / match.actual);
+                                                    const budgetBirimFiyat = match.budget > 0 ? Math.round(tlP.budget / match.budget) : undefined;
+                                                    return [{
+                                                      name: tlP.paramName,
+                                                      adet: match.actual,
+                                                      birimFiyat,
+                                                      toplam: tlP.actual,
+                                                      budgetAdet: match.budget > 0 ? match.budget : undefined,
+                                                      budgetBirimFiyat,
+                                                      budgetToplam: tlP.budget > 0 ? tlP.budget : undefined,
+                                                    }];
+                                                  });
                                                   fetch('/api/analyze-variance', {
                                                     method: 'POST',
                                                     headers: { 'Content-Type': 'application/json' },
@@ -1896,7 +1916,7 @@ export default function Home() {
                                                       variancePercent: activeVariancePct,
                                                       monthlyData: monthly,
                                                       parameters: params,
-                                                      optimizationParameters: optimizationParams,
+                                                      subItems: subItems.length > 0 ? subItems : undefined,
                                                       monthBreakdown,
                                                       departmentBreakdown,
                                                       analysisScope: 'full',
@@ -2507,34 +2527,95 @@ export default function Home() {
                       </div>
                     )}
 
-                    {/* optimization */}
-                    {r.optimization && (
-                      <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
-                        <h4 className="font-semibold text-sm mb-3 text-gray-800 dark:text-gray-200">🎯 Optimizasyon Önerileri</h4>
-                        {r.optimization.scenarios.map((s, i) => (
-                          <div key={i} className="mb-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-                            <div className="flex justify-between items-start mb-1">
-                              <span className="font-medium text-sm text-gray-800 dark:text-gray-200">{s.title}</span>
-                              <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                s.feasibility === 'Yüksek' || s.feasibility === 'Yuksek' ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' :
-                                s.feasibility === 'Orta' ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300' :
-                                'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
-                              }`}>{s.feasibility}</span>
-                            </div>
-                            <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">{s.action}</p>
-                            <p className="text-xs text-green-600 dark:text-green-400 mt-1">{s.impact}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">⚠️ {s.tradeoff}</p>
+                    {/* optimization — accordion A/B/C */}
+                    {r.optimization && (() => {
+                      const opt = r.optimization;
+                      const scenarios: [string, typeof opt.scenarioA][] = [
+                        ['A', opt.scenarioA],
+                        ['B', opt.scenarioB],
+                        ['C', opt.scenarioC],
+                      ];
+                      const feasColor = (f: string) =>
+                        f === 'Yuksek' || f === 'Yüksek'
+                          ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300'
+                          : f === 'Orta'
+                          ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300'
+                          : 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300';
+                      return (
+                        <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
+                          <h4 className="font-semibold text-sm mb-3 text-gray-800 dark:text-gray-200">🎯 Optimizasyon Senaryolari</h4>
+                          <div className="space-y-2">
+                            {scenarios.map(([label, s]) => (
+                              <details key={label} className="group rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+                                <summary className="flex items-center justify-between gap-2 px-3 py-2.5 cursor-pointer list-none select-none hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold flex items-center justify-center">{label}</span>
+                                    <span className="font-medium text-sm text-gray-800 dark:text-gray-200 truncate">{s.title}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 flex-shrink-0">
+                                    <span className="text-xs text-green-600 dark:text-green-400 font-medium">{s.savings}</span>
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${feasColor(s.feasibility)}`}>{s.feasibility}</span>
+                                    <svg className="w-3.5 h-3.5 text-gray-400 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                                  </div>
+                                </summary>
+                                <div className="px-3 pb-3 pt-1 border-t border-gray-100 dark:border-gray-700">
+                                  <ul className="space-y-1 mb-2">
+                                    {s.actions.map((action, ai) => (
+                                      <li key={ai} className="text-xs text-blue-600 dark:text-blue-400 flex items-start gap-1.5">
+                                        <span className="flex-shrink-0 mt-0.5">▸</span>
+                                        <span>{action}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                  {s.items && s.items.length > 0 && (
+                                    <div className="mt-2 overflow-x-auto">
+                                      <table className="w-full text-[11px] border-collapse">
+                                        <thead>
+                                          <tr className="bg-gray-50 dark:bg-gray-700/50">
+                                            <th className="text-left px-2 py-1 font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-600">Kalem</th>
+                                            {s.items.some((it) => it.currentAdet !== undefined) && <th className="text-right px-2 py-1 font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-600">Mevcut Adet</th>}
+                                            {s.items.some((it) => it.targetAdet !== undefined) && <th className="text-right px-2 py-1 font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-600">Hedef Adet</th>}
+                                            {s.items.some((it) => it.currentFiyat !== undefined) && <th className="text-right px-2 py-1 font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-600">Mevcut Fiyat</th>}
+                                            {s.items.some((it) => it.targetFiyat !== undefined) && <th className="text-right px-2 py-1 font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-600">Hedef Fiyat</th>}
+                                            <th className="text-right px-2 py-1 font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-600">Tasarruf</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {s.items.map((it, ii) => (
+                                            <tr key={ii} className={ii % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50/50 dark:bg-gray-700/20'}>
+                                              <td className="px-2 py-1 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600 max-w-[120px] truncate">{it.name}</td>
+                                              {s.items!.some((x) => x.currentAdet !== undefined) && <td className="px-2 py-1 text-right text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-600">{it.currentAdet ?? '—'}</td>}
+                                              {s.items!.some((x) => x.targetAdet !== undefined) && <td className="px-2 py-1 text-right text-blue-600 dark:text-blue-400 border border-gray-200 dark:border-gray-600">{it.targetAdet ?? '—'}</td>}
+                                              {s.items!.some((x) => x.currentFiyat !== undefined) && <td className="px-2 py-1 text-right text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-600">{it.currentFiyat?.toLocaleString('tr-TR') ?? '—'}</td>}
+                                              {s.items!.some((x) => x.targetFiyat !== undefined) && <td className="px-2 py-1 text-right text-blue-600 dark:text-blue-400 border border-gray-200 dark:border-gray-600">{it.targetFiyat?.toLocaleString('tr-TR') ?? '—'}</td>}
+                                              <td className="px-2 py-1 text-right text-green-600 dark:text-green-400 font-medium border border-gray-200 dark:border-gray-600">{it.saving.toLocaleString('tr-TR')} ₺</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  )}
+                                  <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
+                                    Yeni Toplam: <span className="font-semibold text-gray-700 dark:text-gray-300">{s.newTotal.toLocaleString('tr-TR')} ₺</span>
+                                  </p>
+                                </div>
+                              </details>
+                            ))}
                           </div>
-                        ))}
-                        <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
-                          <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">💡 Optimal Yol</p>
-                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">{r.optimization.optimalTarget}</p>
+                          <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                            <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">💡 Optimal Yol</p>
+                            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">{opt.optimalPath}</p>
+                          </div>
+                          <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                            <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">📅 Yil Sonu Prognozu</p>
+                            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{opt.yearEndForecast}</p>
+                          </div>
+                          <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                            <p className="text-xs text-gray-600 dark:text-gray-400">⚖️ {opt.riskNote}</p>
+                          </div>
                         </div>
-                        <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                          <p className="text-xs text-gray-600 dark:text-gray-400">⚖️ {r.optimization.riskNote}</p>
-                        </div>
-                      </div>
-                    )}
+                      );
+                    })()}
                   </>
                 );
               })()}

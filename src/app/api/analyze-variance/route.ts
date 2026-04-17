@@ -21,6 +21,15 @@ export interface VarianceAnalysisRequest {
     diff: number;
     diffPct: number | null;
   }>;
+  subItems?: Array<{
+    name: string;
+    adet: number;
+    birimFiyat: number;
+    toplam: number;
+    budgetAdet?: number;
+    budgetBirimFiyat?: number;
+    budgetToplam?: number;
+  }>;
   categoryFormula?: string;
   activeMonths?: number[];  // fiili verisi olan ay indeksleri (0-based)
   deepAnalysis?: boolean;   // tek kategori derin analiz modu
@@ -48,13 +57,22 @@ export interface VarianceEffect {
   driver: string;
 }
 
-export interface OptimizationScenario {
+export interface OptScenarioItem {
+  name: string;
+  currentAdet?: number;
+  targetAdet?: number;
+  currentFiyat?: number;
+  targetFiyat?: number;
+  saving: number;
+}
+
+export interface OptScenario {
   title: string;
-  action: string;
-  impact: string;
+  actions: string[];
   newTotal: number;
   feasibility: string;
-  tradeoff: string;
+  savings: string;
+  items?: OptScenarioItem[];
 }
 
 export interface VarianceAnalysisResponse {
@@ -73,113 +91,157 @@ export interface VarianceAnalysisResponse {
     secondaryFactor: string;
   };
   optimization?: {
-    scenarios: OptimizationScenario[];
-    optimalTarget: string;
+    scenarioA: OptScenario;
+    scenarioB: OptScenario;
+    scenarioC: OptScenario;
+    optimalPath: string;
     riskNote: string;
+    yearEndForecast: string;
   };
 }
 
-const SYSTEM_PROMPT = `Sen deneyimli bir Türk finans analistisin. Bütçe varyans analizleri konusunda uzmansın.
+const SYSTEM_PROMPT = `Sen deneyimli bir Turk finans analistisin. Butce varyans analizleri ve maliyet optimizasyonu konusunda uzmansın.
 
-Kullanıcı sana bir maliyet kategorisinin bütçe vs fiili harcama verilerini verecek.
-Sen bu varyansı aşağıdaki etkilere ayrıştırarak analiz edeceksin:
+Kullanici sana bir maliyet kategorisinin butce vs fiili harcama verilerini verecek.
 
-1. **Miktar/Hacim Etkisi**: Hizmet alınan personel sayısı, araç adedi, yemek sayısı vb. miktarlardaki değişimden kaynaklanan fark
-2. **Fiyat/Birim Maliyet Etkisi**: Birim fiyat, sözleşme bedeli değişimlerinden kaynaklanan fark
-3. **Karışım Etkisi**: Departmanlar veya alt kalemler arasındaki dağılım değişiminden kaynaklanan fark
-4. **Kombine/Çapraz Etki**: Miktar ve fiyat değişimlerinin birlikte yarattığı ikincil etki
+=== BOLUM 1: VARYANS AYRISTIRMASI ===
 
-Yanıtını MUTLAKA şu JSON formatında ver (başka hiçbir metin ekleme):
+Su etkilere gore varyansı ayrıstır:
+1. Miktar/Hacim Etkisi: Hizmet alınan personel sayısı, arac adedi, yemek sayısı vb. miktarlardaki degisimden kaynaklanan fark
+   - Formul: (Fiili Adet - Butce Adet) x Butce Birim Fiyat
+2. Fiyat/Birim Maliyet Etkisi: Birim fiyat, sozlesme bedeli degisimlerinden kaynaklanan fark
+   - Formul: (Fiili Fiyat - Butce Fiyat) x Butce Adet
+3. Karisim Etkisi: Departmanlar veya alt kalemler arasındaki dagilim degisiminden kaynaklanan fark
+4. Kombine/Capraz Etki: Miktar ve fiyat degisimlerinin birlikte yarattigi ikincil etki
+   - Formul: (Fiili Adet - Butce Adet) x (Fiili Fiyat - Butce Fiyat)
+
+=== BOLUM 2: SENARYO OPTIMIZASYONU (A/B/C) ===
+
+Eger hem miktar (adet/kisi) hem fiyat (birim ucret/fiyat) parametreleri mevcutsa, UC senaryo olustur:
+
+SENARYO A — Miktar Odakli:
+- Sadece adet/kisi sayılarını azaltarak butceye donmeyi hedefle
+- Her alt kalem icin: hangi kalemin kac adet azaltilacagini belirt
+- items dizisinde her kalem icin currentAdet, targetAdet, saving goster
+
+SENARYO B — Fiyat Odakli:
+- Sadece birim fiyatları renegosiye ederek butceye donmeyi hedefle
+- Her alt kalem icin: hangi fiyatin ne kadar indirileceğini belirt
+- items dizisinde her kalem icin currentFiyat, targetFiyat, saving goster
+
+SENARYO C — Kombine (A+B dengeli):
+- Hem adet hem fiyat uzerinde orta duzey degisikliklerle en gercekci senaryo
+- items dizisinde hem adet hem fiyat hedeflerini goster
+
+=== BOLUM 3: RISK VE FIZIBILITE ===
+
+Her senaryo icin:
+- feasibility: "Yuksek" (hemen uygulanabilir), "Orta" (1-3 ay), "Dusuk" (stratejik/uzun vadeli)
+- Yil sonu prognozu: aktif aylar baz alinarak yil sonunda toplam ne olur?
+
+=== JSON FORMAT ===
+
+Yanitini MUTLAKA su JSON formatinda ver (baska hicbir metin ekleme):
 {
-  "summary": "2-3 cümlelik Türkçe özet. Ana sapma nedenini ve büyüklüğünü belirt.",
-  "totalVariance": <fiili - bütçe, sayısal>,
+  "summary": "2-3 cumlelik Turkce ozet. Ana sapma nedenini ve buyuklugunu belirt.",
+  "totalVariance": <fiili - butce, sayisal>,
   "direction": "over | under | on_budget",
   "effects": [
     {
-      "name": "Miktar Etkisi | Fiyat Etkisi | Karışım Etkisi | Kombine Etki",
-      "amount": <TL cinsinden etki tutarı, pozitif=aşım, negatif=tasarruf>,
-      "explanation": "Bu etkinin kaynağını 1 cümlede açıkla",
-      "driver": "En önemli sürücüyü kısa belirt (ör: 'Güvenlik personel sayısı +12%')"
+      "name": "Miktar Etkisi | Fiyat Etkisi | Karisim Etkisi | Kombine Etki",
+      "amount": <TL cinsinden etki tutari, pozitif=asim, negatif=tasarruf>,
+      "explanation": "Bu etkinin kaynagini 1 cumlede acikla",
+      "driver": "En onemli surucuyu kisa belirt (or: 'Guvenlik personel sayisi +12%')"
     }
   ],
-  "monthlyTrend": "Aylık trend hakkında 1-2 cümle. Hangi aylarda sapma yoğunlaşmış?",
+  "monthlyTrend": "Her aktif ay icin ayri ayri yorum. Ocak, Subat gibi ay isimleri kullan, sapma miktarini ve yuzdesini belirt.",
   "recommendations": [
-    "Kısa, aksiyon odaklı öneri 1",
-    "Kısa, aksiyon odaklı öneri 2",
-    "Kısa, aksiyon odaklı öneri 3"
+    "Somut ve olcumlenebilir oneri 1",
+    "Somut ve olcumlenebilir oneri 2",
+    "Somut ve olcumlenebilir oneri 3",
+    "Somut ve olcumlenebilir oneri 4"
   ],
-  "interRelations": "Etkiler arasındaki ilişkileri açıkla. Örneğin: fiyat artışının kısmen miktar azaltmasıyla dengelenip dengelenmediği gibi.",
-  "departmentInsights": "Departman bazlı bulgu (veri yoksa boş string)",
-  "monthlyInsights": "Ay bazlı bulgu (veri yoksa boş string)",
+  "interRelations": "Etkiler arasindaki iliskileri acikla.",
+  "departmentInsights": "Departman bazli bulgu (veri yoksa bos string)",
+  "monthlyInsights": "Ay bazli bulgu (veri yoksa bos string)",
   "karmaEffect": {
-    "description": "Fiyat × Miktar × Departman etkilerinin kesişimi",
-    "dominantFactor": "En baskın etken",
-    "secondaryFactor": "İkincil etken"
+    "description": "Fiyat x Miktar x Departman etkilerinin kesisimi",
+    "dominantFactor": "En baskin etken",
+    "secondaryFactor": "Ikincil etken"
+  },
+  "optimization": {
+    "scenarioA": {
+      "title": "Senaryo A: Miktar Optimizasyonu",
+      "actions": [
+        "Kalem X: 50 kisiden 45 kisiye indir (-5 kisi)",
+        "Kalem Y: 10 aractan 8 araca indir (-2 arac)"
+      ],
+      "newTotal": 12345678,
+      "feasibility": "Yuksek | Orta | Dusuk",
+      "savings": "Z TL tasarruf (%P butce asimi azalir)",
+      "items": [
+        {
+          "name": "Kalem adi",
+          "currentAdet": 50,
+          "targetAdet": 45,
+          "saving": 123456
+        }
+      ]
+    },
+    "scenarioB": {
+      "title": "Senaryo B: Fiyat/Sozlesme Optimizasyonu",
+      "actions": [
+        "Kalem X birim ucretini %5 dusur (ABCDE TL -> FGHIJ TL)",
+        "Kalem Y sozlesme bedelini yeniden muzakere et"
+      ],
+      "newTotal": 12345678,
+      "feasibility": "Yuksek | Orta | Dusuk",
+      "savings": "Z TL tasarruf",
+      "items": [
+        {
+          "name": "Kalem adi",
+          "currentFiyat": 50000,
+          "targetFiyat": 47500,
+          "saving": 75000
+        }
+      ]
+    },
+    "scenarioC": {
+      "title": "Senaryo C: Dengeli Kombine",
+      "actions": [
+        "Kalem X: 50->47 kisi (-3) VE birim ucreti %3 indir",
+        "Kalem Y: adet sabit, fiyati %5 asagiya cek"
+      ],
+      "newTotal": 12345678,
+      "feasibility": "Orta",
+      "savings": "Z TL tasarruf, butce asimi %P'ye dusuyor",
+      "items": [
+        {
+          "name": "Kalem adi",
+          "currentAdet": 50,
+          "targetAdet": 47,
+          "currentFiyat": 50000,
+          "targetFiyat": 48500,
+          "saving": 98000
+        }
+      ]
+    },
+    "optimalPath": "Butceye donmek icin en az direncli yol: hangi senaryo neden tercih edilmeli",
+    "riskNote": "Hangi senaryonun riski daha dusuk ve neden; hangi senaryo uygulanamaz olabilir",
+    "yearEndForecast": "Mevcut trend devam ederse yil sonu tahmini toplam: X TL (butce Y TL, asim Z TL / %P)"
   }
 }
 
-Eğer departman verisi varsa, departmanlar arası karma etkiyi de analiz et:
-- Hangi departman bütçeyi en çok aştı?
-- Departmanlar arası dağılım değişimi (karışım etkisi) nedir?
-
-Eğer aylık breakdown varsa, zamansal karma etkiyi analiz et:
-- Sapma hangi aylarda yoğunlaştı?
-- Mevsimsellik veya tek seferlik etki mi?
-
-Önemli kurallar:
-- Tüm metin Türkçe olacak
-- Analizde YALNIZCA fiili verisi olan ayları (activeMonths) dikkate al. [FİİLİ YOK] etiketli aylar bütçe karşılaştırmasına dahil edilmez; yalnızca tamamlanan dönem üzerinden yorum yap.
-- effects dizisinde tum anlamli etkileri dahil et (en az 2, en fazla 6 etki). Her etki icin driver alani mumkun oldugunca somut ve olcumlenebilir olsun (yuzde, adet, TL).
-- Sayısal değerler kesinlikle TL cinsinden olacak (yüzde değil)
-- monthlyTrend: Her aktif ay icin ayri ayri yorum yap. Ocak, Subat, Mart gibi ay isimlerini kullanarak sapma miktarini ve yuzdesini belirt. Trend yukseliyor mu, dusuyor mu, sabit mi?
-- recommendations: En az 4, en fazla 6 oneri ver. Her oneri somut ve olcumlenebilir olmali.
-- departmentInsights ve monthlyInsights: veri yoksa boş string ("") döndür
-- karmaEffect: her zaman doldur; veri yetersizse genel değerlendirme yap
-- Veri yetersizse "Yeterli parametre verisi bulunamadı, genel degerlendirme yapiliyor" gibi bir not ekle
-- Tüm metinlerde Türkçe özel karakterler KULLANMA. Bunların yerine şunları kullan:
-  ş→s, ğ→g, ü→u, ö→o, ç→c, ı→i, İ→I, Ş→S, Ğ→G, Ü→U, Ö→O, Ç→C
-  Örnek: "güvenlik" yerine "guvenlik", "şirket" yerine "sirket" yaz.
-  Bu kural tüm string alanlara uygulanır: summary, explanation, driver, monthlyTrend, recommendations, interRelations, departmentInsights, monthlyInsights, karmaEffect, optimization alanları.
-
-Eger hem miktar (adet/kisi) hem fiyat (birim ucret/fiyat) parametreleri varsa,
-JSON cevabina asagidaki "optimization" alanini da ekle:
-
-"optimization": {
-  "scenarios": [
-    {
-      "title": "Miktar Optimizasyonu",
-      "action": "Kisi sayisini X'ten Y'ye indirin",
-      "impact": "Z TL tasarruf (%P azalma)",
-      "newTotal": 12345678,
-      "feasibility": "Yuksek | Orta | Dusuk",
-      "tradeoff": "Hizmet kalitesinde olasi etki"
-    },
-    {
-      "title": "Fiyat Optimizasyonu",
-      "action": "Birim ucreti %X artis ile sinirlayin",
-      "impact": "Z TL tasarruf",
-      "newTotal": 12345678,
-      "feasibility": "Yuksek | Orta | Dusuk",
-      "tradeoff": "Sozlesme yenileme riski"
-    },
-    {
-      "title": "Kombine Senaryo",
-      "action": "Kisiyi Y'ye indirin VE ucreti %X ile sinirlayin",
-      "impact": "Z TL tasarruf, butce asimi %P'ye dusuyor",
-      "newTotal": 12345678,
-      "feasibility": "Orta",
-      "tradeoff": "Ikili muzakere gerektirir"
-    }
-  ],
-  "optimalTarget": "Butceye donmek icin en az direncli yol: ...",
-  "riskNote": "Hangi senaryonun riski daha dusuk ve neden"
-}
-
-Matematiksel tutarlilik zorunludur:
-- newTotal = miktar x birim fiyat olarak hesaplanmali
-- Butceye ne kadar yaklasildigi acikca belirtilmeli
-- Gercekci olmayan senaryolar onerilmemeli
-- Yeterli parametre yoksa optimization alani JSON'a dahil edilmez`;
+Onemli kurallar:
+- Tum metin Turkce olacak (ama Turkce ozel karakter KULLANMA: s/g/u/o/c/i)
+- Analizde YALNIZCA fiili verisi olan aylari (activeMonths) dikkate al. [FIILI YOK] etiketli aylar analiz kapsamina dahil edilmez.
+- effects: en az 2, en fazla 6 etki. driver alani somut ve olcumlenebilir (yuzde, adet, TL).
+- Sayisal degerler TL cinsinden olacak (yuzde degil).
+- recommendations: en az 4, en fazla 6 oneri.
+- optimization: subItems verisi varsa her alt kalem icin ayri items satiri olustur. Yoksa makul tahminle doldur.
+- newTotal matematiksel olarak tutarli olmali: miktar x birim fiyat.
+- Yeterli parametre (hem adet hem fiyat) yoksa optimization alani JSON'a dahil edilmez.
+- Turkce ozel karakter yasagi: s,g,u,o,c,i kullan (s=s, g=g, u=u, o=o, c=c, i=i). Hic istisna yok.`;
 
 
 export async function POST(req: NextRequest) {
@@ -198,7 +260,7 @@ export async function POST(req: NextRequest) {
   const {
     mode, categoryName, departmentName, budgetTotal, actualTotal,
     varianceAmount, variancePercent, monthlyData, parameters,
-    monthBreakdown, departmentBreakdown,
+    subItems, monthBreakdown, departmentBreakdown,
   } = body;
 
   const subject = mode === 'department' && departmentName
@@ -261,6 +323,17 @@ export async function POST(req: NextRequest) {
     ? '\nDERIN ANALIZ MODU: Bu tek bir kategorinin detay raporudur. Mumkun olan en kapsamli analizi yap. Her parametreyi tek tek incele, sapmalarin tam nedenini bul, somut rakamlarla destekle.\n'
     : '';
 
+  const subItemLines = subItems && subItems.length > 0
+    ? '\nALT KALEM DETAYI (adet x birim fiyat):\n' + subItems
+        .map((si) => {
+          const budgetPart = (si.budgetAdet !== undefined && si.budgetBirimFiyat !== undefined)
+            ? ` | Butce: ${si.budgetAdet} adet x ${si.budgetBirimFiyat.toLocaleString('tr-TR')} TL = ${(si.budgetToplam ?? si.budgetAdet * si.budgetBirimFiyat).toLocaleString('tr-TR')} TL`
+            : '';
+          return `  ${si.name}: ${si.adet} adet x ${si.birimFiyat.toLocaleString('tr-TR')} TL = ${si.toplam.toLocaleString('tr-TR')} TL${budgetPart}`;
+        })
+        .join('\n')
+    : '';
+
   const userMessage = `${depthNote}Analiz konusu: ${subject}
 
 ÖZET (TÜM YIL):
@@ -280,7 +353,7 @@ ${monthBreakdownLines}
 ${deptBreakdownLines}
 PARAMETRE DETAYI:
 ${paramLines}
-
+${subItemLines}
 Lütfen bu varyansı analiz et ve JSON formatında yanıt ver.`;
 
   try {
