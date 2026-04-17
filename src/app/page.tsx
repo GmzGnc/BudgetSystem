@@ -2563,7 +2563,7 @@ export default function Home() {
                                 <summary className="flex items-center justify-between gap-2 px-3 py-2.5 cursor-pointer list-none select-none hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                   <div className="flex items-center gap-2 min-w-0">
                                     <span className="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold flex items-center justify-center">{label}</span>
-                                    <span className="font-medium text-sm text-gray-800 dark:text-gray-200 truncate">{s.title}</span>
+                                    <span className="font-medium text-sm text-gray-800 dark:text-gray-200">{s.title}</span>
                                   </div>
                                   <div className="flex items-center gap-2 flex-shrink-0">
                                     <span className="text-xs text-green-600 dark:text-green-400 font-medium">{s.savings}</span>
