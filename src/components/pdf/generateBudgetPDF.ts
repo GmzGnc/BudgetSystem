@@ -690,7 +690,8 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
     for (const { key, label } of scenarios) {
       const s = opt[key];
       if (!s) continue;
-      ensureSpace(20);
+      // Orphan önleme: başlık (6.5) + padding (2) + en az 2 bullet (5.5*2) = 19mm
+      ensureSpace(19);
 
       doc.setFillColor(...NAVY);
       doc.rect(14, curY, 269, 6.5, 'F');
@@ -701,7 +702,7 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
       const savText = tr(s.savings ?? '');
       const feasText = tr(s.feasibility ?? '');
       doc.text(`${savText}  |  ${feasText}`, 190, curY + 4.5);
-      curY += 6.5;
+      curY += 6.5 + 2; // +2mm nefes payı — ilk bullet başlığa yapışmasın
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(5.8);
