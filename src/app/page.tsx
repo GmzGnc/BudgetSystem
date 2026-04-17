@@ -214,6 +214,14 @@ export default function Home() {
     return GROUP_MONTHLY;
   }, [company, dbMonthlyData]);
 
+  // Her zaman budget-data.ts sabit kaynağından gelir — Supabase'e bakmaz.
+  // Varyans Analizi KPI ve trend için Excel formül cache'i boşsa güvenli fallback.
+  const staticMonthlyData: MonthlyEntry[] = useMemo(() => {
+    if (company === 'ICA') return ICA_BUDGET.monthlyData;
+    if (company === 'ICE') return ICE_BUDGET.monthlyData;
+    return GROUP_MONTHLY;
+  }, [company]);
+
   const projection2026 = useMemo(
     () => buildProjection2026(monthlyData, coefficients),
     [monthlyData, coefficients],
@@ -449,9 +457,11 @@ export default function Home() {
       }
       if (parsed.length === 0) { showToast('Model sheet okunamadı — sütunları kontrol edin'); return; }
 
-      // Bütçe değeri kontrolü — formül cache'i boşsa uyar
-      const hasBudgetValues = parsed.some((r) => r.budget.some((v) => v !== 0));
-      if (!hasBudgetValues) {
+      // Bütçe değeri kontrolü — TL satırları için formül cache'i boşsa uyar
+      // Sadece TL/TL Karşılığı satırları kontrol edilir; adet satırları 0 olabilir
+      const tlRows = parsed.filter((r) => /^TL/i.test(r.unitType));
+      const hasTLBudgetValues = tlRows.length > 0 && tlRows.some((r) => r.budget.some((v) => v !== 0));
+      if (tlRows.length > 0 && !hasTLBudgetValues) {
         showToast('⚠️ Bütçe değerleri okunamadı. Excel dosyasını Microsoft Excel\'de bir kez açıp kaydedin, sonra tekrar yükleyin.');
         // Yine de devam et — fiili veriler okunmuş olabilir
       }
@@ -1694,7 +1704,11 @@ export default function Home() {
                                         ? varMonth
                                         : (monthsWithData[monthsWithData.length - 1] ?? 0);
 
-                                      const budgetTotal = mainTotalRow?.budget[safeMonth] ?? 0;
+                                      // Excel budget > 0 → Excel kullan; 0 → budget-data.ts statik fallback
+                                      // (Supabase'den gelen dbMonthlyData değil — Supabase'de yanlış değer olabilir)
+                                      const excelBudget = mainTotalRow?.budget[safeMonth] ?? 0;
+                                      const staticBudget = (staticMonthlyData[safeMonth]?.[cat.id] as number) ?? 0;
+                                      const budgetTotal = excelBudget > 0 ? excelBudget : staticBudget;
                                       const actualTotal = mainTotalRow?.actual[safeMonth] ?? 0;
                                       const diffTotal   = actualTotal - budgetTotal;
                                       const diffPctVar  = budgetTotal > 0 ? (diffTotal / budgetTotal) * 100 : 0;
@@ -1710,12 +1724,16 @@ export default function Home() {
                                         .sort((a, b) => b.diff - a.diff)
                                         .slice(0, 5);
 
-                                      // trend — sadece ana toplam satırı
-                                      const trendVarData = MONTH_LABELS.map((label, mi) => ({
-                                        label,
-                                        Bütçe: mainTotalRow?.budget[mi] ?? 0,
-                                        Fiili: mainTotalRow?.actual[mi] ?? 0,
-                                      }));
+                                      // trend — Excel budget > 0 → Excel, yoksa statik fallback
+                                      const trendVarData = MONTH_LABELS.map((label, mi) => {
+                                        const eb = mainTotalRow?.budget[mi] ?? 0;
+                                        const sb = (staticMonthlyData[mi]?.[cat.id] as number) ?? 0;
+                                        return {
+                                          label,
+                                          Bütçe: eb > 0 ? eb : sb,
+                                          Fiili: mainTotalRow?.actual[mi] ?? 0,
+                                        };
+                                      });
 
                                       return (
                                         <div className="space-y-4">
@@ -2110,6 +2128,23 @@ export default function Home() {
                                               </button>
                                             </div>
                                           )}
+
+                                          {/* formül cache uyarısı — TL satırlarının bütçesi sıfırsa göster */}
+                                          {(() => {
+                                            const tlCatRows = catRows.filter((r) => isTLRow(r));
+                                            const hasTLBudget = tlCatRows.some((r) => r.budget[safeMonth] > 0);
+                                            if (tlCatRows.length === 0 || hasTLBudget) return null;
+                                            return (
+                                              <div className="flex items-start gap-2.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mt-0.5 text-amber-500"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                                <p className="text-xs text-amber-700 dark:text-amber-400">
+                                                  <span className="font-semibold">Excel formül cache&apos;i boş.</span>{' '}
+                                                  Parametre bazlı bütçe değerlerini görmek için dosyayı MS Excel&apos;de açıp kaydedin, sonra tekrar içe aktarın.
+                                                  KPI kartları ve trend grafik için statik bütçe verisi kullanılıyor.
+                                                </p>
+                                              </div>
+                                            );
+                                          })()}
 
                                           {/* parametre tablosu — tüm satırlar, unitType'a göre format */}
                                           <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
