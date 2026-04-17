@@ -635,54 +635,46 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
   const opt = (cat.aiAnalysis as any).optimization;
   if (opt) {
     if (curY > MAX_Y - 20) curY = addPage(doc);
-
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
     doc.setTextColor(...NAVY);
     doc.text(tr('Optimizasyon Senaryolari:'), 14, curY);
     curY += LINE_H + 1;
 
-    const scenarios = [
+    const scenarios: Array<{ key: string; label: string }> = [
       { key: 'scenarioA', label: 'A' },
       { key: 'scenarioB', label: 'B' },
       { key: 'scenarioC', label: 'C' },
     ];
 
     for (const { key, label } of scenarios) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const s = (opt as any)[key];
+      const s = opt[key];
       if (!s) continue;
       if (curY > MAX_Y - 20) curY = addPage(doc);
 
-      // Senaryo başlık satırı
       doc.setFillColor(...NAVY);
       doc.rect(14, curY, 269, 6.5, 'F');
       doc.setTextColor(...WHITE);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6.5);
-      doc.text(`Senaryo ${label}: ${tr(s.title ?? '')}`, 17, curY + 4.5);
+      doc.setFontSize(6);
+      doc.text(tr(`Senaryo ${label}: ${s.title ?? ''}`), 17, curY + 4.5);
       const savText = tr(s.savings ?? '');
       const feasText = tr(s.feasibility ?? '');
-      doc.text(`${savText}  |  ${feasText}`, 200, curY + 4.5);
+      doc.text(`${savText}  |  ${feasText}`, 190, curY + 4.5);
       curY += 6.5;
 
-      // Action listesi
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(5.8);
       doc.setTextColor(...BLACK);
-      (s.actions ?? []).slice(0, 4).forEach((action: string) => {
+      ((s.actions ?? []) as string[]).slice(0, 4).forEach((action: string) => {
         if (curY > MAX_Y - 5) curY = addPage(doc);
         const aLines = doc.splitTextToSize(tr(`• ${action}`), 260);
-        aLines.slice(0, 2).forEach((l: string) => {
-          doc.text(l, 17, curY); curY += 3.5;
-        });
+        aLines.slice(0, 2).forEach((l: string) => { doc.text(l, 17, curY); curY += 3.5; });
       });
       curY += 1;
 
-      // Alt kalem tablosu
       if (s.items && s.items.length > 0) {
         if (curY > MAX_Y - 10) curY = addPage(doc);
-
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const hasAdet  = s.items.some((it: any) => it.currentAdet  !== undefined);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -695,37 +687,33 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
         doc.setTextColor(...NAVY);
         doc.text('Kalem', 19, curY + 4);
         if (hasAdet) {
-          doc.text('Mevcut', 140, curY + 4);
-          doc.text('Hedef', 170, curY + 4);
+          doc.text('Mevcut Adet', 138, curY + 4);
+          doc.text('Hedef Adet', 168, curY + 4);
         } else if (hasFiyat) {
-          doc.text('Mevcut Fiyat', 130, curY + 4);
-          doc.text('Hedef Fiyat', 165, curY + 4);
+          doc.text('Mevcut Fiyat', 128, curY + 4);
+          doc.text('Hedef Fiyat', 163, curY + 4);
         }
-        doc.text('Tasarruf', 240, curY + 4);
+        doc.text('Tasarruf', 237, curY + 4);
         curY += 5.5;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        s.items.slice(0, 6).forEach((item: any, ii: number) => {
+        ((s.items ?? []) as any[]).slice(0, 6).forEach((item: any, ii: number) => {
           if (curY > MAX_Y - 5) curY = addPage(doc);
-          doc.setFillColor(...(ii % 2 === 0 ? GRAY_LIGHT : WHITE));
+          doc.setFillColor(...((ii % 2 === 0 ? GRAY_LIGHT : WHITE) as [number, number, number]));
           doc.rect(17, curY, 260, 5.5, 'F');
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(5.5);
           doc.setTextColor(...BLACK);
-
           const nameLines = doc.splitTextToSize(tr(item.name ?? ''), 115);
           doc.text(nameLines[0] ?? '', 19, curY + 4);
-
           if (hasAdet) {
             doc.text(String(item.currentAdet ?? ''), 143, curY + 4);
             doc.text(String(item.targetAdet ?? ''), 173, curY + 4);
           } else if (hasFiyat) {
-            doc.text((item.currentFiyat ?? 0).toLocaleString('tr-TR'), 133, curY + 4);
-            doc.text((item.targetFiyat ?? 0).toLocaleString('tr-TR'), 168, curY + 4);
+            doc.text((item.currentFiyat ?? 0).toLocaleString('tr-TR'), 131, curY + 4);
+            doc.text((item.targetFiyat ?? 0).toLocaleString('tr-TR'), 166, curY + 4);
           }
-
           doc.setTextColor(...GREEN);
-          doc.text((item.saving ?? 0).toLocaleString('tr-TR') + ' TL', 240, curY + 4);
+          doc.text((item.saving ?? 0).toLocaleString('tr-TR') + ' TL', 238, curY + 4);
           curY += 5.5;
         });
         curY += 2;
@@ -733,7 +721,6 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
       curY += 3;
     }
 
-    // Optimal Yol
     if (opt.optimalPath) {
       if (curY > MAX_Y - 12) curY = addPage(doc);
       doc.setFont('helvetica', 'bold');
@@ -744,14 +731,10 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
       doc.setFontSize(5.8);
       doc.setTextColor(...BLACK);
       const optLines = doc.splitTextToSize(tr(opt.optimalPath), 265);
-      optLines.slice(0, 3).forEach((l: string) => {
-        if (curY >= MAX_Y) curY = addPage(doc);
-        doc.text(l, 14, curY); curY += LINE_H;
-      });
+      optLines.slice(0, 3).forEach((l: string) => { if (curY >= MAX_Y) curY = addPage(doc); doc.text(l, 14, curY); curY += LINE_H; });
       curY += 1;
     }
 
-    // Yılsonu Tahmini
     if (opt.yearEndForecast) {
       if (curY > MAX_Y - 12) curY = addPage(doc);
       doc.setFont('helvetica', 'bold');
@@ -762,10 +745,7 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
       doc.setFontSize(5.8);
       doc.setTextColor(...BLACK);
       const foreLines = doc.splitTextToSize(tr(opt.yearEndForecast), 265);
-      foreLines.slice(0, 3).forEach((l: string) => {
-        if (curY >= MAX_Y) curY = addPage(doc);
-        doc.text(l, 14, curY); curY += LINE_H;
-      });
+      foreLines.slice(0, 3).forEach((l: string) => { if (curY >= MAX_Y) curY = addPage(doc); doc.text(l, 14, curY); curY += LINE_H; });
     }
   }
 }
