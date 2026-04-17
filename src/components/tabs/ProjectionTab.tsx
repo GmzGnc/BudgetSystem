@@ -7,8 +7,11 @@ import {
 } from 'recharts';
 import { CATEGORIES, CATEGORY_COLORS, INDEX_BADGE_COLORS } from '@/data/categories';
 import { categoryAnnual, variancePct } from '@/lib/calculations';
-import type { MonthlyEntry, ProjectionCoefficients } from '@/types';
+import type { MonthlyEntry, ProjectionCoefficients, ModelRow } from '@/types';
+import type { Company } from '@/types';
 import { fmt, fmtFull, pctTextColor } from '@/lib/utils';
+import { COMPANY_CONFIGS } from '@/config/companyConfigs';
+import YemekModelPanel from './YemekModelPanel';
 
 const DEFAULT_COEFFICIENTS: ProjectionCoefficients = Object.fromEntries(
   CATEGORIES.map((c) => [c.id, parseFloat((1 + c.rate / 100).toFixed(3))]),
@@ -27,7 +30,16 @@ interface Props {
   axisColor: string;
   gridColor: string;
   LineTooltip: React.ComponentType<Record<string, unknown>>;
+  // Yemek model paneli için
+  company: Company;
+  importedModelData: ModelRow[] | null;
 }
+
+// ICA/ICE şirket adını config code'una çevirir
+const COMPANY_CODE_MAP: Partial<Record<Company, '2410' | '2415'>> = {
+  ICA:  '2410',
+  ICE:  '2415',
+};
 
 export default function ProjectionTab({
   monthlyData,
@@ -42,7 +54,23 @@ export default function ProjectionTab({
   axisColor,
   gridColor,
   LineTooltip,
+  company,
+  importedModelData,
 }: Props) {
+  // Yemek model paneli için config hazırla
+  const companyCode = COMPANY_CODE_MAP[company];
+  const yemekCatCfg = companyCode
+    ? COMPANY_CONFIGS[companyCode]?.categories.find((c) => c.id === 'yemek')
+    : undefined;
+  const yemekFoodCfg = yemekCatCfg?.food;
+
+  // importedModelData'dan yemek satırlarını filtrele
+  const yemekRows = React.useMemo(() => {
+    if (!importedModelData || !yemekCatCfg) return [];
+    const { startRow, endRow } = yemekCatCfg;
+    return importedModelData.filter((r) => r.rowNum >= startRow && r.rowNum <= endRow);
+  }, [importedModelData, yemekCatCfg]);
+
   return (
     <div className="space-y-6">
 
@@ -136,6 +164,15 @@ export default function ProjectionTab({
           </ResponsiveContainer>
         </div>
       </div>
+
+      {/* Yemek model paneli — sadece ICA veya ICE seçiliyken göster */}
+      {yemekFoodCfg && (company === 'ICA' || company === 'ICE') && (
+        <YemekModelPanel
+          config={yemekFoodCfg}
+          modelData={yemekRows}
+          companyName={company}
+        />
+      )}
 
       {/* projection comparison table */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">

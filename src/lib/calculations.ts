@@ -1,5 +1,6 @@
 import type { MonthlyEntry, ProjectionCoefficients } from '@/types';
 import { CATEGORIES } from '@/data/categories';
+import type { FoodDepartment } from '@/config/companyConfigs';
 
 export function categoryIds(): string[] {
   return CATEGORIES.map((c) => c.id);
@@ -68,4 +69,45 @@ export function aggregateMonthly(monthlyData: MonthlyEntry[]): { monthLabel: str
     monthLabel: row.monthLabel as string,
     total: categoryIds().reduce((s, id) => s + ((row[id] as number) ?? 0), 0),
   }));
+}
+
+/**
+ * Yemek bütçesi formülü — TEK AY için hesaplama.
+ * Formula: Σ (meal × day × price) per active department.
+ *
+ * Kurallar:
+ * - isActive=false → atlanır
+ * - isSpecial=true → direkt specials[dept.name] değeri kullanılır (Kilyos gibi)
+ * - meal=0 || day=0 → o dept o ay için atlanır (activeMonths yerine runtime kontrol)
+ * - ICA: prices['global'] tüm departmanlar için kullanılır
+ * - ICE: prices[dept.name] her departman için ayrı fiyat
+ *
+ * @param depts   companyConfigs'ten gelen FoodDepartment dizisi
+ * @param meals   { deptName: mealCount }  — bu ay için öğün sayıları
+ * @param days    { deptName: dayCount }   — bu ay için gün sayıları
+ * @param prices  { deptName: unitPrice } | { global: price }
+ * @param specials { deptName: directTL } — isSpecial=true olan departmanlar
+ */
+export function calculateFoodBudget(
+  depts: FoodDepartment[],
+  meals: Record<string, number>,
+  days: Record<string, number>,
+  prices: Record<string, number>,
+  specials: Record<string, number>,
+): number {
+  let total = 0;
+  for (const dept of depts) {
+    if (!dept.isActive) continue;
+    if (dept.isSpecial) {
+      total += specials[dept.name] ?? 0;
+      continue;
+    }
+    const meal = meals[dept.name] ?? 0;
+    const day  = days[dept.name]  ?? 0;
+    if (meal === 0 || day === 0) continue; // aktif ay değil (runtime skip)
+    // ICA: prices['global'] | ICE: prices[dept.name]
+    const price = prices[dept.name] ?? prices['global'] ?? 0;
+    total += meal * day * price;
+  }
+  return total;
 }

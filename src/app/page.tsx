@@ -34,17 +34,10 @@ import {
   totalAnnual, categoryAnnual, monthlyAverage,
   buildProjection2026, variancePct, categoryShare, aggregateMonthly,
 } from '@/lib/calculations';
-import type { Company, MonthlyEntry, ProjectionCoefficients } from '@/types';
+import type { Company, MonthlyEntry, ProjectionCoefficients, ModelRow } from '@/types';
 
-// ─── model gider types & row ranges ─────────────────────────────────────────
-
-interface ModelRow {
-  rowNum: number;      // 1-based Excel row number
-  paramName: string;   // K column
-  unitType: string;    // L column: "TL", "TL Karşılığı", or "" (empty = adet/miktar)
-  budget: number[];    // 12 months  N–Y
-  actual: number[];    // 12 months  AC–AN
-}
+// ─── model gider row ranges & key params ────────────────────────────────────
+// ModelRow tipi src/types/index.ts'e taşındı
 
 const CAT_KEY_PARAMS: Record<string, string[]> = {
   guvenlik:      ['Kişi Sayısı', 'Proje Müdürü', 'Vardiya Amiri', 'Güvenlik Personeli', 'Ücret', 'Toplam'],
@@ -2224,6 +2217,8 @@ export default function Home() {
             axisColor={axisColor}
             gridColor={gridColor}
             LineTooltip={LineTooltip as React.ComponentType<Record<string, unknown>>}
+            company={company}
+            importedModelData={importedModelData}
           />
         )}
 

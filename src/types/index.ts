@@ -29,3 +29,12 @@ export interface CompanyBudget {
 export interface ProjectionCoefficients {
   [categoryId: string]: number;
 }
+
+/** Excel Model sheet'inden parse edilen tek parametre satırı */
+export interface ModelRow {
+  rowNum: number;    // 1-based Excel satır numarası
+  paramName: string; // K sütunu — parametre adı
+  unitType: string;  // L sütunu — 'TL', 'TL Karşılığı', '' (adet/miktar)
+  budget: number[];  // 12 aylık bütçe değerleri (N–Y sütunları)
+  actual: number[];  // 12 aylık fiili değerler (AC–AN sütunları)
+}
