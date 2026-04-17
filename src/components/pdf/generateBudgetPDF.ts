@@ -28,6 +28,18 @@ async function loadLogo(): Promise<string> {
 function tr(text: string): string {
   if (!text) return '';
   return text
+    // ── sembol dönüşümleri (non-ASCII fallback'ten ÖNCE) ──────────────────
+    .replace(/\u2192/g, '->').replace(/→/g, '->')   // sağ ok (explicit + literal)
+    .replace(/\u2190/g, '<-').replace(/←/g, '<-')   // sol ok
+    .replace(/\u2022/g, '-').replace(/•/g, '-')      // bullet
+    .replace(/\u2013/g, '-')                          // en-dash
+    .replace(/\u2014/g, '-')                          // em-dash
+    .replace(/\u2026/g, '...')                        // ellipsis
+    .replace(/\u2018/g, "'").replace(/\u2019/g, "'") // smart single quotes
+    .replace(/\u201C/g, '"').replace(/\u201D/g, '"') // smart double quotes
+    .replace(/\u00A0/g, ' ')                          // non-breaking space
+    .replace(/\u202F/g, ' ')                          // narrow no-break space
+    // ── Türkçe karakter map ───────────────────────────────────────────────
     .replace(/İ/g, 'I').replace(/ı/g, 'i')
     .replace(/Ğ/g, 'G').replace(/ğ/g, 'g')
     .replace(/Ü/g, 'U').replace(/ü/g, 'u')
@@ -35,14 +47,9 @@ function tr(text: string): string {
     .replace(/Ö/g, 'O').replace(/ö/g, 'o')
     .replace(/Ç/g, 'C').replace(/ç/g, 'c')
     .replace(/Â/g, 'A').replace(/â/g, 'a')
-    .replace(/[\u0080-\u009F]/g, '')       // control characters
-    .replace(/[\u2018\u2019]/g, "'")       // smart single quotes
-    .replace(/[\u201C\u201D]/g, '"')       // smart double quotes
-    .replace(/→/g, '->').replace(/←/g, '<-')  // arrows
-    .replace(/•/g, '-')                    // bullet
-    .replace(/[\u2013\u2014]/g, '-')       // en/em dash
-    .replace(/[\u2026]/g, '...')           // ellipsis
-    .replace(/[^\x00-\x7F]/g, '?');       // diğer tüm non-ASCII → ?
+    // ── kalan non-ASCII → ? (yukarıda zaten ASCII'ye çevrilmediyse) ───────
+    .replace(/[\u0080-\u009F]/g, '')       // C1 control characters
+    .replace(/[^\x00-\x7F]/g, '?');       // diğer tüm non-ASCII
 }
 
 export interface CategoryPDFData {
@@ -595,7 +602,7 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
     curY += domH + 2;
 
     // İkincil Etken — tam genişlik, dinamik yükseklik
-    const secLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.secondaryFactor), 255);
+    const secLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.secondaryFactor), 261);
     const secH = Math.max(12, secLines.length * 4 + 6);
     doc.setFillColor(254, 243, 199);
     doc.roundedRect(14, curY, 269, secH, 1, 1, 'F');
@@ -695,43 +702,58 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
         const hasAdet  = s.items.some((it: any) => it.currentAdet  !== undefined);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const hasFiyat = s.items.some((it: any) => it.currentFiyat !== undefined);
+        const hasCols  = hasAdet || hasFiyat;
+
+        // Dinamik kolon pozisyonları
+        const pageW   = doc.internal.pageSize.getWidth();
+        const margin  = 14;
+        const cW      = pageW - 2 * margin;   // içerik genişliği
+        const xStart  = margin + 3;           // tablo içi sol boşluk
+        const xEnd    = margin + cW;          // sağ kenar (Tasarruf sağa hizalı buraya)
+        const xMevcut = margin + cW * 0.50;
+        const xHedef  = margin + cW * 0.68;
+        const nameMaxW = hasCols ? cW * 0.46 : cW * 0.86;
+
+        // Tasarruf için locale-bağımsız format (toLocaleString NBSP separator üretir)
+        const formatTL = (n: number): string => {
+          const fixed = Math.round(n).toString();
+          return fixed.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' TL';
+        };
 
         doc.setFillColor(230, 232, 245);
-        doc.rect(17, curY, 260, 5.5, 'F');
+        doc.rect(margin + 3, curY, cW - 3, 5.5, 'F');
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(5.5);
         doc.setTextColor(...NAVY);
-        const hasCols = hasAdet || hasFiyat;
-        doc.text('Kalem', 19, curY + 4);
+        doc.text('Kalem', xStart, curY + 4);
         if (hasAdet) {
-          doc.text('Mevcut Adet', 125, curY + 4);
-          doc.text('Hedef Adet', 162, curY + 4);
+          doc.text('Mevcut Adet', xMevcut, curY + 4);
+          doc.text('Hedef Adet', xHedef, curY + 4);
         } else if (hasFiyat) {
-          doc.text('Mevcut Fiyat', 125, curY + 4);
-          doc.text('Hedef Fiyat', 162, curY + 4);
+          doc.text('Mevcut Fiyat', xMevcut, curY + 4);
+          doc.text('Hedef Fiyat', xHedef, curY + 4);
         }
-        doc.text('Tasarruf', 210, curY + 4);
+        doc.text('Tasarruf', xEnd, curY + 4, { align: 'right' });
         curY += 5.5;
 
         ((s.items ?? []) as any[]).slice(0, 6).forEach((item: any, ii: number) => {
           if (curY > MAX_Y - 5) curY = addPage(doc);
           doc.setFillColor(...((ii % 2 === 0 ? GRAY_LIGHT : WHITE) as [number, number, number]));
-          doc.rect(17, curY, 260, 5.5, 'F');
+          doc.rect(margin + 3, curY, cW - 3, 5.5, 'F');
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(5.5);
           doc.setTextColor(...BLACK);
-          const nameMaxW = hasCols ? 100 : 185;
           const nameLines = doc.splitTextToSize(tr(item.name ?? ''), nameMaxW);
-          doc.text(nameLines[0] ?? '', 19, curY + 4);
+          doc.text(nameLines[0] ?? '', xStart, curY + 4);
           if (hasAdet) {
-            doc.text(String(item.currentAdet ?? ''), 125, curY + 4);
-            doc.text(String(item.targetAdet ?? ''), 162, curY + 4);
+            doc.text(String(item.currentAdet ?? ''), xMevcut, curY + 4);
+            doc.text(String(item.targetAdet ?? ''), xHedef, curY + 4);
           } else if (hasFiyat) {
-            doc.text((item.currentFiyat ?? 0).toLocaleString('tr-TR'), 125, curY + 4);
-            doc.text((item.targetFiyat ?? 0).toLocaleString('tr-TR'), 162, curY + 4);
+            doc.text(formatTL(item.currentFiyat ?? 0), xMevcut, curY + 4);
+            doc.text(formatTL(item.targetFiyat ?? 0), xHedef, curY + 4);
           }
           doc.setTextColor(...GREEN);
-          doc.text((item.saving ?? 0).toLocaleString('tr-TR') + ' TL', 210, curY + 4);
+          doc.text(formatTL(item.saving ?? 0), xEnd, curY + 4, { align: 'right' });
           curY += 5.5;
         });
         curY += 2;
