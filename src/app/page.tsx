@@ -1629,27 +1629,10 @@ export default function Home() {
 
                                     {/* ── TAB: Varyans Analizi ── */}
                                     {ddActiveTab === 'variance' && (() => {
-                                      if (!importedModelData) {
-                                        return (
-                                          <div className="bg-white dark:bg-gray-900 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 p-8 text-center">
-                                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Varyans analizi için Excel dosyasını yükleyin</p>
-                                            <p className="text-xs text-gray-400 dark:text-gray-500">Model Gider sheet seçin — fiili sütunlar (AC–AN) dolu olmalı</p>
-                                          </div>
-                                        );
-                                      }
-
                                       const range = CAT_ROW_RANGES[cat.id];
                                       const catRows = importedModelData
                                         ? (range ? importedModelData.filter((r) => r.rowNum >= range[0] && r.rowNum <= range[1]) : importedModelData)
-                                        : (dbModelRows?.get(cat.id) ?? []);
-
-                                      if (catRows.length === 0) {
-                                        return (
-                                          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-6 text-center">
-                                            <p className="text-sm text-gray-400">Bu kategori için satır aralığında veri bulunamadı</p>
-                                          </div>
-                                        );
-                                      }
+                                        : [];
 
                                       // ── row classifiers (L sütununa göre) ──
                                       const isTLRow  = (r: ModelRow) => /^TL/i.test(r.unitType);
@@ -1694,8 +1677,11 @@ export default function Home() {
                                         ? varMonth
                                         : (monthsWithData[monthsWithData.length - 1] ?? 0);
 
-                                      const budgetTotal = mainTotalRow?.budget[safeMonth] ?? 0;
-                                      const actualTotal = mainTotalRow?.actual[safeMonth] ?? 0;
+                                      const excelBudget = mainTotalRow?.budget[safeMonth];
+                                      const dbBudget = (monthlyData[safeMonth]?.[cat.id] as number) ?? 0;
+                                      const budgetTotal = (typeof excelBudget === 'number' && excelBudget > 0) ? excelBudget : dbBudget;
+                                      const excelActual = mainTotalRow?.actual[safeMonth];
+                                      const actualTotal = (typeof excelActual === 'number' && excelActual > 0) ? excelActual : 0;
                                       const diffTotal   = actualTotal - budgetTotal;
                                       const diffPctVar  = budgetTotal > 0 ? (diffTotal / budgetTotal) * 100 : 0;
 
@@ -1710,12 +1696,16 @@ export default function Home() {
                                         .sort((a, b) => b.diff - a.diff)
                                         .slice(0, 5);
 
-                                      // trend — sadece ana toplam satırı
-                                      const trendVarData = MONTH_LABELS.map((label, mi) => ({
-                                        label,
-                                        Bütçe: mainTotalRow?.budget[mi] ?? 0,
-                                        Fiili: mainTotalRow?.actual[mi] ?? 0,
-                                      }));
+                                      // trend — sadece ana toplam satırı; bütçe için Excel→monthlyData fallback
+                                      const trendVarData = MONTH_LABELS.map((label, mi) => {
+                                        const excelB = mainTotalRow?.budget[mi];
+                                        const dbB = (monthlyData[mi]?.[cat.id] as number) ?? 0;
+                                        return {
+                                          label,
+                                          Bütçe: (typeof excelB === 'number' && excelB > 0) ? excelB : dbB,
+                                          Fiili: mainTotalRow?.actual[mi] ?? 0,
+                                        };
+                                      });
 
                                       return (
                                         <div className="space-y-4">
@@ -2111,7 +2101,20 @@ export default function Home() {
                                             </div>
                                           )}
 
-                                          {/* parametre tablosu — tüm satırlar, unitType'a göre format */}
+                                          {/* parametre tablosu — sadece Excel yüklüyken göster */}
+                                          {(!importedModelData || catRows.length === 0) && (
+                                            <div className="bg-white dark:bg-gray-900 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 p-6 text-center">
+                                              {!importedModelData ? (
+                                                <>
+                                                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Parametre detayı için Excel dosyasını yükleyin</p>
+                                                  <p className="text-xs text-gray-400 dark:text-gray-500">Model Gider sheet seçin — fiili sütunlar (AC–AN) dolu olmalı</p>
+                                                </>
+                                              ) : (
+                                                <p className="text-sm text-gray-400">Bu kategori için satır aralığında veri bulunamadı</p>
+                                              )}
+                                            </div>
+                                          )}
+                                          {importedModelData && catRows.length > 0 && (
                                           <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
                                             <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700">
                                               <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">Parametre Detayı — {MONTH_LABELS[safeMonth]}</p>
@@ -2176,6 +2179,7 @@ export default function Home() {
                                               <span className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400"><span className="w-2 h-2 rounded bg-blue-100 dark:bg-blue-950" />Miktar/Adet Satırı</span>
                                             </div>
                                           </div>
+                                          )}
                                         </div>
                                       );
                                     })()}
