@@ -502,8 +502,8 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
     doc.text(tr('Etki Dagilimi / Variance Decomposition:'), 14, curY);
     curY += 4;
 
-    const effCols = [14, 65, 120, 158, 205];
-    const effHeaders = [tr('Etki Turu'), tr('Tutar'), tr('Katki%'), tr('Aciklama'), tr('Suruco')];
+    const effCols = [14, 60, 108, 140, 190];
+    const effHeaders = [tr('Etki Turu'), tr('Tutar'), tr('Katki%'), tr('Aciklama'), tr('Sebep')];
     doc.setFillColor(...NAVY);
     doc.rect(14, curY, 269, 7, 'F');
     doc.setTextColor(...WHITE);
@@ -513,21 +513,23 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
 
     cat.aiAnalysis.effects.forEach((eff, ei) => {
       if (curY > MAX_Y - 8) return;
+      const descLines = doc.splitTextToSize(tr(eff.description), 48);
+      const drvLines  = doc.splitTextToSize(tr((eff as unknown as { driver?: string }).driver ?? ''), 55);
+      const rowLines  = Math.min(Math.max(descLines.length, drvLines.length), 2);
+      const rowH      = 5 + rowLines * 4;
       doc.setFillColor(...(ei % 2 === 0 ? GRAY_LIGHT : WHITE));
-      doc.rect(14, curY, 269, 7.5, 'F');
+      doc.rect(14, curY, 269, rowH, 'F');
       doc.setFontSize(5.8);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(...BLACK);
-      doc.text(tr(eff.label), effCols[0] + 2, curY + 5);
+      doc.text(tr(eff.label), effCols[0] + 2, curY + 4.5);
       doc.setTextColor(...(eff.amount > 0 ? RED : GREEN));
-      doc.text(formatTL(eff.amount), effCols[1] + 2, curY + 5);
-      doc.text('%' + Math.abs(eff.contributionPercent).toFixed(1), effCols[2] + 2, curY + 5);
+      doc.text(formatTL(eff.amount), effCols[1] + 2, curY + 4.5);
+      doc.text('%' + Math.abs(eff.contributionPercent).toFixed(1), effCols[2] + 2, curY + 4.5);
       doc.setTextColor(...BLACK);
-      const descLines = doc.splitTextToSize(tr(eff.description), 44);
-      doc.text(descLines[0] || '', effCols[3] + 2, curY + 5);
-      const drvLines = doc.splitTextToSize(tr((eff as unknown as { driver?: string }).driver ?? ''), 52);
-      doc.text(drvLines[0] || '', effCols[4] + 2, curY + 5);
-      curY += 7.5;
+      descLines.slice(0, 2).forEach((l: string, i: number) => doc.text(l, effCols[3] + 2, curY + 4.5 + i * 3.5));
+      drvLines.slice(0, 2).forEach((l: string, i: number) => doc.text(l, effCols[4] + 2, curY + 4.5 + i * 3.5));
+      curY += rowH;
     });
     curY += 3;
   }
