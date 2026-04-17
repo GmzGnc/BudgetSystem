@@ -397,7 +397,7 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
   // Parametre detay tablosu — otomatik sayfa kırma
   if (cat.parameters && cat.parameters.length > 0) {
     const ROW_H = 5.5;
-    const PAGE_MAX_Y = 193;
+    const PAGE_MAX_Y = doc.internal.pageSize.getHeight() - 16 - 4;
     const PAGE_START_Y = 22;
     const pCols = [14, 110, 148, 186, 224, 256];
     const pHeaders = [tr('Parametre'), tr('Tip'), tr('Butce'), tr('Fiili'), tr('Fark'), tr('Oran')];
@@ -728,24 +728,32 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
           return fixed.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' TL';
         };
 
-        doc.setFillColor(230, 232, 245);
-        doc.rect(margin + 3, curY, cW - 3, 5.5, 'F');
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(5.5);
-        doc.setTextColor(...NAVY);
-        doc.text('Kalem', xStart, curY + 4);
-        if (hasAdet) {
-          doc.text('Mevcut Adet', xMevcut, curY + 4);
-          doc.text('Hedef Adet', xHedef, curY + 4);
-        } else if (hasFiyat) {
-          doc.text('Mevcut Fiyat', xMevcut, curY + 4);
-          doc.text('Hedef Fiyat', xHedef, curY + 4);
-        }
-        doc.text('Tasarruf', xEnd, curY + 4, { align: 'right' });
-        curY += 5.5;
+        // Tablo header — yeni sayfada tekrar çizilir
+        const drawOptTableHeader = () => {
+          doc.setFillColor(230, 232, 245);
+          doc.rect(margin + 3, curY, cW - 3, 5.5, 'F');
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(5.5);
+          doc.setTextColor(...NAVY);
+          doc.text('Kalem', xStart, curY + 4);
+          if (hasAdet) {
+            doc.text('Mevcut Adet', xMevcut, curY + 4);
+            doc.text('Hedef Adet', xHedef, curY + 4);
+          } else if (hasFiyat) {
+            doc.text('Mevcut Fiyat', xMevcut, curY + 4);
+            doc.text('Hedef Fiyat', xHedef, curY + 4);
+          }
+          doc.text('Tasarruf', xEnd, curY + 4, { align: 'right' });
+          curY += 5.5;
+        };
+        drawOptTableHeader();
 
         ((s.items ?? []) as any[]).forEach((item: any, ii: number) => {
-          ensureSpace(5.5);
+          // Satır taşarsa yeni sayfa aç ve tablo header'ını tekrar çiz
+          if (curY + 5.5 > MAX_Y) {
+            curY = addPage(doc);
+            drawOptTableHeader();
+          }
           doc.setFillColor(...((ii % 2 === 0 ? GRAY_LIGHT : WHITE) as [number, number, number]));
           doc.rect(margin + 3, curY, cW - 3, 5.5, 'F');
           doc.setFont('helvetica', 'normal');
