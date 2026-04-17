@@ -38,6 +38,8 @@ function tr(text: string): string {
     .replace(/[\u0080-\u009F]/g, '')       // control characters
     .replace(/[\u2018\u2019]/g, "'")       // smart single quotes
     .replace(/[\u201C\u201D]/g, '"')       // smart double quotes
+    .replace(/→/g, '->').replace(/←/g, '<-')  // arrows
+    .replace(/•/g, '-')                    // bullet
     .replace(/[\u2013\u2014]/g, '-')       // en/em dash
     .replace(/[\u2026]/g, '...')           // ellipsis
     .replace(/[^\x00-\x7F]/g, '?');       // diğer tüm non-ASCII → ?
@@ -702,13 +704,13 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
         const hasCols = hasAdet || hasFiyat;
         doc.text('Kalem', 19, curY + 4);
         if (hasAdet) {
-          doc.text('Mevcut Adet', 135, curY + 4);
-          doc.text('Hedef Adet', 175, curY + 4);
+          doc.text('Mevcut Adet', 125, curY + 4);
+          doc.text('Hedef Adet', 162, curY + 4);
         } else if (hasFiyat) {
-          doc.text('Mevcut Fiyat', 135, curY + 4);
-          doc.text('Hedef Fiyat', 175, curY + 4);
+          doc.text('Mevcut Fiyat', 125, curY + 4);
+          doc.text('Hedef Fiyat', 162, curY + 4);
         }
-        doc.text('Tasarruf', 220, curY + 4);
+        doc.text('Tasarruf', 210, curY + 4);
         curY += 5.5;
 
         ((s.items ?? []) as any[]).slice(0, 6).forEach((item: any, ii: number) => {
@@ -718,18 +720,18 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(5.5);
           doc.setTextColor(...BLACK);
-          const nameMaxW = hasCols ? 110 : 190;
+          const nameMaxW = hasCols ? 100 : 185;
           const nameLines = doc.splitTextToSize(tr(item.name ?? ''), nameMaxW);
           doc.text(nameLines[0] ?? '', 19, curY + 4);
           if (hasAdet) {
-            doc.text(String(item.currentAdet ?? ''), 135, curY + 4);
-            doc.text(String(item.targetAdet ?? ''), 175, curY + 4);
+            doc.text(String(item.currentAdet ?? ''), 125, curY + 4);
+            doc.text(String(item.targetAdet ?? ''), 162, curY + 4);
           } else if (hasFiyat) {
-            doc.text((item.currentFiyat ?? 0).toLocaleString('tr-TR'), 135, curY + 4);
-            doc.text((item.targetFiyat ?? 0).toLocaleString('tr-TR'), 175, curY + 4);
+            doc.text((item.currentFiyat ?? 0).toLocaleString('tr-TR'), 125, curY + 4);
+            doc.text((item.targetFiyat ?? 0).toLocaleString('tr-TR'), 162, curY + 4);
           }
           doc.setTextColor(...GREEN);
-          doc.text((item.saving ?? 0).toLocaleString('tr-TR') + ' TL', 220, curY + 4);
+          doc.text((item.saving ?? 0).toLocaleString('tr-TR') + ' TL', 210, curY + 4);
           curY += 5.5;
         });
         curY += 2;
