@@ -571,28 +571,31 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
     doc.text(tr('Karma Etki Analizi:'), 14, curY);
     curY += 5;
 
+    // Baskın Etken — tam genişlik
     doc.setFillColor(254, 226, 226);
-    doc.roundedRect(14, curY, 128, 14, 1, 1, 'F');
+    doc.roundedRect(14, curY, 269, 12, 1, 1, 'F');
     doc.setFontSize(5.5);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(185, 28, 28);
     doc.text(tr('BASKIN ETKEN'), 18, curY + 5);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(153, 27, 27);
-    const domLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.dominantFactor), 118);
-    domLines.slice(0, 2).forEach((l: string, i: number) => doc.text(l, 18, curY + 9.5 + i * 4));
+    const domLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.dominantFactor), 255);
+    domLines.slice(0, 1).forEach((l: string) => doc.text(l, 18, curY + 9.5));
+    curY += 14;
 
+    // İkincil Etken — tam genişlik
     doc.setFillColor(254, 243, 199);
-    doc.roundedRect(148, curY, 135, 14, 1, 1, 'F');
+    doc.roundedRect(14, curY, 269, 12, 1, 1, 'F');
     doc.setFontSize(5.5);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(180, 83, 9);
-    doc.text(tr('IKINCIL ETKEN'), 152, curY + 5);
+    doc.text(tr('IKINCIL ETKEN'), 18, curY + 5);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(146, 64, 14);
-    const secLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.secondaryFactor), 125);
-    secLines.slice(0, 2).forEach((l: string, i: number) => doc.text(l, 152, curY + 9.5 + i * 4));
-    curY += 18;
+    const secLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.secondaryFactor), 255);
+    secLines.slice(0, 1).forEach((l: string) => doc.text(l, 18, curY + 9.5));
+    curY += 14;
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(6);
@@ -687,15 +690,16 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(5.5);
         doc.setTextColor(...NAVY);
+        const hasCols = hasAdet || hasFiyat;
         doc.text('Kalem', 19, curY + 4);
         if (hasAdet) {
-          doc.text('Mevcut Adet', 138, curY + 4);
-          doc.text('Hedef Adet', 168, curY + 4);
+          doc.text('Mevcut Adet', 135, curY + 4);
+          doc.text('Hedef Adet', 175, curY + 4);
         } else if (hasFiyat) {
-          doc.text('Mevcut Fiyat', 128, curY + 4);
-          doc.text('Hedef Fiyat', 163, curY + 4);
+          doc.text('Mevcut Fiyat', 135, curY + 4);
+          doc.text('Hedef Fiyat', 175, curY + 4);
         }
-        doc.text('Tasarruf', 237, curY + 4);
+        doc.text('Tasarruf', 220, curY + 4);
         curY += 5.5;
 
         ((s.items ?? []) as any[]).slice(0, 6).forEach((item: any, ii: number) => {
@@ -705,17 +709,18 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(5.5);
           doc.setTextColor(...BLACK);
-          const nameLines = doc.splitTextToSize(tr(item.name ?? ''), 115);
+          const nameMaxW = hasCols ? 110 : 190;
+          const nameLines = doc.splitTextToSize(tr(item.name ?? ''), nameMaxW);
           doc.text(nameLines[0] ?? '', 19, curY + 4);
           if (hasAdet) {
-            doc.text(String(item.currentAdet ?? ''), 143, curY + 4);
-            doc.text(String(item.targetAdet ?? ''), 173, curY + 4);
+            doc.text(String(item.currentAdet ?? ''), 135, curY + 4);
+            doc.text(String(item.targetAdet ?? ''), 175, curY + 4);
           } else if (hasFiyat) {
-            doc.text((item.currentFiyat ?? 0).toLocaleString('tr-TR'), 131, curY + 4);
-            doc.text((item.targetFiyat ?? 0).toLocaleString('tr-TR'), 166, curY + 4);
+            doc.text((item.currentFiyat ?? 0).toLocaleString('tr-TR'), 135, curY + 4);
+            doc.text((item.targetFiyat ?? 0).toLocaleString('tr-TR'), 175, curY + 4);
           }
           doc.setTextColor(...GREEN);
-          doc.text((item.saving ?? 0).toLocaleString('tr-TR') + ' TL', 238, curY + 4);
+          doc.text((item.saving ?? 0).toLocaleString('tr-TR') + ' TL', 220, curY + 4);
           curY += 5.5;
         });
         curY += 2;
