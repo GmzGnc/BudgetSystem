@@ -48,6 +48,15 @@ export interface VarianceEffect {
   driver: string;
 }
 
+export interface OptimizationScenario {
+  title: string;
+  action: string;
+  impact: string;
+  newTotal: number;
+  feasibility: string;
+  tradeoff: string;
+}
+
 export interface VarianceAnalysisResponse {
   summary: string;
   totalVariance: number;
@@ -62,6 +71,11 @@ export interface VarianceAnalysisResponse {
     description: string;
     dominantFactor: string;
     secondaryFactor: string;
+  };
+  optimization?: {
+    scenarios: OptimizationScenario[];
+    optimalTarget: string;
+    riskNote: string;
   };
 }
 
@@ -125,7 +139,48 @@ Eğer aylık breakdown varsa, zamansal karma etkiyi analiz et:
 - Tüm metinlerde Türkçe özel karakterler KULLANMA. Bunların yerine şunları kullan:
   ş→s, ğ→g, ü→u, ö→o, ç→c, ı→i, İ→I, Ş→S, Ğ→G, Ü→U, Ö→O, Ç→C
   Örnek: "güvenlik" yerine "guvenlik", "şirket" yerine "sirket" yaz.
-  Bu kural tüm string alanlara uygulanır: summary, explanation, driver, monthlyTrend, recommendations, interRelations, departmentInsights, monthlyInsights, karmaEffect alanları.`;
+  Bu kural tüm string alanlara uygulanır: summary, explanation, driver, monthlyTrend, recommendations, interRelations, departmentInsights, monthlyInsights, karmaEffect, optimization alanları.
+
+Eger hem miktar (adet/kisi) hem fiyat (birim ucret/fiyat) parametreleri varsa,
+JSON cevabina asagidaki "optimization" alanini da ekle:
+
+"optimization": {
+  "scenarios": [
+    {
+      "title": "Miktar Optimizasyonu",
+      "action": "Kisi sayisini X'ten Y'ye indirin",
+      "impact": "Z TL tasarruf (%P azalma)",
+      "newTotal": 12345678,
+      "feasibility": "Yuksek | Orta | Dusuk",
+      "tradeoff": "Hizmet kalitesinde olasi etki"
+    },
+    {
+      "title": "Fiyat Optimizasyonu",
+      "action": "Birim ucreti %X artis ile sinirlayin",
+      "impact": "Z TL tasarruf",
+      "newTotal": 12345678,
+      "feasibility": "Yuksek | Orta | Dusuk",
+      "tradeoff": "Sozlesme yenileme riski"
+    },
+    {
+      "title": "Kombine Senaryo",
+      "action": "Kisiyi Y'ye indirin VE ucreti %X ile sinirlayin",
+      "impact": "Z TL tasarruf, butce asimi %P'ye dusuyor",
+      "newTotal": 12345678,
+      "feasibility": "Orta",
+      "tradeoff": "Ikili muzakere gerektirir"
+    }
+  ],
+  "optimalTarget": "Butceye donmek icin en az direncli yol: ...",
+  "riskNote": "Hangi senaryonun riski daha dusuk ve neden"
+}
+
+Matematiksel tutarlilik zorunludur:
+- newTotal = miktar x birim fiyat olarak hesaplanmali
+- Butceye ne kadar yaklasildigi acikca belirtilmeli
+- Gercekci olmayan senaryolar onerilmemeli
+- Yeterli parametre yoksa optimization alani JSON'a dahil edilmez`;
+
 
 export async function POST(req: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY;

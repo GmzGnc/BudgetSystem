@@ -132,6 +132,18 @@ export default function Home() {
     departmentInsights: string;
     monthlyInsights: string;
     karmaEffect: { description: string; dominantFactor: string; secondaryFactor: string };
+    optimization?: {
+      scenarios: Array<{
+        title: string;
+        action: string;
+        impact: string;
+        newTotal: number;
+        feasibility: string;
+        tradeoff: string;
+      }>;
+      optimalTarget: string;
+      riskNote: string;
+    };
   } | null>(null);
   const [varDrawerError, setVarDrawerError] = useState<string | null>(null);
   const [isExecPdfLoading,   setIsExecPdfLoading]   = useState(false);
@@ -1866,6 +1878,12 @@ export default function Home() {
                                                   const activeActualTotal = activeMonthIdxs.reduce((s, mi) => s + (mainTotalRow?.actual[mi] ?? 0), 0);
                                                   const activeVarianceAmount = activeActualTotal - activeBudgetTotal;
                                                   const activeVariancePct = activeBudgetTotal > 0 ? (activeVarianceAmount / activeBudgetTotal) * 100 : 0;
+                                                  const optimizationParams = params.map((p) => ({
+                                                    name: p.paramName,
+                                                    unit: p.unitType || '',
+                                                    budget: p.budget,
+                                                    actual: p.actual,
+                                                  }));
                                                   fetch('/api/analyze-variance', {
                                                     method: 'POST',
                                                     headers: { 'Content-Type': 'application/json' },
@@ -1878,6 +1896,7 @@ export default function Home() {
                                                       variancePercent: activeVariancePct,
                                                       monthlyData: monthly,
                                                       parameters: params,
+                                                      optimizationParameters: optimizationParams,
                                                       monthBreakdown,
                                                       departmentBreakdown,
                                                       analysisScope: 'full',
@@ -2485,6 +2504,35 @@ export default function Home() {
                             </li>
                           ))}
                         </ul>
+                      </div>
+                    )}
+
+                    {/* optimization */}
+                    {r.optimization && (
+                      <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
+                        <h4 className="font-semibold text-sm mb-3 text-gray-800 dark:text-gray-200">🎯 Optimizasyon Önerileri</h4>
+                        {r.optimization.scenarios.map((s, i) => (
+                          <div key={i} className="mb-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                            <div className="flex justify-between items-start mb-1">
+                              <span className="font-medium text-sm text-gray-800 dark:text-gray-200">{s.title}</span>
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                s.feasibility === 'Yüksek' || s.feasibility === 'Yuksek' ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' :
+                                s.feasibility === 'Orta' ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300' :
+                                'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
+                              }`}>{s.feasibility}</span>
+                            </div>
+                            <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">{s.action}</p>
+                            <p className="text-xs text-green-600 dark:text-green-400 mt-1">{s.impact}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">⚠️ {s.tradeoff}</p>
+                          </div>
+                        ))}
+                        <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                          <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">💡 Optimal Yol</p>
+                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">{r.optimization.optimalTarget}</p>
+                        </div>
+                        <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                          <p className="text-xs text-gray-600 dark:text-gray-400">⚖️ {r.optimization.riskNote}</p>
+                        </div>
                       </div>
                     )}
                   </>
