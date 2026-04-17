@@ -1227,6 +1227,19 @@ export default function Home() {
                       const diff = t26 - t25;
                       const diffPctCat = variancePct(t25, t26);
 
+                      // 2025 Fiili — importedModelData varsa mainTotalRow.actual toplamı
+                      const cat2025Actual = (() => {
+                        if (!importedModelData) return null;
+                        const range = CAT_ROW_RANGES[cat.id];
+                        const rows = range
+                          ? importedModelData.filter((r) => r.rowNum >= range[0] && r.rowNum <= range[1])
+                          : [];
+                        const mainRow = rows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName))
+                          ?? rows.find((r) => /^TL/i.test(r.unitType));
+                        if (!mainRow) return null;
+                        return mainRow.actual.reduce((s, v) => s + v, 0);
+                      })();
+
                       const catTrendData = monthlyData.map((m) => ({
                         month: m.monthLabel as string,
                         value: m[cat.id] as number,
@@ -1320,9 +1333,10 @@ export default function Home() {
                                     </div>
 
                                     {/* 2025 vs 2026 karşılaştırma kartları */}
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                                       {[
-                                        { label: '2025 Bütçe', value: fmtFull(t25), cls: 'text-gray-900 dark:text-white' },
+                                        { label: '2025 Bütçe',       value: fmtFull(t25), cls: 'text-gray-900 dark:text-white' },
+                                        { label: '2025 Fiili',        value: cat2025Actual !== null ? fmtFull(cat2025Actual) : '—', cls: 'text-amber-600 dark:text-amber-400' },
                                         { label: '2026 Projeksiyon', value: fmtFull(t26), cls: 'text-indigo-600 dark:text-indigo-400' },
                                         { label: 'Fark (TL)',        value: `+${fmtFull(diff)}`, cls: 'text-red-500 dark:text-red-400' },
                                         { label: 'Fark (%)',         value: `+${diffPctCat.toFixed(1)}%`, cls: diffPctCat >= 25 ? 'text-red-500 dark:text-red-400' : diffPctCat >= 20 ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400' },
