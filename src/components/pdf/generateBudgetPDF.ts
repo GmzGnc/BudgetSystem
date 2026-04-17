@@ -472,10 +472,18 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
 
   let curY = 38;
   const LINE_H = 4.5;
-  const MAX_Y = 193;
+  const MAX_Y = 275;
+
+  function addPage(d: jsPDF): number {
+    d.addPage();
+    addPageHeader(d, data.companyName, 0, 0, logoBase64);
+    addPageFooter(d, data.generatedAt);
+    return 32;
+  }
 
   function section(title: string, text: string, maxLines: number) {
-    if (!text || curY > MAX_Y - 15) return;
+    if (!text) return;
+    if (curY > MAX_Y - 15) curY = addPage(doc);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
     doc.setTextColor(...NAVY);
@@ -486,7 +494,8 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
     doc.setTextColor(...BLACK);
     const lines = doc.splitTextToSize(tr(text), 265);
     lines.slice(0, maxLines).forEach((line: string) => {
-      if (curY < MAX_Y) { doc.text(line, 14, curY); curY += LINE_H; }
+      if (curY >= MAX_Y) curY = addPage(doc);
+      doc.text(line, 14, curY); curY += LINE_H;
     });
     curY += 2;
   }
@@ -494,42 +503,53 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
   // Özet
   section('Ozet / Summary:', cat.aiAnalysis.summary, 6);
 
-  // Etki Dağılımı tablosu
-  if (cat.aiAnalysis.effects.length > 0 && curY < MAX_Y - 20) {
+  // Etki Dağılımı — kart düzeni
+  if (cat.aiAnalysis.effects.length > 0) {
+    if (curY > MAX_Y - 20) curY = addPage(doc);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
     doc.setTextColor(...NAVY);
     doc.text(tr('Etki Dagilimi / Variance Decomposition:'), 14, curY);
-    curY += 4;
+    curY += 5;
 
-    const effCols = [14, 60, 108, 140, 190];
-    const effHeaders = [tr('Etki Turu'), tr('Tutar'), tr('Katki%'), tr('Aciklama'), tr('Sebep')];
-    doc.setFillColor(...NAVY);
-    doc.rect(14, curY, 269, 7, 'F');
-    doc.setTextColor(...WHITE);
-    doc.setFontSize(6);
-    effHeaders.forEach((h, i) => doc.text(h, effCols[i] + 2, curY + 4.5));
-    curY += 7;
+    const EFFECT_WIDTH = 269;
+    const COL1 = 14;
+    const COL2 = 90;
+    const COL3 = 155;
 
     cat.aiAnalysis.effects.forEach((eff, ei) => {
-      if (curY > MAX_Y - 8) return;
-      const descLines = doc.splitTextToSize(tr(eff.description), 48);
-      const drvLines  = doc.splitTextToSize(tr((eff as unknown as { driver?: string }).driver ?? ''), 55);
-      const rowLines  = Math.min(Math.max(descLines.length, drvLines.length), 2);
-      const rowH      = 5 + rowLines * 4;
-      doc.setFillColor(...(ei % 2 === 0 ? GRAY_LIGHT : WHITE));
-      doc.rect(14, curY, 269, rowH, 'F');
-      doc.setFontSize(5.8);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(...BLACK);
-      doc.text(tr(eff.label), effCols[0] + 2, curY + 4.5);
+      const descLines = doc.splitTextToSize(tr('Aciklama: ' + eff.description), 240);
+      const drvLines  = doc.splitTextToSize(tr('Sebep: ' + ((eff as unknown as { driver?: string }).driver ?? '')), 240);
+      const blockH    = 7 + (descLines.length * 3.8) + (drvLines.length * 3.8) + 4;
+
+      if (curY + blockH > MAX_Y) curY = addPage(doc);
+
+      doc.setFillColor(...(ei % 2 === 0 ? ([240, 242, 255] as [number, number, number]) : WHITE));
+      doc.rect(COL1, curY, EFFECT_WIDTH, blockH, 'F');
+      doc.setDrawColor(200, 200, 220);
+      doc.rect(COL1, curY, EFFECT_WIDTH, blockH, 'S');
+
+      // Header row
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.5);
+      doc.setTextColor(...NAVY);
+      doc.text(tr(eff.label), COL1 + 3, curY + 5);
+
       doc.setTextColor(...(eff.amount > 0 ? RED : GREEN));
-      doc.text(formatTL(eff.amount), effCols[1] + 2, curY + 4.5);
-      doc.text('%' + Math.abs(eff.contributionPercent).toFixed(1), effCols[2] + 2, curY + 4.5);
+      doc.text(formatTL(eff.amount), COL2, curY + 5);
+
+      doc.setTextColor(...NAVY);
+      doc.text('%' + Math.abs(eff.contributionPercent).toFixed(1), COL3, curY + 5);
+
+      // Description + driver lines
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(5.8);
       doc.setTextColor(...BLACK);
-      descLines.slice(0, 2).forEach((l: string, i: number) => doc.text(l, effCols[3] + 2, curY + 4.5 + i * 3.5));
-      drvLines.slice(0, 2).forEach((l: string, i: number) => doc.text(l, effCols[4] + 2, curY + 4.5 + i * 3.5));
-      curY += rowH;
+      let lineY = curY + 9;
+      descLines.forEach((l: string) => { doc.text(l, COL1 + 3, lineY); lineY += 3.8; });
+      drvLines.forEach((l: string)  => { doc.text(l, COL1 + 3, lineY); lineY += 3.8; });
+
+      curY += blockH + 1;
     });
     curY += 3;
   }
@@ -541,7 +561,8 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
   section('Etki Iliskileri:', cat.aiAnalysis.interRelations, 5);
 
   // Karma Etki
-  if (cat.aiAnalysis.karmaEffect && curY < MAX_Y - 20) {
+  if (cat.aiAnalysis.karmaEffect) {
+    if (curY > MAX_Y - 20) curY = addPage(doc);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
     doc.setTextColor(...NAVY);
@@ -576,7 +597,8 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
     doc.setTextColor(...BLACK);
     const karmaLines = doc.splitTextToSize(tr(cat.aiAnalysis.karmaEffect.description), 265);
     karmaLines.slice(0, 3).forEach((line: string) => {
-      if (curY < MAX_Y) { doc.text(line, 14, curY); curY += LINE_H; }
+      if (curY >= MAX_Y) curY = addPage(doc);
+      doc.text(line, 14, curY); curY += LINE_H;
     });
     curY += 2;
   }
@@ -588,20 +610,22 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
   section('Aylik Yogunlasma:', cat.aiAnalysis.monthlyInsights ?? '', 5);
 
   // Öneriler
-  if (cat.aiAnalysis.recommendations.length > 0 && curY < MAX_Y - 15) {
+  if (cat.aiAnalysis.recommendations.length > 0) {
+    if (curY > MAX_Y - 15) curY = addPage(doc);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
     doc.setTextColor(...NAVY);
     doc.text(tr('Oneriler / Recommendations:'), 14, curY);
     curY += LINE_H;
     cat.aiAnalysis.recommendations.slice(0, 6).forEach((rec, ri) => {
-      if (curY > MAX_Y - 6) return;
+      if (curY > MAX_Y - 6) curY = addPage(doc);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(6.2);
       doc.setTextColor(...BLACK);
       const recLines = doc.splitTextToSize(tr(`${ri + 1}. ${rec}`), 265);
       recLines.slice(0, 3).forEach((line: string) => {
-        if (curY < MAX_Y) { doc.text(line, 14, curY); curY += LINE_H; }
+        if (curY >= MAX_Y) curY = addPage(doc);
+        doc.text(line, 14, curY); curY += LINE_H;
       });
     });
   }
