@@ -1926,7 +1926,18 @@ export default function Home() {
                                                     .then((r) => r.json())
                                                     .then((d) => {
                                                       if (d.error) setVarDrawerError(d.error);
-                                                      else setVarDrawerResult(d);
+                                                      else {
+                                                        // effects: name → label, explanation → description dönüşümü
+                                                        if (d.effects) {
+                                                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                                          d.effects = d.effects.map((e: any) => ({
+                                                            ...e,
+                                                            label: e.label ?? e.name ?? '',
+                                                            description: e.description ?? e.explanation ?? '',
+                                                          }));
+                                                        }
+                                                        setVarDrawerResult(d);
+                                                      }
                                                     })
                                                     .catch((err) => setVarDrawerError(err.message))
                                                     .finally(() => setVarDrawerLoading(false));
@@ -2545,7 +2556,9 @@ export default function Home() {
                         <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
                           <h4 className="font-semibold text-sm mb-3 text-gray-800 dark:text-gray-200">🎯 Optimizasyon Senaryolari</h4>
                           <div className="space-y-2">
-                            {scenarios.map(([label, s]) => (
+                            {scenarios.map(([label, s]) => {
+                              console.log('[opt] scenario', label, s?.title, !!s);
+                              return (
                               <details key={label} className="group rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
                                 <summary className="flex items-center justify-between gap-2 px-3 py-2.5 cursor-pointer list-none select-none hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                   <div className="flex items-center gap-2 min-w-0">
@@ -2595,12 +2608,15 @@ export default function Home() {
                                       </table>
                                     </div>
                                   )}
-                                  <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
-                                    Yeni Toplam: <span className="font-semibold text-gray-700 dark:text-gray-300">{s.newTotal.toLocaleString('tr-TR')} ₺</span>
-                                  </p>
+                                  {s.newTotal > 1000 && (
+                                    <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
+                                      Yeni Toplam: <span className="font-semibold text-gray-700 dark:text-gray-300">{s.newTotal.toLocaleString('tr-TR')} ₺</span>
+                                    </p>
+                                  )}
                                 </div>
                               </details>
-                            ))}
+                              );
+                            })}
                           </div>
                           <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
                             <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">💡 Optimal Yol</p>
