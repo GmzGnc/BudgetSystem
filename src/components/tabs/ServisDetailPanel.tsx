@@ -435,82 +435,78 @@ export default function ServisDetailPanel({ dark, lineItems }: Props) {
                   <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                     Birim Fiyat Aylık (TL/araç/ay)
                   </p>
-                  <div className="overflow-x-auto">
-                    <table className="text-[10px]" style={{ minWidth: 260, width: '100%', tableLayout: 'fixed' }}>
-                      <colgroup>
-                        <col style={{ width: 60 }} />
-                        <col style={{ width: 200 }} />
-                      </colgroup>
-                      <thead>
-                        <tr className="text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left pb-1.5 pr-2 font-medium">Ay</th>
-                          <th className="text-right pb-1.5 font-medium">Birim Fiyat (₺/araç/ay)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {MONTH_LABELS.map((lbl, mi) => {
-                          const active = mi === activeMonth;
-                          const bf = birimFiyatArr[mi] ?? 0;
-                          return (
-                            <tr
-                              key={lbl}
-                              className={active ? 'bg-purple-50/60 dark:bg-purple-950/20 font-semibold' : 'border-b border-gray-50 dark:border-gray-800'}
-                            >
-                              <td className="py-0.5 pr-2 text-gray-500 dark:text-gray-400">{lbl}</td>
-                              <td className="py-0.5 text-right font-mono text-gray-700 dark:text-gray-300">{bf > 0 ? fmtFull(bf) : '—'}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                  <table className="text-[10px]" style={{ width: '100%', tableLayout: 'fixed' }}>
+                    <colgroup>
+                      <col style={{ width: 80 }} />
+                      <col />
+                    </colgroup>
+                    <thead>
+                      <tr className="text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-gray-700">
+                        <th style={{ padding: '8px 12px', textAlign: 'left' }} className="font-medium">Ay</th>
+                        <th style={{ padding: '8px 12px', textAlign: 'right' }} className="font-medium">Birim Fiyat (₺/araç/ay)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {MONTH_LABELS.map((lbl, mi) => {
+                        const active = mi === activeMonth;
+                        const bf = birimFiyatArr[mi] ?? 0;
+                        return (
+                          <tr
+                            key={lbl}
+                            className={active ? 'bg-purple-50/60 dark:bg-purple-950/20 font-semibold' : 'border-b border-gray-50 dark:border-gray-800'}
+                          >
+                            <td style={{ padding: '6px 12px' }} className="text-gray-500 dark:text-gray-400">{lbl}</td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right' }} className="font-mono text-gray-700 dark:text-gray-300">{bf > 0 ? fmtFull(bf) : '—'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
 
               {/* ── Section 2: Araç Sayısı ── */}
               {paramTab === 'arac' && (
-                <div className="space-y-3">
-                  <div className="overflow-x-auto">
-                    <table className="text-[10px]" style={{ minWidth: 400, width: '100%', tableLayout: 'fixed' }}>
-                      <colgroup>
-                        <col style={{ width: 60 }} />
-                        <col style={{ width: 120 }} />
-                        <col style={{ width: 120 }} />
-                        <col style={{ width: 100 }} />
-                      </colgroup>
-                      <thead>
-                        <tr className="text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left pb-1.5 pr-2 font-medium">Ay</th>
-                          <th className="text-right pb-1.5 pr-2 font-medium">Bütçe Araç</th>
-                          <th className="text-right pb-1.5 pr-2 font-medium">Fiili Araç</th>
-                          <th className="text-right pb-1.5 font-medium">Fark</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {MONTH_LABELS.map((lbl, mi) => {
-                          const active = mi === activeMonth;
-                          const bv   = aracSayisiBudArr[mi] ?? 0;
-                          const av   = aracSayisiActArr[mi] ?? 0;
-                          const diff = av - bv;
-                          return (
-                            <tr
-                              key={lbl}
-                              className={active ? 'bg-purple-50/60 dark:bg-purple-950/20 font-semibold' : 'border-b border-gray-50 dark:border-gray-800'}
-                            >
-                              <td className="py-0.5 pr-2 text-gray-500 dark:text-gray-400">{lbl}</td>
-                              <td className="py-0.5 pr-2 text-right font-mono text-gray-700 dark:text-gray-300">{bv > 0 ? bv.toLocaleString('tr-TR') : '—'}</td>
-                              <td className={`py-0.5 pr-2 text-right font-mono ${av > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-gray-300 dark:text-gray-600'}`}>
-                                {av > 0 ? av.toLocaleString('tr-TR') : '—'}
-                              </td>
-                              <td className={`py-0.5 text-right font-mono ${diff > 0 ? 'text-red-500 dark:text-red-400' : diff < 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                                {bv > 0 ? `${diff >= 0 ? '+' : ''}${diff}` : '—'}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                <div>
+                  <table className="text-[10px]" style={{ width: '100%', tableLayout: 'fixed' }}>
+                    <colgroup>
+                      <col style={{ width: 80 }} />
+                      <col />
+                      <col />
+                      <col />
+                    </colgroup>
+                    <thead>
+                      <tr className="text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-gray-700">
+                        <th style={{ padding: '8px 12px', textAlign: 'left' }} className="font-medium">Ay</th>
+                        <th style={{ padding: '8px 12px', textAlign: 'right' }} className="font-medium">Bütçe Araç</th>
+                        <th style={{ padding: '8px 12px', textAlign: 'right' }} className="font-medium">Fiili Araç</th>
+                        <th style={{ padding: '8px 12px', textAlign: 'right' }} className="font-medium">Fark</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {MONTH_LABELS.map((lbl, mi) => {
+                        const active = mi === activeMonth;
+                        const bv   = aracSayisiBudArr[mi] ?? 0;
+                        const av   = aracSayisiActArr[mi] ?? 0;
+                        const diff = av - bv;
+                        return (
+                          <tr
+                            key={lbl}
+                            className={active ? 'bg-purple-50/60 dark:bg-purple-950/20 font-semibold' : 'border-b border-gray-50 dark:border-gray-800'}
+                          >
+                            <td style={{ padding: '6px 12px' }} className="text-gray-500 dark:text-gray-400">{lbl}</td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right' }} className="font-mono text-gray-700 dark:text-gray-300">{bv > 0 ? bv.toLocaleString('tr-TR') : '—'}</td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right' }} className={`font-mono ${av > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-gray-300 dark:text-gray-600'}`}>
+                              {av > 0 ? av.toLocaleString('tr-TR') : '—'}
+                            </td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right' }} className={`font-mono ${diff > 0 ? 'text-red-500 dark:text-red-400' : diff < 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                              {bv > 0 ? `${diff >= 0 ? '+' : ''}${diff}` : '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
 
@@ -522,39 +518,39 @@ export default function ServisDetailPanel({ dark, lineItems }: Props) {
                       Bu rakamlar birim fiyatlardır. Toplam maliyet = birim fiyat × gün sayısı × kişi katsayısı
                     </p>
                   </div>
-                  <div style={{ maxHeight: 400, overflowY: 'auto', overflowX: 'auto' }}>
-                    <table className="text-[10px]" style={{ minWidth: 520, width: '100%', tableLayout: 'fixed' }}>
+                  <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+                    <table className="text-[10px]" style={{ width: '100%', tableLayout: 'fixed' }}>
                       <colgroup>
                         <col style={{ width: 40 }} />
-                        <col />  {/* flexible */}
-                        <col style={{ width: 140 }} />
-                        <col style={{ width: 140 }} />
+                        <col style={{ width: '50%' }} />
+                        <col style={{ width: '25%' }} />
+                        <col style={{ width: '25%' }} />
                       </colgroup>
                       <thead className="sticky top-0 bg-white dark:bg-gray-900 z-10">
                         <tr className="text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left pb-1.5 pr-2 font-medium">#</th>
-                          <th className="text-left pb-1.5 pr-2 font-medium">Rota Adı</th>
-                          <th className="text-right pb-1.5 pr-2 font-medium">Birim Fiyat (TL/ay)</th>
-                          <th className="text-right pb-1.5 font-medium">Yıllık Bütçe (TL)</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'left' }} className="font-medium">#</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'left' }} className="font-medium">Rota Adı</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'right' }} className="font-medium">Birim Fiyat (TL/ay)</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'right' }} className="font-medium">Yıllık Bütçe (TL)</th>
                         </tr>
                       </thead>
                       <tbody>
                         {ROUTES_SORTED.map((r, idx) => (
                           <tr key={r.name} className="border-b border-gray-50 dark:border-gray-800 hover:bg-gray-50/60 dark:hover:bg-gray-800/40">
-                            <td className="py-0.5 pr-2 text-gray-400 dark:text-gray-600">{idx + 1}</td>
-                            <td className="py-0.5 pr-2 text-gray-700 dark:text-gray-300">{r.name}</td>
-                            <td className="py-0.5 pr-2 text-right font-mono text-gray-600 dark:text-gray-400">{r.monthlyBudget.toLocaleString('tr-TR')}</td>
-                            <td className="py-0.5 text-right font-mono text-purple-600 dark:text-purple-400">{r.annualBudget.toLocaleString('tr-TR')}</td>
+                            <td style={{ padding: '6px 12px' }} className="text-gray-400 dark:text-gray-600">{idx + 1}</td>
+                            <td style={{ padding: '6px 12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} className="text-gray-700 dark:text-gray-300">{r.name}</td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right' }} className="font-mono text-gray-600 dark:text-gray-400">{r.monthlyBudget.toLocaleString('tr-TR')}</td>
+                            <td style={{ padding: '6px 12px', textAlign: 'right' }} className="font-mono text-purple-600 dark:text-purple-400">{r.annualBudget.toLocaleString('tr-TR')}</td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot className="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
                         <tr className="font-semibold text-gray-700 dark:text-gray-200">
-                          <td className="pt-1 pr-2 text-gray-400 dark:text-gray-500" colSpan={2}>41 rota</td>
-                          <td className="pt-1 pr-2 text-right font-mono text-gray-600 dark:text-gray-300">
+                          <td style={{ padding: '8px 12px' }} className="text-gray-400 dark:text-gray-500" colSpan={2}>41 rota</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right' }} className="font-mono text-gray-600 dark:text-gray-300">
                             {ROUTES_SORTED.reduce((s, r) => s + r.monthlyBudget, 0).toLocaleString('tr-TR')}
                           </td>
-                          <td className="pt-1 text-right font-mono text-purple-600 dark:text-purple-400">
+                          <td style={{ padding: '8px 12px', textAlign: 'right' }} className="font-mono text-purple-600 dark:text-purple-400">
                             {ROUTES_SORTED.reduce((s, r) => s + r.annualBudget, 0).toLocaleString('tr-TR')} TL/yıl
                           </td>
                         </tr>
