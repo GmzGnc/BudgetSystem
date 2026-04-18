@@ -165,19 +165,19 @@ export default function ServisDetailPanel({ dark, lineItems }: Props) {
   }
 
   // param arrays
-  const birimFiyatArr      = paramArr('birim_fiyat_ort',   'budget');
-  const tufeUfeArr         = paramArr('tufe_ufe_oran',      'budget');
-  const yakitBaremArr      = paramArr('yakit_barem',        'budget');
+  const birimFiyatArr      = paramArr('birim_fiyat_ort',    'budget');
+  const tufeKumulatifArr   = paramArr('tufe_ufe_kumulatif', 'budget');
+  const tufeUygulamaArr    = paramArr('tufe_ufe_uygulama',  'budget');
+  const yakitUygulamaArr   = paramArr('yakit_uygulama',     'budget');
   const asgariUcretArr     = paramArr('asgari_ucret_fark',  'budget');
   const aracSayisiBudArr   = paramArr('arac_sayisi',        'budget');
   const aracSayisiActArr   = paramArr('arac_sayisi',        'actual');
 
-  // Debug: log raw tufe_ufe param to verify Excel value interpretation
-  if (typeof window !== 'undefined') {
-    const tufeItem = paramByCode.get('tufe_ufe_oran');
-    console.log('[servis] tufe_ufe_oran raw monthly_budget:', tufeItem?.monthly_budget);
-    console.log('[servis] yakıt_barem raw monthly_budget:',   paramByCode.get('yakit_barem')?.monthly_budget);
-  }
+  // Scalar summaries (take first non-zero value — these params are effectively constants)
+  const tufeKumulatif = tufeKumulatifArr.find(v => v !== 0) ?? 0;
+  const tufeUygulama  = tufeUygulamaArr.find(v => v !== 0)  ?? 0;
+  const yakitUygulama = yakitUygulamaArr.find(v => v !== 0) ?? 0;
+  const asgariUcret   = asgariUcretArr.find(v => v !== 0)   ?? 0;
 
   return (
     <div className="mt-4 space-y-4">
@@ -414,58 +414,50 @@ export default function ServisDetailPanel({ dark, lineItems }: Props) {
               {/* ── Section 1: Birim Fiyat & Endeks ── */}
               {paramTab === 'endeks' && (
                 <div className="space-y-3">
-                  {/* Active month KPI strip */}
+
+                  {/* Parametre Özeti — scalar constants */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {[
-                      { label: 'Birim Fiyat',       value: fmtFull(birimFiyatArr[activeMonth] ?? 0),    unit: '₺/araç/ay' },
-                      { label: 'Asgari Ücret Farkı', value: fmtFull(asgariUcretArr[activeMonth] ?? 0),  unit: '₺/araç'    },
-                      { label: 'TÜFE+ÜFE Oranı',    value: fmtRatio(tufeUfeArr[activeMonth] ?? 0),      unit: '%'         },
-                      { label: 'Yakıt Baremi',       value: fmtRatio(yakitBaremArr[activeMonth] ?? 0),   unit: '%'         },
-                    ].map(({ label, value, unit }) => (
+                      { label: 'TÜFE+ÜFE Kümülatif', value: fmtRatio(tufeKumulatif), sub: 'Oca 2025 gerçekleşme'     },
+                      { label: 'TÜFE+ÜFE Uygulama',  value: fmtRatio(tufeUygulama),  sub: 'Birim fiyatın bu kısmına' },
+                      { label: 'Yakıt Uygulama',      value: fmtRatio(yakitUygulama), sub: 'Aşım — taşıma bed. 1/3'  },
+                      { label: 'Asgari Ücret Farkı',  value: asgariUcret > 0 ? fmtFull(asgariUcret) : '—', sub: '₺/araç · Oca 2025' },
+                    ].map(({ label, value, sub }) => (
                       <div key={label} className="bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2">
                         <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wide truncate">{label}</p>
                         <p className="text-xs font-bold mt-0.5 font-mono text-purple-600 dark:text-purple-400">{value}</p>
-                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{unit} · {MONTH_LABELS[activeMonth]}</p>
+                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{sub}</p>
                       </div>
                     ))}
                   </div>
 
-                  {/* Monthly table */}
+                  {/* Birim Fiyat — monthly (aylık değişken) */}
+                  <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    Birim Fiyat Aylık (TL/araç/ay)
+                  </p>
                   <div className="overflow-x-auto">
-                    <table className="text-[10px]" style={{ minWidth: 610, width: '100%', tableLayout: 'fixed' }}>
+                    <table className="text-[10px]" style={{ minWidth: 260, width: '100%', tableLayout: 'fixed' }}>
                       <colgroup>
                         <col style={{ width: 60 }} />
-                        <col style={{ width: 160 }} />
-                        <col style={{ width: 140 }} />
-                        <col style={{ width: 130 }} />
-                        <col style={{ width: 120 }} />
+                        <col style={{ width: 200 }} />
                       </colgroup>
                       <thead>
                         <tr className="text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-gray-700">
                           <th className="text-left pb-1.5 pr-2 font-medium">Ay</th>
-                          <th className="text-right pb-1.5 pr-2 font-medium">Birim Fiyat (₺/araç/ay)</th>
-                          <th className="text-right pb-1.5 pr-2 font-medium">Asg. Ücret Farkı</th>
-                          <th className="text-right pb-1.5 pr-2 font-medium">TÜFE+ÜFE Oran</th>
-                          <th className="text-right pb-1.5 font-medium">Yakıt Baremi</th>
+                          <th className="text-right pb-1.5 font-medium">Birim Fiyat (₺/araç/ay)</th>
                         </tr>
                       </thead>
                       <tbody>
                         {MONTH_LABELS.map((lbl, mi) => {
                           const active = mi === activeMonth;
-                          const bf = birimFiyatArr[mi]  ?? 0;
-                          const au = asgariUcretArr[mi] ?? 0;
-                          const tu = tufeUfeArr[mi]     ?? 0;
-                          const yb = yakitBaremArr[mi]  ?? 0;
+                          const bf = birimFiyatArr[mi] ?? 0;
                           return (
                             <tr
                               key={lbl}
                               className={active ? 'bg-purple-50/60 dark:bg-purple-950/20 font-semibold' : 'border-b border-gray-50 dark:border-gray-800'}
                             >
                               <td className="py-0.5 pr-2 text-gray-500 dark:text-gray-400">{lbl}</td>
-                              <td className="py-0.5 pr-2 text-right font-mono text-gray-700 dark:text-gray-300">{bf > 0 ? fmtFull(bf) : '—'}</td>
-                              <td className="py-0.5 pr-2 text-right font-mono text-gray-700 dark:text-gray-300">{au > 0 ? fmtFull(au) : '—'}</td>
-                              <td className="py-0.5 pr-2 text-right font-mono text-gray-700 dark:text-gray-300">{tu > 0 ? fmtRatio(tu) : '—'}</td>
-                              <td className="py-0.5 text-right font-mono text-gray-700 dark:text-gray-300">{yb > 0 ? fmtRatio(yb) : '—'}</td>
+                              <td className="py-0.5 text-right font-mono text-gray-700 dark:text-gray-300">{bf > 0 ? fmtFull(bf) : '—'}</td>
                             </tr>
                           );
                         })}

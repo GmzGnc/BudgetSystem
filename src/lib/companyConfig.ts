@@ -24,6 +24,7 @@ export interface ParamConfig {
   row: number;
   label: string;
   unit: string;
+  noRound?: boolean; // true for decimal ratio/percentage params (prevents Math.round mangling)
 }
 
 export interface CategoryConfig {
@@ -298,11 +299,13 @@ export const COMPANY_CONFIG: Record<string, SheetConfig> = {
           },
         ],
         params: [
-          { code: "birim_fiyat_ort",   row: 246, label: "Birim Fiyat Ort. (TL/araç/ay)",      unit: "TL"   },
-          { code: "tufe_ufe_oran",      row: 242, label: "TÜFE+ÜFE/2 Uygulanacak Oran (%)",    unit: "TL"   },
-          { code: "yakit_barem",        row: 244, label: "Yakıt Artış Uygulama Oranı (%)",      unit: "TL"   },
-          { code: "asgari_ucret_fark",  row: 245, label: "Asgari Ücret Farkı (TL/araç)",        unit: "TL"   },
-          { code: "arac_sayisi",        row: 605, label: "Kiralık Araç Sayısı Toplam",           unit: "Adet" },
+          { code: "tufe_ufe_kumulatif", row: 241, label: "TÜFE+ÜFE Kümülatif Oran",            unit: "%",    noRound: true },
+          { code: "tufe_ufe_uygulama",  row: 242, label: "TÜFE+ÜFE Uygulama Oranı (%70)",      unit: "%",    noRound: true },
+          { code: "yakit_asim_bayrak",  row: 243, label: "Yakıt Aşım Bayrağı",                 unit: "Flag"              },
+          { code: "yakit_uygulama",     row: 244, label: "Yakıt Uygulama Oranı (1/3)",          unit: "%",    noRound: true },
+          { code: "asgari_ucret_fark",  row: 245, label: "Asgari Ücret Farkı (TL/araç)",        unit: "TL"                },
+          { code: "birim_fiyat_ort",    row: 246, label: "Birim Fiyat Ort. (TL/araç/ay)",       unit: "TL"                },
+          { code: "arac_sayisi",        row: 605, label: "Kiralık Araç Sayısı",                  unit: "Adet"              },
         ],
       },
       arac_kira: {

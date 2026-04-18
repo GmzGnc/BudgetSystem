@@ -20,13 +20,14 @@ export interface ParsedExcelData {
   activeMonth: number; // 0-based index of last month with actual data
 }
 
-function readRow(ws: XLSX.WorkSheet, row: number, cols: number[]): number[] {
+function readRow(ws: XLSX.WorkSheet, row: number, cols: number[], noRound = false): number[] {
   return cols.map(colIdx => {
     const cellAddress = XLSX.utils.encode_cell({ r: row - 1, c: colIdx });
     const cell = ws[cellAddress];
     if (!cell) return 0;
     const val = cell.v;
-    return typeof val === 'number' ? Math.round(val) : 0;
+    if (typeof val !== 'number') return 0;
+    return noRound ? val : Math.round(val);
   });
 }
 
@@ -101,8 +102,8 @@ export function parseExcelFile(
 
     // 4. PARAM rows
     for (const param of catConfig.params) {
-      const paramBudget = readRow(ws, param.row, BUDGET_COLS);
-      const paramActual = readRow(ws, param.row, ACTUAL_COLS);
+      const paramBudget = readRow(ws, param.row, BUDGET_COLS, param.noRound);
+      const paramActual = readRow(ws, param.row, ACTUAL_COLS, param.noRound);
       if (paramBudget.every(v => v === 0) && paramActual.every(v => v === 0)) continue;
       lineItems.push({
         category_code: catCode,
