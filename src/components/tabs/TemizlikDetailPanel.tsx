@@ -341,10 +341,10 @@ export default function TemizlikDetailPanel({ dark, lineItems }: Props) {
                               <tr>
                                 <td className="px-3 py-1.5 font-bold text-gray-800 dark:text-gray-100">Toplam</td>
                                 <td className="px-3 py-1.5 text-right font-bold font-mono text-gray-900 dark:text-white">
-                                  {fmtM(items.reduce((s, it) => s + ensureArray(it.monthly_budget).reduce((a, b) => a + b, 0), 0))}
+                                  {fmtM(deptAnnual)}
                                 </td>
                                 <td className="px-3 py-1.5 text-right font-bold font-mono text-amber-600 dark:text-amber-400">
-                                  {fmtM(items.reduce((s, it) => s + ensureArray(it.monthly_actual).slice(0, activeMonth + 1).reduce((a, b) => a + b, 0), 0))}
+                                  {fmtM(deptActYTD)}
                                 </td>
                                 <td />
                               </tr>

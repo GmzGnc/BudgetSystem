@@ -1292,19 +1292,20 @@ export default function Home() {
                   </thead>
                   <tbody>
                     {CATEGORIES.map((cat) => {
-                      // guvenlik was moved to budget_line_items — read annual sum from there
-                      const guvenlikLI = cat.id === 'guvenlik'
+                      // guvenlik + temizlik moved to budget_line_items — read annual sum from there
+                      const liCategories = ['guvenlik', 'temizlik'];
+                      const liTotalItem = liCategories.includes(cat.id)
                         ? (lineItemsData as any[]).find(
-                            (i: any) => i.category_code === 'guvenlik' && i.row_type === 'total'
+                            (i: any) => i.category_code === cat.id && i.row_type === 'total'
                           )
                         : null;
-                      const guvenlikAnnual = guvenlikLI
-                        ? (Array.isArray(guvenlikLI.monthly_budget)
-                            ? (guvenlikLI.monthly_budget as number[]).reduce((a: number, b: number) => a + b, 0)
+                      const liAnnual = liTotalItem
+                        ? (Array.isArray(liTotalItem.monthly_budget)
+                            ? (liTotalItem.monthly_budget as number[]).reduce((a: number, b: number) => a + b, 0)
                             : 0)
                         : 0;
-                      const catTotal = cat.id === 'guvenlik'
-                        ? guvenlikAnnual
+                      const catTotal = liCategories.includes(cat.id)
+                        ? liAnnual
                         : categoryAnnual(staticMonthlyData, cat.id);
                       const share       = categoryShare(catTotal, total2025);
                       const isOpen      = selectedCategory === cat.id;
