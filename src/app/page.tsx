@@ -31,6 +31,8 @@ import {
   getBudgetMonthlyData, getSapMonthlyData, getBudgetEntriesAsModelRows, CATEGORY_CODE_MAP,
 } from '@/lib/db';
 import type { BudgetEntry, SapEntry as DbSapEntry } from '@/lib/db';
+import { parseExcelFile } from '@/lib/excelParser';
+import { upsertBudgetLineItems, fetchBudgetLineItems } from '@/lib/budgetLineItemsService';
 import {
   totalAnnual, categoryAnnual, monthlyAverage,
   buildProjection2026, variancePct, categoryShare, aggregateMonthly,
@@ -169,6 +171,8 @@ export default function Home() {
   const [dbSapData,     setDbSapData]     = useState<SapEntry[] | null>(null);
   const [dbModelRows,   setDbModelRows]   = useState<Map<string, ModelRow[]> | null>(null);
   const [dbLoading,     setDbLoading]     = useState(true);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [lineItemsData, setLineItemsData] = useState<any[]>([]);
 
   // ── excel import state ──
   const [importOpen,      setImportOpen]      = useState(false);
@@ -177,7 +181,8 @@ export default function Home() {
   const [selectedSheet,   setSelectedSheet]   = useState('');
   const [importedSapData, setImportedSapData] = useState<SapEntry[] | null>(null);
   const [toast,           setToast]           = useState('');
-  const wbRef = useRef<XLSX.WorkBook | null>(null);
+  const wbRef       = useRef<XLSX.WorkBook | null>(null);
+  const bufferRef   = useRef<ArrayBuffer | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── dark mode bootstrap from localStorage ──
@@ -204,10 +209,12 @@ export default function Home() {
       const companyCode = company === 'GRUP' ? 'ICA' : company;
       console.log('[debug] loadFromDb started, company:', companyCode);
       try {
-        const [monthlyRes, sapRes, budgetRowsRes] = await Promise.all([
+        const [monthlyRes, sapRes, budgetRowsRes, companiesRes, yearsRes] = await Promise.all([
           getBudgetMonthlyData(companyCode),
           getSapMonthlyData(companyCode),
           getBudgetEntriesAsModelRows(companyCode),
+          getCompanies(),
+          getFiscalYears(),
         ]);
         setDbMonthlyData(monthlyRes);
         setDbSapData(sapRes);
@@ -217,6 +224,13 @@ export default function Home() {
           budgetRowsRes.forEach(({ categoryCode, rows }) => map.set(categoryCode, rows));
           setDbModelRows(map);
           console.log('[debug] dbModelRows map:', map);
+        }
+        // ── budget_line_items fetch ──
+        const dbCompany = companiesRes.data?.find((c) => c.code === companyCode) ?? null;
+        const dbYear    = yearsRes.data?.find((y) => y.year === 2025 && y.status === 'active') ?? null;
+        if (dbCompany && dbYear) {
+          const items = await fetchBudgetLineItems(dbCompany.id, dbYear.id);
+          setLineItemsData(items as Record<string, unknown>[]);
         }
       } catch (e) {
         console.error('[debug] loadFromDb error:', e);
@@ -409,6 +423,7 @@ export default function Home() {
     reader.onload = (e) => {
       const data = e.target?.result;
       if (!data) return;
+      bufferRef.current = data as ArrayBuffer;
       const wb = XLSX.read(data, { type: 'array', cellFormula: true, cellNF: false, cellDates: false });
       wbRef.current = wb;
       setSheets(wb.SheetNames);
@@ -496,9 +511,12 @@ export default function Home() {
       const budgetCount = parsed.filter((r) => r.budget.some((v) => v !== 0)).length;
       const actualCount = parsed.filter((r) => r.actual.some((v) => v !== 0)).length;
       const hasActual = parsed.some((r) => r.actual.some((v) => v !== 0));
+      // Capture buffer BEFORE cleanup nulls bufferRef.current
+      const importBuffer = bufferRef.current;
+
       setImportedModelData(parsed);
       setImportOpen(false);
-      wbRef.current = null; setSheets([]); setSelectedSheet('');
+      wbRef.current = null; bufferRef.current = null; setSheets([]); setSelectedSheet('');
       if (fileInputRef.current) fileInputRef.current.value = '';
 
       let msg = `✓ ${parsed.length} parametre yüklendi`;
@@ -512,10 +530,11 @@ export default function Home() {
 
       // ── DB'ye yaz (best-effort, UI'ı bloklamaz) ──
       void (async () => {
-        try {
-          const { dbCompany, dbYear, dbCats } = await resolveDbIds();
-          if (!dbCompany || !dbYear) return; // DB tabloları henüz kurulmamış
+        const { dbCompany, dbYear, dbCats } = await resolveDbIds();
+        if (!dbCompany || !dbYear) return; // DB tabloları henüz kurulmamış
 
+        // ── Block 1: budget_entries (legacy single-total per category) ──
+        try {
           const entries: BudgetEntry[] = [];
           for (const [catCode, range] of Object.entries(CAT_ROW_RANGES)) {
             const catRows = parsed.filter((r) => r.rowNum >= range[0] && r.rowNum <= range[1]);
@@ -546,9 +565,33 @@ export default function Home() {
             const res = await upsertBudgetEntries(entries);
             if (res.error) console.warn('[DB] budget_entries upsert:', res.error);
           }
+        } catch (e) {
+          console.warn('[DB] budget_entries failed (non-fatal):', e);
+        }
+
+        // ── Block 2: budget_line_items (granular row hierarchy) ──
+        try {
+          if (!importBuffer) {
+            console.error('[DB] importBuffer is null — skipping budget_line_items parse');
+          } else {
+            const excelCompanyCode = company === 'ICE' ? '2415' : '2410';
+            const parsedLineItems = parseExcelFile(importBuffer, excelCompanyCode, dbYear.year);
+            const result = await upsertBudgetLineItems(parsedLineItems, dbCompany.id, dbYear.id);
+            console.log('[DB] budget_line_items:', result.upserted, 'rows upserted');
+            if (result.errors.length > 0) console.warn('[DB] budget_line_items errors:', result.errors);
+            // Refresh lineItemsData state so UI reflects the newly imported data
+            const refreshed = await fetchBudgetLineItems(dbCompany.id, dbYear.id);
+            setLineItemsData(refreshed as Record<string, unknown>[]);
+          }
+        } catch (e) {
+          console.error('[DB] budget_line_items failed:', e);
+        }
+
+        // ── Block 3: import log ──
+        try {
           await logExcelImport({ company_id: dbCompany.id, fiscal_year_id: dbYear.id, sheet_name: selectedSheet, row_count: parsed.length, import_type: 'model' });
         } catch (e) {
-          console.warn('[DB] Model import DB write failed:', e);
+          console.warn('[DB] logExcelImport failed (non-fatal):', e);
         }
       })();
       return;
@@ -614,7 +657,7 @@ export default function Home() {
     // ── state güncelle ──
     setImportedSapData(parsed);
     setImportOpen(false);
-    wbRef.current = null; setSheets([]); setSelectedSheet('');
+    wbRef.current = null; bufferRef.current = null; setSheets([]); setSelectedSheet('');
     if (fileInputRef.current) fileInputRef.current.value = '';
     showToast(`✓ ${parsed.length} SAP kodu yüklendi`);
 
@@ -646,6 +689,7 @@ export default function Home() {
   const closeImport = useCallback(() => {
     setImportOpen(false);
     wbRef.current = null;
+    bufferRef.current = null;
     setSheets([]);
     setSelectedSheet('');
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -1434,7 +1478,11 @@ export default function Home() {
 
                                     {/* ── Güvenlik 3-level panel ── */}
                                     {cat.id === 'guvenlik' && (
-                                      <GuvenlikDetailPanel dark={dark} />
+                                      <GuvenlikDetailPanel
+                                        dark={dark}
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                        lineItems={lineItemsData.filter((i: any) => i.category_code === 'guvenlik')}
+                                      />
                                     )}
 
                                     {/* ── inner tab bar: Aylık Detay / Varyans Analizi ── */}

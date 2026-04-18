@@ -1,24 +1,40 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   ComposedChart, Bar, Line,
   PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
-import {
-  GUVENLIK_TOTAL_BUDGET,
-  GUVENLIK_TOTAL_ACTUAL_YTD,
-  GUVENLIK_MONTHLY_BUDGET,
-  GUVENLIK_MONTHLY_ACTUAL,
-  GUVENLIK_DEPTS,
-  GUVENLIK_UNIT_WAGES,
-  GUVENLIK_HEADCOUNT,
-  GUVENLIK_DEPT_COLORS,
-  GUVENLIK_ACTIVE_MONTHS,
-} from '@/data/guvenlik-data';
+
+export interface LineItem {
+  category_code: string;
+  row_type: 'total' | 'dept' | 'item' | 'param';
+  dept_code: string | null;
+  item_code: string | null;
+  param_code: string | null;
+  label: string;
+  monthly_budget: number[];
+  monthly_actual: number[];
+  unit_type: string | null;
+}
+
+interface Props {
+  dark: boolean;
+  lineItems: LineItem[];
+}
 
 const MONTH_LABELS = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+const DEPT_COLORS  = ['#6366f1', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
+
+// Headcount group hierarchy — defines which param_code is the group total
+// and which param_code prefix identifies its children
+const HC_GROUPS = [
+  { id: 'toplam',    label: 'Toplam',        parentCode: 'kisi_toplam',    childPrefix: null        as string | null },
+  { id: 'gyg',       label: 'GYG',           parentCode: 'kisi_gyg',       childPrefix: 'kisi_gyg_' as string | null },
+  { id: 'oht',       label: 'OHT',           parentCode: 'kisi_oht',       childPrefix: 'kisi_oht_' as string | null },
+  { id: 'operasyon', label: 'Operasyon',     parentCode: 'kisi_operasyon', childPrefix: 'kisi_ops_' as string | null },
+];
 
 function fmtM(n: number): string {
   if (n === 0) return '—';
@@ -30,38 +46,81 @@ function fmtFull(n: number): string {
   return `₺${n.toLocaleString('tr-TR')}`;
 }
 
-// YTD budget = sum of active months
-const YTD_BUDGET = GUVENLIK_ACTIVE_MONTHS.reduce((s, mi) => s + GUVENLIK_MONTHLY_BUDGET[mi], 0);
-const SAPMA_TL   = GUVENLIK_TOTAL_ACTUAL_YTD - YTD_BUDGET;
-const SAPMA_PCT  = YTD_BUDGET > 0 ? (SAPMA_TL / YTD_BUDGET) * 100 : 0;
-
-const CHART_MONTHLY = MONTH_LABELS.map((label, i) => ({
-  label,
-  'Bütçe':  GUVENLIK_MONTHLY_BUDGET[i],
-  'Fiili':  GUVENLIK_MONTHLY_ACTUAL[i] || undefined,
-}));
-
-interface Props {
-  dark: boolean;
-}
-
-export default function GuvenlikDetailPanel({ dark }: Props) {
-  const axisColor = dark ? '#9ca3af' : '#6b7280';
-  const gridColor = dark ? '#374151' : '#e5e7eb';
-  const tooltipBg = dark ? '#1f2937' : '#ffffff';
+export default function GuvenlikDetailPanel({ dark, lineItems }: Props) {
+  const axisColor    = dark ? '#9ca3af' : '#6b7280';
+  const gridColor    = dark ? '#374151' : '#e5e7eb';
+  const tooltipBg    = dark ? '#1f2937' : '#ffffff';
   const tooltipBorder = dark ? '#374151' : '#e5e7eb';
 
-  const [openDepts, setOpenDepts]         = useState<Set<string>>(new Set());
-  const [paramOpen, setParamOpen]         = useState(false);
+  const [openDepts,     setOpenDepts]     = useState<Set<string>>(new Set());
+  const [paramOpen,     setParamOpen]     = useState(false);
   const [openParamDepts, setOpenParamDepts] = useState<Set<string>>(new Set());
+
+  // ── derive data from lineItems ──────────────────────────────────────────────
+
+  const totalItem = useMemo(
+    () => lineItems.find((i) => i.row_type === 'total') ?? null,
+    [lineItems]
+  );
+
+  const monthlyBudget: number[] = totalItem?.monthly_budget ?? Array(12).fill(0);
+  const monthlyActual: number[] = totalItem?.monthly_actual ?? Array(12).fill(0);
+
+  // activeMonth: last index where actual > 0
+  const activeMonth = useMemo(() => {
+    for (let i = 11; i >= 0; i--) {
+      if (monthlyActual[i] > 0) return i;
+    }
+    return 0;
+  }, [monthlyActual]);
+
+  const annualBudget = monthlyBudget.reduce((a, b) => a + b, 0);
+  const ytdBudget    = monthlyBudget.slice(0, activeMonth + 1).reduce((a, b) => a + b, 0);
+  const ytdActual    = monthlyActual.slice(0, activeMonth + 1).reduce((a, b) => a + b, 0);
+  const sapmaTL      = ytdActual - ytdBudget;
+  const sapmaPct     = ytdBudget > 0 ? (sapmaTL / ytdBudget) * 100 : 0;
+
+  const activeLabel = MONTH_LABELS[activeMonth] ?? '';
+
+  const depts = useMemo(
+    () => lineItems.filter((i) => i.row_type === 'dept'),
+    [lineItems]
+  );
+
+  const deptItems = (deptCode: string) =>
+    lineItems.filter((i) => i.row_type === 'item' && i.dept_code === deptCode);
+
+  const unitWages = useMemo(
+    () => lineItems.filter((i) => i.row_type === 'param' && i.param_code?.startsWith('ucret_')),
+    [lineItems]
+  );
+
+  const paramByCode = useMemo(() => {
+    const m = new Map<string, LineItem>();
+    lineItems.forEach((i) => { if (i.param_code) m.set(i.param_code, i); });
+    return m;
+  }, [lineItems]);
+
+  const chartMonthly = MONTH_LABELS.map((label, i) => ({
+    label,
+    'Bütçe': monthlyBudget[i] ?? 0,
+    'Fiili': (monthlyActual[i] ?? 0) > 0 ? (monthlyActual[i] ?? 0) : undefined,
+  }));
 
   function toggleDept(id: string) {
     setOpenDepts((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+  }
+
+  if (lineItems.length === 0) {
+    return (
+      <div className="mt-4 p-4 text-sm text-gray-400 dark:text-gray-500 text-center">
+        Güvenlik verileri yükleniyor...
+      </div>
+    );
   }
 
   return (
@@ -71,32 +130,32 @@ export default function GuvenlikDetailPanel({ dark }: Props) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           {
-            label:   'Bütçe Yıllık',
-            value:   fmtM(GUVENLIK_TOTAL_BUDGET),
-            sub:     `YTD ${fmtM(YTD_BUDGET)}`,
-            cls:     'text-gray-900 dark:text-white',
-            border:  'border-gray-200 dark:border-gray-700',
+            label:  'Bütçe Yıllık',
+            value:  fmtM(annualBudget),
+            sub:    `YTD ${fmtM(ytdBudget)}`,
+            cls:    'text-gray-900 dark:text-white',
+            border: 'border-gray-200 dark:border-gray-700',
           },
           {
-            label:   'Fiili YTD',
-            value:   fmtM(GUVENLIK_TOTAL_ACTUAL_YTD),
-            sub:     `Oca–Mar 2025`,
-            cls:     'text-amber-600 dark:text-amber-400',
-            border:  'border-amber-200 dark:border-amber-800',
+            label:  'Fiili YTD',
+            value:  fmtM(ytdActual),
+            sub:    `Oca–${activeLabel} 2025`,
+            cls:    'text-amber-600 dark:text-amber-400',
+            border: 'border-amber-200 dark:border-amber-800',
           },
           {
-            label:   'Sapma (TL)',
-            value:   `${SAPMA_TL >= 0 ? '+' : ''}${fmtM(SAPMA_TL)}`,
-            sub:     SAPMA_TL > 0 ? 'Aşım' : 'Tasarruf',
-            cls:     SAPMA_TL > 0 ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400',
-            border:  SAPMA_TL > 0 ? 'border-red-200 dark:border-red-800' : 'border-green-200 dark:border-green-800',
+            label:  'Sapma (TL)',
+            value:  `${sapmaTL >= 0 ? '+' : ''}${fmtM(sapmaTL)}`,
+            sub:    sapmaTL > 0 ? 'Aşım' : 'Tasarruf',
+            cls:    sapmaTL > 0 ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400',
+            border: sapmaTL > 0 ? 'border-red-200 dark:border-red-800' : 'border-green-200 dark:border-green-800',
           },
           {
-            label:   'Sapma (%)',
-            value:   `${SAPMA_PCT >= 0 ? '+' : ''}${SAPMA_PCT.toFixed(1)}%`,
-            sub:     'YTD bütçeye göre',
-            cls:     SAPMA_PCT > 0 ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400',
-            border:  SAPMA_PCT > 0 ? 'border-red-200 dark:border-red-800' : 'border-green-200 dark:border-green-800',
+            label:  'Sapma (%)',
+            value:  `${sapmaPct >= 0 ? '+' : ''}${sapmaPct.toFixed(1)}%`,
+            sub:    'YTD bütçeye göre',
+            cls:    sapmaPct > 0 ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400',
+            border: sapmaPct > 0 ? 'border-red-200 dark:border-red-800' : 'border-green-200 dark:border-green-800',
           },
         ].map(({ label, value, sub, cls, border }) => (
           <div
@@ -113,13 +172,13 @@ export default function GuvenlikDetailPanel({ dark }: Props) {
       {/* ── Grafikler ────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-        {/* Aylık Bütçe vs Fiili — ComposedChart */}
+        {/* Aylık Bütçe vs Fiili */}
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3 shadow-sm">
           <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-3">
             Aylık Bütçe vs Fiili — Güvenlik 2025
           </p>
           <ResponsiveContainer width="100%" height={180}>
-            <ComposedChart data={CHART_MONTHLY} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
+            <ComposedChart data={chartMonthly} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
               <XAxis dataKey="label" tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} />
               <YAxis tickFormatter={fmtM} tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} width={56} />
@@ -143,15 +202,18 @@ export default function GuvenlikDetailPanel({ dark }: Props) {
             <ResponsiveContainer width={140} height={140}>
               <PieChart>
                 <Pie
-                  data={GUVENLIK_DEPTS}
-                  dataKey="budgetYearly"
+                  data={depts.map((d) => ({
+                    name: d.label,
+                    value: d.monthly_budget.reduce((a, b) => a + b, 0),
+                  }))}
+                  dataKey="value"
                   nameKey="name"
                   cx="50%" cy="50%"
                   innerRadius={38} outerRadius={58}
                   paddingAngle={2}
                 >
-                  {GUVENLIK_DEPTS.map((d, i) => (
-                    <Cell key={d.id} fill={GUVENLIK_DEPT_COLORS[i]} />
+                  {depts.map((_d, i) => (
+                    <Cell key={i} fill={DEPT_COLORS[i % DEPT_COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip
@@ -161,14 +223,13 @@ export default function GuvenlikDetailPanel({ dark }: Props) {
               </PieChart>
             </ResponsiveContainer>
             <div className="flex-1 space-y-1">
-              {GUVENLIK_DEPTS.map((d, i) => {
-                const share = GUVENLIK_TOTAL_BUDGET > 0
-                  ? (d.budgetYearly / GUVENLIK_TOTAL_BUDGET) * 100
-                  : 0;
+              {depts.map((d, i) => {
+                const deptAnnual = d.monthly_budget.reduce((a, b) => a + b, 0);
+                const share = annualBudget > 0 ? (deptAnnual / annualBudget) * 100 : 0;
                 return (
-                  <div key={d.id} className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: GUVENLIK_DEPT_COLORS[i] }} />
-                    <span className="text-[10px] text-gray-700 dark:text-gray-300 flex-1 truncate">{d.name}</span>
+                  <div key={d.dept_code} className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: DEPT_COLORS[i % DEPT_COLORS.length] }} />
+                    <span className="text-[10px] text-gray-700 dark:text-gray-300 flex-1 truncate">{d.label}</span>
                     <span className="text-[10px] font-mono text-gray-500 dark:text-gray-400">{share.toFixed(0)}%</span>
                   </div>
                 );
@@ -184,19 +245,21 @@ export default function GuvenlikDetailPanel({ dark }: Props) {
           <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">Departman Detayı</p>
         </div>
 
-        {GUVENLIK_DEPTS.map((dept, di) => {
-          const isOpen    = openDepts.has(dept.id);
-          const deptColor = GUVENLIK_DEPT_COLORS[di];
-          const deptYTD   = dept.monthlyActual.reduce((s, v) => s + v, 0);
-          const deptBudYTD = GUVENLIK_ACTIVE_MONTHS.reduce((s, mi) => s + dept.monthlyBudget[mi], 0);
-          const deptSapma  = deptYTD - deptBudYTD;
+        {depts.map((dept, di) => {
+          const deptCode   = dept.dept_code ?? '';
+          const isOpen     = openDepts.has(deptCode);
+          const deptColor  = DEPT_COLORS[di % DEPT_COLORS.length];
+          const deptAnnual = dept.monthly_budget.reduce((a, b) => a + b, 0);
+          const deptBudYTD = dept.monthly_budget.slice(0, activeMonth + 1).reduce((a, b) => a + b, 0);
+          const deptActYTD = dept.monthly_actual.slice(0, activeMonth + 1).reduce((a, b) => a + b, 0);
+          const deptSapma  = deptActYTD - deptBudYTD;
           const deptSapPct = deptBudYTD > 0 ? (deptSapma / deptBudYTD) * 100 : 0;
+          const items      = deptItems(deptCode);
 
           return (
-            <div key={dept.id} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
-              {/* dept header row */}
+            <div key={deptCode} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
               <button
-                onClick={() => toggleDept(dept.id)}
+                onClick={() => toggleDept(deptCode)}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors"
               >
                 <span
@@ -207,27 +270,24 @@ export default function GuvenlikDetailPanel({ dark }: Props) {
                 </span>
                 <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: deptColor }} />
                 <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 flex-1 text-left">
-                  {dept.name}
+                  {dept.label}
                 </span>
-                {/* mini KPIs — YTD values */}
                 <div className="hidden sm:flex items-center gap-4 text-[10px]">
                   <span className="text-gray-400 dark:text-gray-500">
                     YTD Bütçe: <span className="font-mono font-semibold text-gray-600 dark:text-gray-300">{fmtM(deptBudYTD)}</span>
                   </span>
                   <span className="text-gray-400 dark:text-gray-500">
-                    YTD Fiili: <span className="font-mono font-semibold text-amber-600 dark:text-amber-400">{fmtM(deptYTD)}</span>
+                    YTD Fiili: <span className="font-mono font-semibold text-amber-600 dark:text-amber-400">{fmtM(deptActYTD)}</span>
                   </span>
                   <span className={`font-mono font-semibold ${deptSapPct > 0 ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
                     {deptSapPct >= 0 ? '+' : ''}{deptSapPct.toFixed(1)}%
                   </span>
                 </div>
-                {/* mobile: YTD sapma */}
                 <span className={`sm:hidden text-[10px] font-mono font-semibold ${deptSapPct > 0 ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
                   {deptSapPct >= 0 ? '+' : ''}{deptSapPct.toFixed(1)}%
                 </span>
               </button>
 
-              {/* dept detail (level 2 expanded) */}
               <div
                 style={{
                   display: 'grid',
@@ -241,10 +301,10 @@ export default function GuvenlikDetailPanel({ dark }: Props) {
                     {/* dept KPI strip */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {[
-                        { label: 'Bütçe (Yıllık)',  value: fmtM(dept.budgetYearly), cls: 'text-gray-900 dark:text-white' },
-                        { label: 'Fiili YTD',        value: fmtM(deptYTD),          cls: 'text-amber-600 dark:text-amber-400' },
-                        { label: 'Sapma (TL)',        value: `${deptSapma >= 0 ? '+' : ''}${fmtM(deptSapma)}`, cls: deptSapma > 0 ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400' },
-                        { label: 'Sapma (%)',         value: `${deptSapPct >= 0 ? '+' : ''}${deptSapPct.toFixed(1)}%`, cls: deptSapPct > 0 ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400' },
+                        { label: 'Bütçe (Yıllık)', value: fmtM(deptAnnual),                                                                                              cls: 'text-gray-900 dark:text-white' },
+                        { label: 'Fiili YTD',       value: fmtM(deptActYTD),                                                                                             cls: 'text-amber-600 dark:text-amber-400' },
+                        { label: 'Sapma (TL)',       value: `${deptSapma >= 0 ? '+' : ''}${fmtM(deptSapma)}`,                                                            cls: deptSapma > 0 ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400' },
+                        { label: 'Sapma (%)',        value: `${deptSapPct >= 0 ? '+' : ''}${deptSapPct.toFixed(1)}%`,                                                    cls: deptSapPct > 0 ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400' },
                       ].map(({ label, value, cls }) => (
                         <div key={label} className="bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 px-2.5 py-2">
                           <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wide">{label}</p>
@@ -253,61 +313,45 @@ export default function GuvenlikDetailPanel({ dark }: Props) {
                       ))}
                     </div>
 
-                    {/* LEVEL 3: kalem detayları */}
-                    {dept.items.length > 0 && (
+                    {/* LEVEL 3: item rows */}
+                    {items.length > 0 && (
                       <div className="rounded border border-gray-200 dark:border-gray-700 overflow-hidden">
                         <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                           <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                            Alt Kalemler — {dept.items.length} adet
+                            Alt Kalemler — {items.length} adet
                           </p>
                         </div>
                         <div className="overflow-x-auto">
                           <table className="w-full min-w-[400px] text-xs">
                             <thead className="bg-gray-50/80 dark:bg-gray-800/60">
                               <tr>
-                                <th className="px-3 py-1.5 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                                  Kalem
-                                </th>
-                                <th className="px-3 py-1.5 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[100px]">
-                                  Bütçe (Yıllık)
-                                </th>
-                                <th className="px-3 py-1.5 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[100px]">
-                                  Fiili YTD
-                                </th>
-                                <th className="px-3 py-1.5 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[60px]">
-                                  Sapma %
-                                </th>
+                                {['Kalem', 'Bütçe (Yıllık)', 'Fiili YTD', 'Sapma %'].map((h, i) => (
+                                  <th key={h} className={`px-3 py-1.5 font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide ${i === 0 ? 'text-left' : 'text-right min-w-[100px]'}`}>
+                                    {h}
+                                  </th>
+                                ))}
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                              {dept.items.map((item) => {
-                                const itemBudYTD = GUVENLIK_ACTIVE_MONTHS.length > 0
-                                  ? Math.round(item.budgetYearly / 12) * GUVENLIK_ACTIVE_MONTHS.length
-                                  : 0;
-                                const itemSapma = item.actualYTD - itemBudYTD;
+                              {items.map((item) => {
+                                const itemAnnual = item.monthly_budget.reduce((a, b) => a + b, 0);
+                                const itemActYTD = item.monthly_actual.slice(0, activeMonth + 1).reduce((a, b) => a + b, 0);
+                                const itemBudYTD = item.monthly_budget.slice(0, activeMonth + 1).reduce((a, b) => a + b, 0);
+                                const itemSapma  = itemActYTD - itemBudYTD;
                                 const itemSapPct = itemBudYTD > 0 ? (itemSapma / itemBudYTD) * 100 : 0;
                                 return (
-                                  <tr
-                                    key={item.rowNum}
-                                    className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
-                                  >
-                                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300">{item.name}</td>
-                                    <td className="px-3 py-1.5 text-right font-mono text-gray-600 dark:text-gray-400">
-                                      {fmtM(item.budgetYearly)}
-                                    </td>
+                                  <tr key={item.item_code} className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
+                                    <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300">{item.label}</td>
+                                    <td className="px-3 py-1.5 text-right font-mono text-gray-600 dark:text-gray-400">{fmtM(itemAnnual)}</td>
                                     <td className="px-3 py-1.5 text-right font-mono text-amber-600 dark:text-amber-400">
-                                      {item.actualYTD > 0 ? fmtM(item.actualYTD) : '—'}
+                                      {itemActYTD > 0 ? fmtM(itemActYTD) : '—'}
                                     </td>
                                     <td className={`px-3 py-1.5 text-right font-semibold ${
-                                      itemSapma > 0
-                                        ? 'text-red-500 dark:text-red-400'
-                                        : itemSapma < 0
-                                        ? 'text-green-600 dark:text-green-400'
-                                        : 'text-gray-400 dark:text-gray-500'
+                                      itemSapma > 0 ? 'text-red-500 dark:text-red-400'
+                                      : itemSapma < 0 ? 'text-green-600 dark:text-green-400'
+                                      : 'text-gray-400 dark:text-gray-500'
                                     }`}>
-                                      {item.actualYTD > 0
-                                        ? `${itemSapPct >= 0 ? '+' : ''}${itemSapPct.toFixed(1)}%`
-                                        : '—'}
+                                      {itemActYTD > 0 ? `${itemSapPct >= 0 ? '+' : ''}${itemSapPct.toFixed(1)}%` : '—'}
                                     </td>
                                   </tr>
                                 );
@@ -317,10 +361,10 @@ export default function GuvenlikDetailPanel({ dark }: Props) {
                               <tr>
                                 <td className="px-3 py-1.5 font-bold text-gray-800 dark:text-gray-100">Toplam</td>
                                 <td className="px-3 py-1.5 text-right font-bold font-mono text-gray-900 dark:text-white">
-                                  {fmtM(dept.items.reduce((s, it) => s + it.budgetYearly, 0))}
+                                  {fmtM(items.reduce((s, it) => s + it.monthly_budget.reduce((a, b) => a + b, 0), 0))}
                                 </td>
                                 <td className="px-3 py-1.5 text-right font-bold font-mono text-amber-600 dark:text-amber-400">
-                                  {fmtM(dept.items.reduce((s, it) => s + it.actualYTD, 0))}
+                                  {fmtM(items.reduce((s, it) => s + it.monthly_actual.slice(0, activeMonth + 1).reduce((a, b) => a + b, 0), 0))}
                                 </td>
                                 <td />
                               </tr>
@@ -330,7 +374,7 @@ export default function GuvenlikDetailPanel({ dark }: Props) {
                       </div>
                     )}
 
-                    {dept.items.length === 0 && (
+                    {items.length === 0 && (
                       <p className="text-[11px] text-gray-400 dark:text-gray-500 italic px-1">
                         Bu departman için alt kalem detayı bulunmamaktadır.
                       </p>
@@ -343,7 +387,7 @@ export default function GuvenlikDetailPanel({ dark }: Props) {
         })}
       </div>
 
-      {/* ── PARAMETRE PANELİ (collapsible) ────────────────────────────────── */}
+      {/* ── PARAMETRE PANELİ ─────────────────────────────────────────────── */}
       <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
         <button
           onClick={() => setParamOpen((p) => !p)}
@@ -380,35 +424,30 @@ export default function GuvenlikDetailPanel({ dark }: Props) {
                     <thead className="bg-gray-50 dark:bg-gray-800">
                       <tr>
                         {['Pozisyon', 'Bütçe (Aylık)', 'Fiili (Aylık)', 'Fark %'].map((h, i) => (
-                          <th
-                            key={h}
-                            className={`px-3 py-1.5 font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide ${i === 0 ? 'text-left' : 'text-right'}`}
-                          >
+                          <th key={h} className={`px-3 py-1.5 font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide ${i === 0 ? 'text-left' : 'text-right'}`}>
                             {h}
                           </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                      {GUVENLIK_UNIT_WAGES.map((w) => {
-                        const diff = w.budgetMonthly > 0
-                          ? ((w.actualMonthly - w.budgetMonthly) / w.budgetMonthly) * 100
-                          : 0;
+                      {unitWages.map((w) => {
+                        const budMonthly = w.monthly_budget[activeMonth] ?? 0;
+                        const actMonthly = w.monthly_actual[activeMonth] ?? 0;
+                        const diff = budMonthly > 0 ? ((actMonthly - budMonthly) / budMonthly) * 100 : 0;
                         return (
-                          <tr key={w.rowNum} className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
-                            <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300">{w.position}</td>
+                          <tr key={w.param_code} className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
+                            <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300">{w.label}</td>
                             <td className="px-3 py-1.5 text-right font-mono text-gray-600 dark:text-gray-400">
-                              {w.budgetMonthly > 0 ? fmtM(w.budgetMonthly) : '—'}
+                              {budMonthly > 0 ? fmtM(budMonthly) : '—'}
                             </td>
                             <td className="px-3 py-1.5 text-right font-mono text-amber-600 dark:text-amber-400">
-                              {w.actualMonthly > 0 ? fmtM(w.actualMonthly) : '—'}
+                              {actMonthly > 0 ? fmtM(actMonthly) : '—'}
                             </td>
                             <td className={`px-3 py-1.5 text-right font-semibold ${
                               diff > 0 ? 'text-red-500 dark:text-red-400' : diff < 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'
                             }`}>
-                              {w.budgetMonthly > 0 && w.actualMonthly > 0
-                                ? `${diff >= 0 ? '+' : ''}${diff.toFixed(1)}%`
-                                : '—'}
+                              {budMonthly > 0 && actMonthly > 0 ? `${diff >= 0 ? '+' : ''}${diff.toFixed(1)}%` : '—'}
                             </td>
                           </tr>
                         );
@@ -418,104 +457,96 @@ export default function GuvenlikDetailPanel({ dark }: Props) {
                 </div>
               </div>
 
-              {/* Kişi Sayısı — per-dept sub-accordions */}
+              {/* Kişi Sayısı — headcount groups */}
               <div>
                 <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
                   Kişi Sayısı Parametreleri
                 </p>
                 <div className="rounded border border-gray-200 dark:border-gray-700 overflow-hidden">
-                  {GUVENLIK_HEADCOUNT.map((hc) => {
-                    const diff = hc.actual - hc.budget;
-                    const isToplam = hc.group === 'Toplam';
-                    const hasChildren = (hc.items && hc.items.length > 0) || hc.note;
-                    const isParamOpen = openParamDepts.has(hc.group);
+                  {HC_GROUPS.map((grp) => {
+                    const parentItem   = grp.parentCode ? paramByCode.get(grp.parentCode) : null;
+                    const budgetVal    = parentItem ? (parentItem.monthly_budget[activeMonth] ?? 0) : 0;
+                    const actualVal    = parentItem ? (parentItem.monthly_actual[activeMonth] ?? 0) : 0;
+                    const diff         = actualVal - budgetVal;
+                    const childItems   = grp.childPrefix
+                      ? Array.from(paramByCode.values()).filter(
+                          (i) => i.param_code?.startsWith(grp.childPrefix!) && i.param_code !== grp.parentCode
+                        )
+                      : [];
+                    const hasChildren  = childItems.length > 0;
+                    const isGrpOpen    = openParamDepts.has(grp.id);
 
                     return (
-                      <div key={hc.group} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
-                        {/* group row — clickable if it has children */}
+                      <div key={grp.id} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
                         <div
                           role={hasChildren ? 'button' : undefined}
                           onClick={hasChildren ? () => setOpenParamDepts((prev) => {
                             const next = new Set(prev);
-                            if (next.has(hc.group)) next.delete(hc.group);
-                            else next.add(hc.group);
+                            if (next.has(grp.id)) next.delete(grp.id); else next.add(grp.id);
                             return next;
                           }) : undefined}
                           className={`flex items-center gap-2 px-3 py-2 text-xs ${
                             hasChildren ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/60' : ''
-                          } ${isToplam ? 'bg-gray-50 dark:bg-gray-800/40 font-semibold' : ''} transition-colors`}
+                          } ${grp.id === 'toplam' ? 'bg-gray-50 dark:bg-gray-800/40 font-semibold' : ''} transition-colors`}
                         >
-                          {hasChildren && (
+                          {hasChildren ? (
                             <span
                               className="text-gray-400 dark:text-gray-500 text-[9px] flex-shrink-0 transition-transform duration-200"
-                              style={{ display: 'inline-block', transform: isParamOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
+                              style={{ display: 'inline-block', transform: isGrpOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
                             >
                               ▶
                             </span>
+                          ) : (
+                            <span className="w-[9px] flex-shrink-0" />
                           )}
-                          {!hasChildren && <span className="w-[9px] flex-shrink-0" />}
-                          <span className="flex-1 text-gray-700 dark:text-gray-300">{hc.group}</span>
-                          {!hc.note && (
-                            <>
-                              <span className="w-10 text-right font-mono text-gray-600 dark:text-gray-400">{hc.budget}</span>
-                              <span className="w-10 text-right font-mono text-amber-600 dark:text-amber-400">{hc.actual}</span>
-                              <span className={`w-8 text-right font-semibold ${
-                                diff > 0 ? 'text-red-500 dark:text-red-400' : diff < 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'
-                              }`}>
-                                {diff !== 0 ? `${diff > 0 ? '+' : ''}${diff}` : '='}
-                              </span>
-                            </>
-                          )}
-                          {hc.note && (
-                            <span className="text-[10px] text-gray-400 dark:text-gray-500 italic text-right flex-1">
-                              —
-                            </span>
-                          )}
+                          <span className="flex-1 text-gray-700 dark:text-gray-300">{grp.label}</span>
+                          <span className="w-10 text-right font-mono text-gray-600 dark:text-gray-400">{budgetVal}</span>
+                          <span className="w-10 text-right font-mono text-amber-600 dark:text-amber-400">{actualVal}</span>
+                          <span className={`w-8 text-right font-semibold ${
+                            diff > 0 ? 'text-red-500 dark:text-red-400' : diff < 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'
+                          }`}>
+                            {diff !== 0 ? `${diff > 0 ? '+' : ''}${diff}` : '='}
+                          </span>
                         </div>
 
-                        {/* expandable items */}
                         {hasChildren && (
                           <div
                             style={{
                               display: 'grid',
-                              gridTemplateRows: isParamOpen ? '1fr' : '0fr',
+                              gridTemplateRows: isGrpOpen ? '1fr' : '0fr',
                               transition: 'grid-template-rows 0.2s ease',
                             }}
                           >
                             <div className="overflow-hidden">
-                              {hc.note ? (
-                                <div className="px-4 pl-8 py-2 bg-amber-50/60 dark:bg-amber-950/20 border-t border-gray-100 dark:border-gray-800">
-                                  <p className="text-[11px] text-amber-700 dark:text-amber-400 italic">{hc.note}</p>
-                                </div>
-                              ) : (
-                                <table className="w-full text-xs border-t border-gray-100 dark:border-gray-800">
-                                  <thead className="bg-gray-50/80 dark:bg-gray-800/50">
-                                    <tr>
-                                      <th className="px-3 pl-8 py-1 text-left font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Kalem</th>
-                                      <th className="px-3 py-1 text-right font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide w-12">Büt.</th>
-                                      <th className="px-3 py-1 text-right font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide w-12">Fili</th>
-                                      <th className="px-3 py-1 text-right font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide w-10">Fark</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                                    {hc.items!.map((item) => {
-                                      const itemDiff = item.actual - item.budget;
-                                      return (
-                                        <tr key={item.name} className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
-                                          <td className="px-3 pl-8 py-1 text-gray-600 dark:text-gray-400">{item.name}</td>
-                                          <td className="px-3 py-1 text-right font-mono text-gray-500 dark:text-gray-500">{item.budget}</td>
-                                          <td className="px-3 py-1 text-right font-mono text-amber-500 dark:text-amber-500">{item.actual}</td>
-                                          <td className={`px-3 py-1 text-right font-semibold ${
-                                            itemDiff > 0 ? 'text-red-400 dark:text-red-500' : itemDiff < 0 ? 'text-green-500 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'
-                                          }`}>
-                                            {itemDiff !== 0 ? `${itemDiff > 0 ? '+' : ''}${itemDiff}` : '='}
-                                          </td>
-                                        </tr>
-                                      );
-                                    })}
-                                  </tbody>
-                                </table>
-                              )}
+                              <table className="w-full text-xs border-t border-gray-100 dark:border-gray-800">
+                                <thead className="bg-gray-50/80 dark:bg-gray-800/50">
+                                  <tr>
+                                    <th className="px-3 pl-8 py-1 text-left font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Kalem</th>
+                                    <th className="px-3 py-1 text-right font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide w-12">Büt.</th>
+                                    <th className="px-3 py-1 text-right font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide w-12">Fili</th>
+                                    <th className="px-3 py-1 text-right font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide w-10">Fark</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+                                  {childItems.map((ci) => {
+                                    const ciBud  = ci.monthly_budget[activeMonth] ?? 0;
+                                    const ciAct  = ci.monthly_actual[activeMonth] ?? 0;
+                                    const ciDiff = ciAct - ciBud;
+                                    return (
+                                      <tr key={ci.param_code} className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
+                                        <td className="px-3 pl-8 py-1 text-gray-600 dark:text-gray-400">{ci.label}</td>
+                                        <td className="px-3 py-1 text-right font-mono text-gray-500 dark:text-gray-500">{ciBud}</td>
+                                        <td className="px-3 py-1 text-right font-mono text-amber-500 dark:text-amber-500">{ciAct}</td>
+                                        <td className={`px-3 py-1 text-right font-semibold ${
+                                          ciDiff > 0 ? 'text-red-400 dark:text-red-500' : ciDiff < 0 ? 'text-green-500 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'
+                                        }`}>
+                                          {ciDiff !== 0 ? `${ciDiff > 0 ? '+' : ''}${ciDiff}` : '='}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
                             </div>
                           </div>
                         )}
