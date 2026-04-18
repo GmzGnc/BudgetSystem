@@ -14,6 +14,7 @@ import { generateBudgetPDF, generateExecutivePDF } from '@/components/pdf/genera
 import type { CategoryPDFData, PDFReportData } from '@/components/pdf/generateBudgetPDF';
 import ProjectionTab from '@/components/tabs/ProjectionTab';
 import GuvenlikDetailPanel from '@/components/tabs/GuvenlikDetailPanel';
+import TemizlikDetailPanel from '@/components/tabs/TemizlikDetailPanel';
 import SapmaTab from '@/components/tabs/SapmaTab';
 import SapTab from '@/components/tabs/SapTab';
 import DeptTab from '@/components/tabs/DeptTab';
@@ -1501,6 +1502,15 @@ export default function Home() {
                                         dark={dark}
                                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                         lineItems={lineItemsData.filter((i: any) => i.category_code === 'guvenlik')}
+                                      />
+                                    )}
+
+                                    {/* ── Temizlik 3-level panel ── */}
+                                    {cat.id === 'temizlik' && (
+                                      <TemizlikDetailPanel
+                                        dark={dark}
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                        lineItems={lineItemsData.filter((i: any) => i.category_code === 'temizlik')}
                                       />
                                     )}
 
