@@ -144,14 +144,78 @@ export const COMPANY_CONFIG: Record<string, SheetConfig> = {
       temizlik: {
         total: { row: 124, label: "Temizlik Giderleri", unit: "TL Karşılığı" },
         depts: [
-          { code: "gyg",       row: 149, label: "GYG",       itemRows: [] },
-          { code: "ictas",     row: 153, label: "İçtaş",     itemRows: [] },
-          { code: "kamu",      row: 156, label: "Kamu",       itemRows: [] },
-          { code: "oht",       row: 160, label: "OHT",        itemRows: [] },
-          { code: "operasyon", row: 169, label: "Operasyon",  itemRows: [] },
-          { code: "kilyos",    row: 179, label: "Kilyos",     itemRows: [] },
+          {
+            code: "gyg", row: 149, label: "GYG",
+            itemRows: [
+              { row: 150, label: "AKM Binası", unit: "TL" },
+              { row: 151, label: "PMO Binası + VIP Ofis", unit: "TL" },
+            ],
+          },
+          {
+            code: "ictas", row: 153, label: "İçtaş",
+            itemRows: [
+              { row: 154, label: "İçtaş Temizlik", unit: "TL" },
+            ],
+          },
+          {
+            code: "kamu", row: 156, label: "Kamu",
+            itemRows: [
+              { row: 157, label: "Köprü Koruma Amirliği", unit: "TL" },
+              { row: 158, label: "KGM Binası", unit: "TL" },
+            ],
+          },
+          {
+            code: "oht", row: 160, label: "OHT",
+            itemRows: [
+              { row: 161, label: "OHT", unit: "TL" },
+              { row: 162, label: "OHT Ekip Sorumlusu", unit: "TL" },
+              { row: 163, label: "OHT Mesai Giderleri", unit: "TL" },
+              { row: 164, label: "OHT Ek Giderler (araç+yakıt)", unit: "TL" },
+            ],
+            // Note: rows 167-168 are negative allocation rows (-441,884 / -462,000)
+            // These are included in OHT total (row 160) already, skip as items
+          },
+          {
+            code: "operasyon", row: 169, label: "Operasyon",
+            itemRows: [
+              { row: 170, label: "Bahçıvan", unit: "TL" },
+              { row: 171, label: "AKM Çevre", unit: "TL" },
+              { row: 172, label: "Odayeri BİM", unit: "TL" },
+              { row: 173, label: "Hüseynili BİM", unit: "TL" },
+              { row: 174, label: "Hyundai Binası", unit: "TL" },
+              { row: 175, label: "Kimyasal", unit: "TL" },
+              { row: 176, label: "Mesai Giderleri", unit: "TL" },
+              { row: 177, label: "Ek Giderler (2 mobil ekip+araç+yakıt)", unit: "TL" },
+            ],
+          },
+          {
+            code: "kilyos", row: 179, label: "Kilyos",
+            itemRows: [],
+          },
         ],
-        params: [],
+        params: [
+          { code: "ucret_oht_ekip_sorumlusu", row: 125, label: "OHT Ekip Sorumlusu Ücret",  unit: "TL" },
+          { code: "ucret_oht_personel",        row: 126, label: "OHT Personel Ücret",         unit: "TL" },
+          { code: "ucret_danisma",             row: 127, label: "Danışma Tarabya Yalı Ücret", unit: "TL" },
+          { code: "ucret_temizlik_personel",   row: 128, label: "Temizlik Personel Ücret",    unit: "TL" },
+          { code: "kisi_toplam",     row: 129, label: "Kişi Sayısı Toplam",       unit: "Kişi" },
+          { code: "kisi_gyg",        row: 130, label: "GYG Kişi",                 unit: "Kişi" },
+          { code: "kisi_gyg_akm",    row: 131, label: "AKM Binası Kişi",          unit: "Kişi" },
+          { code: "kisi_gyg_pmo",    row: 132, label: "PMO Binası Kişi",          unit: "Kişi" },
+          { code: "kisi_kamu",       row: 135, label: "Kamu Kişi",                unit: "Kişi" },
+          { code: "kisi_kamu_kopru", row: 136, label: "Köprü Koruma Kişi",        unit: "Kişi" },
+          { code: "kisi_kamu_kgm",   row: 137, label: "KGM Binası Kişi",          unit: "Kişi" },
+          { code: "kisi_oht",        row: 138, label: "OHT Kişi",                 unit: "Kişi" },
+          { code: "kisi_oht_main",   row: 139, label: "OHT Ana Kişi",             unit: "Kişi" },
+          { code: "kisi_oht_ekip",   row: 140, label: "OHT Ekip Sorumlusu Kişi",  unit: "Kişi" },
+          { code: "kisi_operasyon",  row: 141, label: "Operasyon Kişi",           unit: "Kişi" },
+          { code: "kisi_ops_bah",    row: 142, label: "Bahçıvan Kişi",            unit: "Kişi" },
+          { code: "kisi_ops_akm",    row: 143, label: "AKM Çevre Kişi",           unit: "Kişi" },
+          { code: "kisi_ops_oda",    row: 144, label: "Odayeri BİM Kişi",         unit: "Kişi" },
+          { code: "kisi_ops_hus",    row: 145, label: "Hüseynili BİM Kişi",       unit: "Kişi" },
+          { code: "kisi_ops_hyu",    row: 146, label: "Hyundai Kişi",             unit: "Kişi" },
+          { code: "kisi_ops_kim",    row: 147, label: "Kimyasal Kişi",            unit: "Kişi" },
+        ],
       },
       yemek: {
         total: { row: 180, label: "Yemek Giderleri", unit: "TL Karşılığı" },
