@@ -25,8 +25,12 @@ function fmtM(n: number): string {
 function fmtFull(n: number): string {
   return `₺${n.toLocaleString('tr-TR')}`;
 }
-function fmtPct(n: number): string {
-  return n === 0 ? '—' : `${(n * 100).toFixed(2)}%`;
+// Smart ratio formatter: Excel can store percent params as decimal (0.075) or integer (7.5).
+// If value < 1 → treat as decimal fraction (0.075 → 7.5%).
+// If value >= 1 → treat as already in percent units (7.5 → 7.5%).
+function fmtRatio(n: number): string {
+  if (n === 0) return '—';
+  return n < 1 ? `${(n * 100).toFixed(1)}%` : `${n.toFixed(1)}%`;
 }
 
 // Static route reference data (birim fiyatlar, Excel rows 247-293)
@@ -167,6 +171,13 @@ export default function ServisDetailPanel({ dark, lineItems }: Props) {
   const asgariUcretArr     = paramArr('asgari_ucret_fark',  'budget');
   const aracSayisiBudArr   = paramArr('arac_sayisi',        'budget');
   const aracSayisiActArr   = paramArr('arac_sayisi',        'actual');
+
+  // Debug: log raw tufe_ufe param to verify Excel value interpretation
+  if (typeof window !== 'undefined') {
+    const tufeItem = paramByCode.get('tufe_ufe_oran');
+    console.log('[servis] tufe_ufe_oran raw monthly_budget:', tufeItem?.monthly_budget);
+    console.log('[servis] yakıt_barem raw monthly_budget:',   paramByCode.get('yakit_barem')?.monthly_budget);
+  }
 
   return (
     <div className="mt-4 space-y-4">
@@ -406,10 +417,10 @@ export default function ServisDetailPanel({ dark, lineItems }: Props) {
                   {/* Active month KPI strip */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {[
-                      { label: 'Birim Fiyat',       value: fmtFull(birimFiyatArr[activeMonth] ?? 0),  unit: '₺/araç/ay' },
-                      { label: 'Asgari Ücret Farkı', value: fmtFull(asgariUcretArr[activeMonth] ?? 0), unit: '₺/araç'    },
-                      { label: 'TÜFE+ÜFE Oranı',    value: fmtPct(tufeUfeArr[activeMonth] ?? 0),      unit: '%'         },
-                      { label: 'Yakıt Baremi',       value: fmtPct(yakitBaremArr[activeMonth] ?? 0),   unit: '%'         },
+                      { label: 'Birim Fiyat',       value: fmtFull(birimFiyatArr[activeMonth] ?? 0),    unit: '₺/araç/ay' },
+                      { label: 'Asgari Ücret Farkı', value: fmtFull(asgariUcretArr[activeMonth] ?? 0),  unit: '₺/araç'    },
+                      { label: 'TÜFE+ÜFE Oranı',    value: fmtRatio(tufeUfeArr[activeMonth] ?? 0),      unit: '%'         },
+                      { label: 'Yakıt Baremi',       value: fmtRatio(yakitBaremArr[activeMonth] ?? 0),   unit: '%'         },
                     ].map(({ label, value, unit }) => (
                       <div key={label} className="bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2">
                         <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wide truncate">{label}</p>
@@ -421,7 +432,14 @@ export default function ServisDetailPanel({ dark, lineItems }: Props) {
 
                   {/* Monthly table */}
                   <div className="overflow-x-auto">
-                    <table className="w-full text-[10px]">
+                    <table className="text-[10px]" style={{ minWidth: 610, width: '100%', tableLayout: 'fixed' }}>
+                      <colgroup>
+                        <col style={{ width: 60 }} />
+                        <col style={{ width: 160 }} />
+                        <col style={{ width: 140 }} />
+                        <col style={{ width: 130 }} />
+                        <col style={{ width: 120 }} />
+                      </colgroup>
                       <thead>
                         <tr className="text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-gray-700">
                           <th className="text-left pb-1.5 pr-2 font-medium">Ay</th>
@@ -446,8 +464,8 @@ export default function ServisDetailPanel({ dark, lineItems }: Props) {
                               <td className="py-0.5 pr-2 text-gray-500 dark:text-gray-400">{lbl}</td>
                               <td className="py-0.5 pr-2 text-right font-mono text-gray-700 dark:text-gray-300">{bf > 0 ? fmtFull(bf) : '—'}</td>
                               <td className="py-0.5 pr-2 text-right font-mono text-gray-700 dark:text-gray-300">{au > 0 ? fmtFull(au) : '—'}</td>
-                              <td className="py-0.5 pr-2 text-right font-mono text-gray-700 dark:text-gray-300">{tu > 0 ? fmtPct(tu) : '—'}</td>
-                              <td className="py-0.5 text-right font-mono text-gray-700 dark:text-gray-300">{yb > 0 ? fmtPct(yb) : '—'}</td>
+                              <td className="py-0.5 pr-2 text-right font-mono text-gray-700 dark:text-gray-300">{tu > 0 ? fmtRatio(tu) : '—'}</td>
+                              <td className="py-0.5 text-right font-mono text-gray-700 dark:text-gray-300">{yb > 0 ? fmtRatio(yb) : '—'}</td>
                             </tr>
                           );
                         })}
@@ -461,7 +479,13 @@ export default function ServisDetailPanel({ dark, lineItems }: Props) {
               {paramTab === 'arac' && (
                 <div className="space-y-3">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-[10px]">
+                    <table className="text-[10px]" style={{ minWidth: 400, width: '100%', tableLayout: 'fixed' }}>
+                      <colgroup>
+                        <col style={{ width: 60 }} />
+                        <col style={{ width: 120 }} />
+                        <col style={{ width: 120 }} />
+                        <col style={{ width: 100 }} />
+                      </colgroup>
                       <thead>
                         <tr className="text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-gray-700">
                           <th className="text-left pb-1.5 pr-2 font-medium">Ay</th>
@@ -506,11 +530,17 @@ export default function ServisDetailPanel({ dark, lineItems }: Props) {
                       Bu rakamlar birim fiyatlardır. Toplam maliyet = birim fiyat × gün sayısı × kişi katsayısı
                     </p>
                   </div>
-                  <div className="overflow-x-auto" style={{ maxHeight: 400, overflowY: 'auto' }}>
-                    <table className="w-full text-[10px]">
+                  <div style={{ maxHeight: 400, overflowY: 'auto', overflowX: 'auto' }}>
+                    <table className="text-[10px]" style={{ minWidth: 520, width: '100%', tableLayout: 'fixed' }}>
+                      <colgroup>
+                        <col style={{ width: 40 }} />
+                        <col />  {/* flexible */}
+                        <col style={{ width: 140 }} />
+                        <col style={{ width: 140 }} />
+                      </colgroup>
                       <thead className="sticky top-0 bg-white dark:bg-gray-900 z-10">
                         <tr className="text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left pb-1.5 pr-2 font-medium w-6">#</th>
+                          <th className="text-left pb-1.5 pr-2 font-medium">#</th>
                           <th className="text-left pb-1.5 pr-2 font-medium">Rota Adı</th>
                           <th className="text-right pb-1.5 pr-2 font-medium">Birim Fiyat (TL/ay)</th>
                           <th className="text-right pb-1.5 font-medium">Yıllık Bütçe (TL)</th>
