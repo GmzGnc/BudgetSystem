@@ -15,6 +15,7 @@ import type { CategoryPDFData, PDFReportData } from '@/components/pdf/generateBu
 import ProjectionTab from '@/components/tabs/ProjectionTab';
 import GuvenlikDetailPanel from '@/components/tabs/GuvenlikDetailPanel';
 import TemizlikDetailPanel from '@/components/tabs/TemizlikDetailPanel';
+import YemekDetailPanel from '@/components/tabs/YemekDetailPanel';
 import SapmaTab from '@/components/tabs/SapmaTab';
 import SapTab from '@/components/tabs/SapTab';
 import DeptTab from '@/components/tabs/DeptTab';
@@ -1293,7 +1294,7 @@ export default function Home() {
                   <tbody>
                     {CATEGORIES.map((cat) => {
                       // guvenlik + temizlik moved to budget_line_items — read annual sum from there
-                      const liCategories = ['guvenlik', 'temizlik'];
+                      const liCategories = ['guvenlik', 'temizlik', 'yemek'];
                       const liTotalItem = liCategories.includes(cat.id)
                         ? (lineItemsData as any[]).find(
                             (i: any) => i.category_code === cat.id && i.row_type === 'total'
@@ -1512,6 +1513,15 @@ export default function Home() {
                                         dark={dark}
                                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                         lineItems={lineItemsData.filter((i: any) => i.category_code === 'temizlik')}
+                                      />
+                                    )}
+
+                                    {/* ── Yemek 3-level panel ── */}
+                                    {cat.id === 'yemek' && (
+                                      <YemekDetailPanel
+                                        dark={dark}
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                        lineItems={lineItemsData.filter((i: any) => i.category_code === 'yemek')}
                                       />
                                     )}
 

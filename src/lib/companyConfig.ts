@@ -220,13 +220,64 @@ export const COMPANY_CONFIG: Record<string, SheetConfig> = {
       yemek: {
         total: { row: 180, label: "Yemek Giderleri", unit: "TL Karşılığı" },
         depts: [
-          { code: "ictas",     row: 218, label: "İçtaş",     itemRows: [] },
-          { code: "operasyon", row: 220, label: "Operasyon",  itemRows: [] },
-          { code: "kamu",      row: 224, label: "Kamu",       itemRows: [] },
-          { code: "gyg",       row: 231, label: "GYG",        itemRows: [] },
-          { code: "kilyos",    row: 237, label: "Kilyos",     itemRows: [] },
+          {
+            code: "ictas", row: 218, label: "İçtaş",
+            itemRows: [
+              { row: 219, label: "İçtaş Yemek", unit: "TL" },
+            ],
+          },
+          {
+            code: "operasyon", row: 220, label: "Operasyon",
+            itemRows: [
+              { row: 221, label: "CCN Güvenlik", unit: "TL" },
+              { row: 222, label: "Taşeron",       unit: "TL" },
+            ],
+          },
+          {
+            code: "kamu", row: 224, label: "Kamu",
+            itemRows: [
+              { row: 225, label: "Karayolları",                        unit: "TL" },
+              { row: 226, label: "Köprü Koruma (Emniyet) Poyraz",     unit: "TL" },
+              { row: 227, label: "Sahil Güvenlik",                    unit: "TL" },
+              { row: 228, label: "Diğer Kamu (İBB+PTT+Orman)",       unit: "TL" },
+              { row: 229, label: "Asya Trafik Jandarma",              unit: "TL" },
+              { row: 230, label: "Rumelihisarı Jandarma",             unit: "TL" },
+            ],
+          },
+          {
+            code: "gyg", row: 231, label: "GYG",
+            itemRows: [
+              { row: 232, label: "ICA",                  unit: "TL" },
+              { row: 233, label: "Cafe Personeli Gideri", unit: "TL" },
+            ],
+          },
+          {
+            code: "kilyos", row: 237, label: "Kilyos",
+            itemRows: [],
+            // note: Kilyos is dominant (86% of total), single row, endeks-based
+          },
         ],
-        params: [],
+        params: [
+          { code: "birim_fiyat",     row: 181, label: "Birim Fiyat (TL/öğün)",       unit: "TL"   },
+          { code: "ogun_toplam",     row: 185, label: "Günlük Öğün Sayısı Toplam",   unit: "Öğün" },
+          { code: "ogun_gyg",        row: 186, label: "GYG Öğün",                    unit: "Öğün" },
+          { code: "ogun_ictas",      row: 187, label: "İçtaş Öğün",                  unit: "Öğün" },
+          { code: "ogun_operasyon",  row: 188, label: "Operasyon Öğün Toplam",        unit: "Öğün" },
+          { code: "ogun_ops_ccn",    row: 189, label: "CCN Güvenlik Öğün",           unit: "Öğün" },
+          { code: "ogun_ops_tase",   row: 190, label: "Taşeron Öğün",                unit: "Öğün" },
+          { code: "ogun_kamu",       row: 192, label: "Kamu Öğün Toplam",            unit: "Öğün" },
+          { code: "ogun_kamu_kara",  row: 193, label: "Karayolları Öğün",            unit: "Öğün" },
+          { code: "ogun_kamu_kopru", row: 194, label: "Köprü Koruma Öğün",           unit: "Öğün" },
+          { code: "ogun_kamu_sahil", row: 195, label: "Sahil Güvenlik Öğün",         unit: "Öğün" },
+          { code: "ogun_kamu_diger", row: 196, label: "Diğer Kamu Öğün",             unit: "Öğün" },
+          { code: "ogun_kamu_asya",  row: 197, label: "Asya Trafik Jandarma Öğün",  unit: "Öğün" },
+          { code: "ogun_kamu_rume",  row: 198, label: "Rumelihisarı Jandarma Öğün", unit: "Öğün" },
+          { code: "ogun_gyg_ica",    row: 199, label: "GYG Öğün Toplam",             unit: "Öğün" },
+          { code: "gun_gyg",         row: 201, label: "Gün Sayısı GYG Ort.",         unit: "Gün"  },
+          { code: "gun_ictas",       row: 202, label: "Gün Sayısı İçtaş",            unit: "Gün"  },
+          { code: "gun_operasyon",   row: 204, label: "Operasyon Gün Ort.",           unit: "Gün"  },
+          { code: "gun_kamu",        row: 208, label: "Kamu Gün Ort.",               unit: "Gün"  },
+        ],
       },
       servis: {
         total: { row: 238, label: "Servis Giderleri", unit: "TL Karşılığı" },
