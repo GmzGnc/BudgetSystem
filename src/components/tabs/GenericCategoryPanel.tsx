@@ -57,13 +57,6 @@ export default function GenericCategoryPanel({
   const [openDepts, setOpenDepts] = useState<Set<string>>(new Set());
   const [paramOpen, setParamOpen] = useState(false);
 
-  // ── temporary debug ────────────────────────────────────────────────────────
-  if (typeof window !== 'undefined' && categoryCode === 'arac_kira') {
-    const _allDepts = lineItems.filter(i => i.category_code === 'arac_kira' && i.row_type === 'dept');
-    console.log('[generic depts]', _allDepts.map(d => d.dept_code));
-    console.log('[generic depts full]', _allDepts.map(d => ({ dept_code: d.dept_code, label: d.label, jan: Array.isArray(d.monthly_budget) ? d.monthly_budget[0] : d.monthly_budget })));
-  }
-
   // ── derive totals ──────────────────────────────────────────────────────────
 
   const totalItem = useMemo(

@@ -56,10 +56,6 @@ export default function GuvenlikDetailPanel({ dark, lineItems }: Props) {
   const [paramOpen,     setParamOpen]     = useState(false);
   const [openParamDepts, setOpenParamDepts] = useState<Set<string>>(new Set());
 
-  // ── debug ──────────────────────────────────────────────────────────────────
-  console.log('[panel] received lineItems:', lineItems.length,
-    'categories:', [...new Set(lineItems.map((i: any) => i.category_code))]);  // eslint-disable-line @typescript-eslint/no-explicit-any
-
   // ── derive data from lineItems ──────────────────────────────────────────────
 
   const totalItem = useMemo(
@@ -75,9 +71,6 @@ export default function GuvenlikDetailPanel({ dark, lineItems }: Props) {
     }
     return v;
   }
-
-  console.log('[panel] totalItem:', totalItem);
-  console.log('[panel] monthly_budget raw:', totalItem?.monthly_budget);
 
   const monthlyBudget: number[] = ensureArray(totalItem?.monthly_budget);
   const monthlyActual: number[] = ensureArray(totalItem?.monthly_actual);
