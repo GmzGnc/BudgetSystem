@@ -322,7 +322,6 @@ export const COMPANY_CONFIG: Record<string, SheetConfig> = {
           { code: "arac_sayisi_ops",  row: 632, label: "Operasyon Araç Sayısı",  unit: "Adet" },
           { code: "arac_sayisi_kamu", row: 710, label: "Kamu Araç Sayısı",       unit: "Adet" },
           { code: "arac_sayisi_kil",  row: 727, label: "Kilyos Araç Sayısı",     unit: "Adet" },
-          { code: "hgs_arac_toplam",  row: 784, label: "HGS Araç Toplam",        unit: "Adet" },
         ],
       },
       hgs: {
