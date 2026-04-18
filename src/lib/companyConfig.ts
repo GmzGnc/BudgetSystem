@@ -310,32 +310,63 @@ export const COMPANY_CONFIG: Record<string, SheetConfig> = {
       },
       arac_kira: {
         total: { row: 606, label: "Araç Kira Giderleri", unit: "TL Karşılığı" },
-        depts: [],
-        params: [],
+        depts: [
+          { code: "gyg",       row: 607, label: "GYG",       itemRows: [] },
+          { code: "operasyon", row: 632, label: "Operasyon", itemRows: [] },
+          { code: "kamu",      row: 710, label: "Kamu",      itemRows: [] },
+          { code: "kilyos",    row: 728, label: "Kilyos",    itemRows: [] },
+        ],
+        params: [
+          { code: "arac_sayisi_gyg",  row: 607, label: "GYG Araç Sayısı",       unit: "Adet" },
+          { code: "arac_sayisi_ops",  row: 632, label: "Operasyon Araç Sayısı",  unit: "Adet" },
+          { code: "arac_sayisi_kamu", row: 710, label: "Kamu Araç Sayısı",       unit: "Adet" },
+          { code: "arac_sayisi_kil",  row: 727, label: "Kilyos Araç Sayısı",     unit: "Adet" },
+          { code: "hgs_arac_toplam",  row: 784, label: "HGS Araç Toplam",        unit: "Adet" },
+        ],
       },
       hgs: {
         total: { row: 785, label: "HGS Giderleri", unit: "TL Karşılığı" },
-        depts: [],
+        depts: [
+          { code: "gyg",       row: 787, label: "Genel Yönetim", itemRows: [] },
+          { code: "operasyon", row: 815, label: "Operasyon",     itemRows: [] },
+          { code: "ictas",     row: 871, label: "İçtaş",         itemRows: [] },
+          { code: "kamu",      row: 893, label: "Kamu",          itemRows: [] },
+          { code: "kilyos",    row: 910, label: "Kilyos",        itemRows: [] },
+        ],
         params: [],
       },
       arac_yakit: {
         total: { row: 970, label: "Araç Yakıt Giderleri", unit: "TL Karşılığı" },
-        depts: [],
+        depts: [
+          { code: "gyg",       row: 973,  label: "GYG",       itemRows: [] },
+          { code: "operasyon", row: 1025, label: "Operasyon", itemRows: [] },
+          { code: "kamu",      row: 1128, label: "Kamu",      itemRows: [] },
+        ],
         params: [],
       },
       arac_bakim: {
         total: { row: 1163, label: "Taşıt Bakım Onarım", unit: "TL Karşılığı" },
-        depts: [],
+        depts: [
+          { code: "gyg",       row: 1165, label: "Genel Müdürlük", itemRows: [] },
+          { code: "kamu",      row: 1191, label: "Kamu",            itemRows: [] },
+          { code: "operasyon", row: 1207, label: "Operasyon",       itemRows: [] },
+        ],
         params: [],
       },
       diger_hizmet: {
         total: { row: 1273, label: "Diğer Hizmet Giderleri", unit: "TL Karşılığı" },
-        depts: [],
+        depts: [
+          { code: "cop_kamyon", row: 1274, label: "Kiralık Çöp Kamyoneti + Çöp Döküm", itemRows: [] },
+          { code: "su_nakliye", row: 1303, label: "Su Nakliye Giderleri-Operasyon",     itemRows: [] },
+        ],
         params: [],
       },
       icme_suyu: {
         total: { row: 1312, label: "İçme Suyu Giderleri", unit: "TL Karşılığı" },
-        depts: [],
+        depts: [
+          { code: "gyg", row: 1313, label: "GYG",          itemRows: [] },
+          { code: "oht", row: 1329, label: "OHT İçme Suyu", itemRows: [] },
+        ],
         params: [],
       },
       diger_cesitli: {

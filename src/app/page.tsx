@@ -17,6 +17,7 @@ import GuvenlikDetailPanel from '@/components/tabs/GuvenlikDetailPanel';
 import TemizlikDetailPanel from '@/components/tabs/TemizlikDetailPanel';
 import YemekDetailPanel from '@/components/tabs/YemekDetailPanel';
 import ServisDetailPanel from '@/components/tabs/ServisDetailPanel';
+import GenericCategoryPanel from '@/components/tabs/GenericCategoryPanel';
 import SapmaTab from '@/components/tabs/SapmaTab';
 import SapTab from '@/components/tabs/SapTab';
 import DeptTab from '@/components/tabs/DeptTab';
@@ -1295,7 +1296,7 @@ export default function Home() {
                   <tbody>
                     {CATEGORIES.map((cat) => {
                       // guvenlik + temizlik moved to budget_line_items — read annual sum from there
-                      const liCategories = ['guvenlik', 'temizlik', 'yemek', 'servis'];
+                      const liCategories = ['guvenlik', 'temizlik', 'yemek', 'servis', 'arac_kira', 'hgs', 'arac_yakit', 'arac_bakim', 'diger_hizmet', 'icme_suyu', 'diger_cesitli'];
                       const liTotalItem = liCategories.includes(cat.id)
                         ? (lineItemsData as any[]).find(
                             (i: any) => i.category_code === cat.id && i.row_type === 'total'
@@ -1534,6 +1535,29 @@ export default function Home() {
                                         lineItems={lineItemsData.filter((i: any) => i.category_code === 'servis')}
                                       />
                                     )}
+
+                                    {/* ── Generic panels: Araç Kira / HGS / Yakıt / Bakım / Diğer ── */}
+                                    {(['arac_kira', 'hgs', 'arac_yakit', 'arac_bakim', 'diger_hizmet', 'icme_suyu', 'diger_cesitli'] as const).includes(cat.id as never) && (() => {
+                                      const colorMap: Record<string, string> = {
+                                        arac_kira:     '#f97316',
+                                        hgs:           '#06b6d4',
+                                        arac_yakit:    '#84cc16',
+                                        arac_bakim:    '#f43f5e',
+                                        diger_hizmet:  '#a78bfa',
+                                        icme_suyu:     '#22d3ee',
+                                        diger_cesitli: '#fb923c',
+                                      };
+                                      return (
+                                        <GenericCategoryPanel
+                                          categoryCode={cat.id}
+                                          categoryLabel={cat.name}
+                                          dark={dark}
+                                          color={colorMap[cat.id] ?? '#6366f1'}
+                                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                          lineItems={lineItemsData.filter((i: any) => i.category_code === cat.id)}
+                                        />
+                                      );
+                                    })()}
 
                                     {/* ── inner tab bar: Aylık Detay / Varyans Analizi ── */}
                                     <div className="flex gap-0 border-b border-gray-200 dark:border-gray-700 -mx-4 sm:-mx-5 px-4 sm:px-5">
