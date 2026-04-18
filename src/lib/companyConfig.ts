@@ -311,9 +311,10 @@ export const COMPANY_CONFIG: Record<string, SheetConfig> = {
       arac_kira: {
         total: { row: 606, label: "Araç Kira Giderleri", unit: "TL Karşılığı" },
         depts: [
-          { code: "gyg",       row: 607, label: "GYG",       itemRows: [] },
-          { code: "operasyon", row: 632, label: "Operasyon", itemRows: [] },
-          { code: "kamu",      row: 710, label: "Kamu",      itemRows: [] },
+          { code: "gyg",       row: 608, label: "GYG",       itemRows: [] },
+          { code: "operasyon", row: 635, label: "Operasyon", itemRows: [] },
+          { code: "ictas",     row: 689, label: "İçtaş",     itemRows: [] },
+          { code: "kamu",      row: 711, label: "Kamu",      itemRows: [] },
           { code: "kilyos",    row: 728, label: "Kilyos",    itemRows: [] },
         ],
         params: [
