@@ -29,6 +29,52 @@ function fmtPct(n: number): string {
   return n === 0 ? '—' : `${(n * 100).toFixed(2)}%`;
 }
 
+// Static route reference data (birim fiyatlar, Excel rows 247-293)
+// Sorted descending by annualBudget
+const ROUTES_SORTED = [
+  { name: "Tuzla (Aydınlı)",                           monthlyBudget: 6250,  annualBudget: 80401 },
+  { name: "Beylikdüzü",                                monthlyBudget: 6250,  annualBudget: 80401 },
+  { name: "Bostancı",                                  monthlyBudget: 6123,  annualBudget: 78760 },
+  { name: "Pendik",                                    monthlyBudget: 6186,  annualBudget: 79580 },
+  { name: "Avcılar",                                   monthlyBudget: 6180,  annualBudget: 79498 },
+  { name: "Bakırköy-Küçükçekmece",                    monthlyBudget: 6139,  annualBudget: 78970 },
+  { name: "Bağcılar",                                  monthlyBudget: 6158,  annualBudget: 79211 },
+  { name: "Kadıköy",                                   monthlyBudget: 6116,  annualBudget: 78678 },
+  { name: "Kartal",                                    monthlyBudget: 6116,  annualBudget: 78678 },
+  { name: "Üsküdar",                                   monthlyBudget: 6046,  annualBudget: 77775 },
+  { name: "Bayrampaşa",                                monthlyBudget: 6046,  annualBudget: 77775 },
+  { name: "Yeşilpınar-Göktürk",                       monthlyBudget: 6046,  annualBudget: 77775 },
+  { name: "Sultangazi",                                monthlyBudget: 6046,  annualBudget: 77775 },
+  { name: "Ataşehir",                                  monthlyBudget: 6046,  annualBudget: 77775 },
+  { name: "Çıksalın-Nurtepe",                         monthlyBudget: 6046,  annualBudget: 77775 },
+  { name: "Maltepe",                                   monthlyBudget: 6046,  annualBudget: 77775 },
+  { name: "Yenibosna",                                 monthlyBudget: 6046,  annualBudget: 77775 },
+  { name: "Kasımpaşa",                                 monthlyBudget: 6046,  annualBudget: 77775 },
+  { name: "Esenler",                                   monthlyBudget: 6046,  annualBudget: 77775 },
+  { name: "CCN Haftasonu Mesai-Sultangazi",            monthlyBudget: 6046,  annualBudget: 77775 },
+  { name: "CCN Haftasonu Mesai-Sultangazi (Bayrampaşa)", monthlyBudget: 6046, annualBudget: 77775 },
+  { name: "Başakşehir-Bahçeşehir",                    monthlyBudget: 6005,  annualBudget: 77242 },
+  { name: "Kağıthane",                                 monthlyBudget: 5715,  annualBudget: 73509 },
+  { name: "İstinye-Sarıyer",                          monthlyBudget: 5715,  annualBudget: 73509 },
+  { name: "Beşiktaş",                                  monthlyBudget: 5715,  annualBudget: 73509 },
+  { name: "Ayazağa",                                   monthlyBudget: 5652,  annualBudget: 72688 },
+  { name: "Taşdelen",                                  monthlyBudget: 5919,  annualBudget: 76134 },
+  { name: "Arnavutköy",                                monthlyBudget: 5919,  annualBudget: 76134 },
+  { name: "Yenidoğan",                                 monthlyBudget: 5919,  annualBudget: 76134 },
+  { name: "Arnavutköy Haraççı",                       monthlyBudget: 5919,  annualBudget: 76134 },
+  { name: "Çekmeköy (Ümraniye)",                      monthlyBudget: 5919,  annualBudget: 76134 },
+  { name: "Sultanbeyli",                               monthlyBudget: 5919,  annualBudget: 76134 },
+  { name: "Beykoz",                                    monthlyBudget: 5919,  annualBudget: 76134 },
+  { name: "Bahçeköy",                                  monthlyBudget: 5582,  annualBudget: 71786 },
+  { name: "Maden-Rumeli Feneri",                       monthlyBudget: 5525,  annualBudget: 71047 },
+  { name: "Odayeri-Garipçe-1 (Ring)",                  monthlyBudget: 1053,  annualBudget: 13366 },
+  { name: "Odayeri-Garipçe-2 (Ring)",                  monthlyBudget: 1053,  annualBudget: 13366 },
+  { name: "Hüseynili-Garipçe-1 (Ring)",               monthlyBudget: 977,   annualBudget: 12382 },
+  { name: "Hüseynili-Garipçe-2 (Ring)",               monthlyBudget: 977,   annualBudget: 12382 },
+  { name: "Hacıosman Metro-Garipçe-1",                monthlyBudget: 882,   annualBudget: 11151 },
+  { name: "Hacıosman Metro-Garipçe-2",                monthlyBudget: 882,   annualBudget: 11151 },
+].sort((a, b) => b.annualBudget - a.annualBudget);
+
 export default function ServisDetailPanel({ dark, lineItems }: Props) {
   const axisColor     = dark ? '#9ca3af' : '#6b7280';
   const gridColor     = dark ? '#374151' : '#e5e7eb';
@@ -37,7 +83,7 @@ export default function ServisDetailPanel({ dark, lineItems }: Props) {
 
   const [openDepts,  setOpenDepts]  = useState<Set<string>>(new Set());
   const [paramOpen,  setParamOpen]  = useState(false);
-  const [paramTab,   setParamTab]   = useState<'endeks' | 'arac'>('endeks');
+  const [paramTab,   setParamTab]   = useState<'endeks' | 'arac' | 'rotalar'>('endeks');
 
   // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -335,17 +381,21 @@ export default function ServisDetailPanel({ dark, lineItems }: Props) {
 
               {/* Tab switcher */}
               <div className="flex gap-0 border-b border-gray-200 dark:border-gray-700">
-                {(['endeks', 'arac'] as const).map((t) => (
+                {([
+                  { id: 'endeks',  label: 'Birim Fiyat & Endeks' },
+                  { id: 'arac',    label: 'Araç Sayısı'           },
+                  { id: 'rotalar', label: 'Rotalar (41)'          },
+                ] as const).map(({ id, label }) => (
                   <button
-                    key={t}
-                    onClick={() => setParamTab(t)}
+                    key={id}
+                    onClick={() => setParamTab(id)}
                     className={`px-3 py-1.5 text-[10px] font-medium border-b-2 transition-colors ${
-                      paramTab === t
+                      paramTab === id
                         ? 'border-purple-500 text-purple-600 dark:text-purple-400'
                         : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                     }`}
                   >
-                    {t === 'endeks' ? 'Birim Fiyat & Endeks' : 'Araç Sayısı'}
+                    {label}
                   </button>
                 ))}
               </div>
@@ -448,16 +498,49 @@ export default function ServisDetailPanel({ dark, lineItems }: Props) {
                 </div>
               )}
 
-              {/* ── Section 3: Rota Özeti ── */}
-              <div className="px-3 py-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center gap-3">
-                <div>
-                  <p className="text-xs font-semibold text-gray-700 dark:text-gray-200">Rota Özeti</p>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">41 aktif rota · GYG + Operasyon havuzu</p>
-                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 italic">
-                    Rota detayları (birim fiyat × gün sayısı × kişi sayısı) sonraki versiyonda eklenecek.
-                  </p>
+              {/* ── Section 3: Rotalar ── */}
+              {paramTab === 'rotalar' && (
+                <div className="space-y-2">
+                  <div className="px-2 py-1.5 bg-purple-50/60 dark:bg-purple-950/20 rounded border border-purple-200 dark:border-purple-800">
+                    <p className="text-[10px] text-purple-700 dark:text-purple-400">
+                      Bu rakamlar birim fiyatlardır. Toplam maliyet = birim fiyat × gün sayısı × kişi katsayısı
+                    </p>
+                  </div>
+                  <div className="overflow-x-auto" style={{ maxHeight: 400, overflowY: 'auto' }}>
+                    <table className="w-full text-[10px]">
+                      <thead className="sticky top-0 bg-white dark:bg-gray-900 z-10">
+                        <tr className="text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-gray-700">
+                          <th className="text-left pb-1.5 pr-2 font-medium w-6">#</th>
+                          <th className="text-left pb-1.5 pr-2 font-medium">Rota Adı</th>
+                          <th className="text-right pb-1.5 pr-2 font-medium">Birim Fiyat (TL/ay)</th>
+                          <th className="text-right pb-1.5 font-medium">Yıllık Bütçe (TL)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ROUTES_SORTED.map((r, idx) => (
+                          <tr key={r.name} className="border-b border-gray-50 dark:border-gray-800 hover:bg-gray-50/60 dark:hover:bg-gray-800/40">
+                            <td className="py-0.5 pr-2 text-gray-400 dark:text-gray-600">{idx + 1}</td>
+                            <td className="py-0.5 pr-2 text-gray-700 dark:text-gray-300">{r.name}</td>
+                            <td className="py-0.5 pr-2 text-right font-mono text-gray-600 dark:text-gray-400">{r.monthlyBudget.toLocaleString('tr-TR')}</td>
+                            <td className="py-0.5 text-right font-mono text-purple-600 dark:text-purple-400">{r.annualBudget.toLocaleString('tr-TR')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+                        <tr className="font-semibold text-gray-700 dark:text-gray-200">
+                          <td className="pt-1 pr-2 text-gray-400 dark:text-gray-500" colSpan={2}>41 rota</td>
+                          <td className="pt-1 pr-2 text-right font-mono text-gray-600 dark:text-gray-300">
+                            {ROUTES_SORTED.reduce((s, r) => s + r.monthlyBudget, 0).toLocaleString('tr-TR')}
+                          </td>
+                          <td className="pt-1 text-right font-mono text-purple-600 dark:text-purple-400">
+                            {ROUTES_SORTED.reduce((s, r) => s + r.annualBudget, 0).toLocaleString('tr-TR')} TL/yıl
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
                 </div>
-              </div>
+              )}
 
             </div>
           </div>
