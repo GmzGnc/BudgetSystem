@@ -331,40 +331,55 @@ export default function ServisDetailPanel({ dark, lineItems }: Props) {
                       </div>
                     )}
 
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-[10px]">
-                        <thead>
-                          <tr className="text-gray-400 dark:text-gray-500">
-                            <th className="text-left pb-1 pr-2 font-medium w-8">Ay</th>
-                            <th className="text-right pb-1 pr-2 font-medium">Bütçe</th>
-                            <th className="text-right pb-1 font-medium">Fiili</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {MONTH_LABELS.map((lbl, mi) => {
-                            const bv     = mb[mi] ?? 0;
-                            const av     = ma[mi] ?? 0;
-                            const active = mi === activeMonth;
-                            return (
-                              <tr key={lbl} className={active ? 'bg-purple-50/60 dark:bg-purple-950/20 font-semibold' : ''}>
-                                <td className="py-0.5 pr-2 text-gray-500 dark:text-gray-400">{lbl}</td>
-                                <td className="py-0.5 pr-2 text-right font-mono text-gray-600 dark:text-gray-300">{fmtM(bv)}</td>
-                                <td className={`py-0.5 text-right font-mono ${av > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-gray-300 dark:text-gray-600'}`}>
-                                  {av > 0 ? fmtM(av) : '—'}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                        <tfoot className="border-t border-gray-200 dark:border-gray-700">
-                          <tr className="font-semibold text-gray-700 dark:text-gray-200">
-                            <td className="pt-1 pr-2">Toplam</td>
-                            <td className="pt-1 pr-2 text-right font-mono">{fmtM(deptAnnual)}</td>
-                            <td className="pt-1 text-right font-mono text-purple-600 dark:text-purple-400">{fmtM(deptActYTD)}</td>
-                          </tr>
-                        </tfoot>
-                      </table>
+                    {/* dept KPI strip */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {[
+                        { label: 'Bütçe (Yıllık)', value: fmtM(deptAnnual),                                                           cls: 'text-gray-900 dark:text-white',                                                               border: 'border-gray-200 dark:border-gray-700' },
+                        { label: 'Fiili YTD',       value: fmtM(deptActYTD),                                                          cls: 'text-purple-600 dark:text-purple-400',                                                        border: 'border-purple-200 dark:border-purple-800' },
+                        { label: 'Sapma (TL)',       value: `${deptSapma >= 0 ? '+' : ''}${fmtM(deptSapma)}`,                         cls: deptSapma > 0 ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400',      border: deptSapma > 0 ? 'border-red-200 dark:border-red-800' : 'border-green-200 dark:border-green-800' },
+                        { label: 'Sapma (%)',        value: `${deptSapPct >= 0 ? '+' : ''}${deptSapPct.toFixed(1)}%`,                 cls: deptSapPct > 0 ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400',     border: deptSapPct > 0 ? 'border-red-200 dark:border-red-800' : 'border-green-200 dark:border-green-800' },
+                      ].map(({ label, value, cls, border }) => (
+                        <div key={label} className={`bg-white dark:bg-gray-900 rounded border ${border} px-2.5 py-2`}>
+                          <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wide">{label}</p>
+                          <p className={`text-xs font-bold mt-0.5 font-mono ${cls}`}>{value}</p>
+                        </div>
+                      ))}
                     </div>
+
+                    {/* monthly table */}
+                    <table className="w-full text-[10px]" style={{ tableLayout: 'fixed' }}>
+                      <colgroup><col style={{ width: 56 }} /><col /><col /></colgroup>
+                      <thead>
+                        <tr className="text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-gray-700">
+                          <th className="text-left pb-1 font-medium">Ay</th>
+                          <th className="text-right pb-1 font-medium">Bütçe</th>
+                          <th className="text-right pb-1 font-medium">Fiili</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {MONTH_LABELS.map((lbl, mi) => {
+                          const bv     = mb[mi] ?? 0;
+                          const av     = ma[mi] ?? 0;
+                          const active = mi === activeMonth;
+                          return (
+                            <tr key={lbl} className={active ? 'bg-purple-50/60 dark:bg-purple-950/20 font-semibold' : 'border-b border-gray-50 dark:border-gray-800'}>
+                              <td className="py-0.5 text-gray-500 dark:text-gray-400">{lbl}</td>
+                              <td className="py-0.5 text-right font-mono text-gray-600 dark:text-gray-300">{fmtM(bv)}</td>
+                              <td className={`py-0.5 text-right font-mono ${av > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-gray-300 dark:text-gray-600'}`}>
+                                {av > 0 ? fmtM(av) : '—'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot className="border-t border-gray-200 dark:border-gray-700">
+                        <tr className="font-semibold text-gray-700 dark:text-gray-200">
+                          <td className="pt-1">Toplam</td>
+                          <td className="pt-1 text-right font-mono">{fmtM(deptAnnual)}</td>
+                          <td className="pt-1 text-right font-mono text-purple-600 dark:text-purple-400">{fmtM(deptActYTD)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
                   </div>
                 </div>
               </div>

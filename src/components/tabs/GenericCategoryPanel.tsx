@@ -285,7 +285,24 @@ export default function GenericCategoryPanel({
 
                 <div style={{ display: 'grid', gridTemplateRows: isOpen ? '1fr' : '0fr', transition: 'grid-template-rows 0.25s ease' }}>
                   <div className="overflow-hidden">
-                    <div className="border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30 p-3">
+                    <div className="border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30 p-3 space-y-3">
+
+                      {/* dept KPI strip */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {[
+                          { label: 'Bütçe (Yıllık)', value: fmtM(deptAnnual),                                                              cls: 'text-gray-900 dark:text-white',                                                                                    border: 'border-gray-200 dark:border-gray-700' },
+                          { label: 'Fiili YTD',       value: fmtM(deptActYTD),                                                             cls: '',                                                                                                                 border: 'border-gray-200 dark:border-gray-700', style: { color } },
+                          { label: 'Sapma (TL)',       value: `${deptSapma >= 0 ? '+' : ''}${fmtM(deptSapma)}`,                            cls: deptSapma > 0 ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400',                            border: deptSapma > 0 ? 'border-red-200 dark:border-red-800' : 'border-green-200 dark:border-green-800' },
+                          { label: 'Sapma (%)',        value: `${deptSapPct >= 0 ? '+' : ''}${deptSapPct.toFixed(1)}%`,                    cls: deptSapPct > 0 ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400',                           border: deptSapPct > 0 ? 'border-red-200 dark:border-red-800' : 'border-green-200 dark:border-green-800' },
+                        ].map(({ label, value, cls, border, style }) => (
+                          <div key={label} className={`bg-white dark:bg-gray-900 rounded border ${border} px-2.5 py-2`}>
+                            <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wide">{label}</p>
+                            <p className={`text-xs font-bold mt-0.5 font-mono ${cls}`} style={style}>{value}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* monthly table */}
                       <table className="w-full text-[10px]" style={{ tableLayout: 'fixed' }}>
                         <colgroup><col style={{ width: 56 }} /><col /><col /></colgroup>
                         <thead>
