@@ -56,15 +56,31 @@ export default function GuvenlikDetailPanel({ dark, lineItems }: Props) {
   const [paramOpen,     setParamOpen]     = useState(false);
   const [openParamDepts, setOpenParamDepts] = useState<Set<string>>(new Set());
 
+  // ── debug ──────────────────────────────────────────────────────────────────
+  console.log('[panel] received lineItems:', lineItems.length,
+    'categories:', [...new Set(lineItems.map((i: any) => i.category_code))]);  // eslint-disable-line @typescript-eslint/no-explicit-any
+
   // ── derive data from lineItems ──────────────────────────────────────────────
 
   const totalItem = useMemo(
-    () => lineItems.find((i) => i.row_type === 'total') ?? null,
+    () => lineItems.find((i) => i.category_code === 'guvenlik' && i.row_type === 'total') ?? null,
     [lineItems]
   );
 
-  const monthlyBudget: number[] = totalItem?.monthly_budget ?? Array(12).fill(0);
-  const monthlyActual: number[] = totalItem?.monthly_actual ?? Array(12).fill(0);
+  // Supabase JSONB arrives as a parsed array via REST, but guard against string in case
+  function ensureArray(v: number[] | string | undefined | null): number[] {
+    if (!v) return Array(12).fill(0);
+    if (typeof v === 'string') {
+      try { return JSON.parse(v) as number[]; } catch { return Array(12).fill(0); }
+    }
+    return v;
+  }
+
+  console.log('[panel] totalItem:', totalItem);
+  console.log('[panel] monthly_budget raw:', totalItem?.monthly_budget);
+
+  const monthlyBudget: number[] = ensureArray(totalItem?.monthly_budget);
+  const monthlyActual: number[] = ensureArray(totalItem?.monthly_actual);
 
   // activeMonth: last index where actual > 0
   const activeMonth = useMemo(() => {
@@ -83,21 +99,23 @@ export default function GuvenlikDetailPanel({ dark, lineItems }: Props) {
   const activeLabel = MONTH_LABELS[activeMonth] ?? '';
 
   const depts = useMemo(
-    () => lineItems.filter((i) => i.row_type === 'dept'),
+    () => lineItems.filter((i) => i.category_code === 'guvenlik' && i.row_type === 'dept'),
     [lineItems]
   );
 
   const deptItems = (deptCode: string) =>
-    lineItems.filter((i) => i.row_type === 'item' && i.dept_code === deptCode);
+    lineItems.filter((i) => i.category_code === 'guvenlik' && i.row_type === 'item' && i.dept_code === deptCode);
 
   const unitWages = useMemo(
-    () => lineItems.filter((i) => i.row_type === 'param' && i.param_code?.startsWith('ucret_')),
+    () => lineItems.filter((i) => i.category_code === 'guvenlik' && i.row_type === 'param' && i.param_code?.startsWith('ucret_')),
     [lineItems]
   );
 
   const paramByCode = useMemo(() => {
     const m = new Map<string, LineItem>();
-    lineItems.forEach((i) => { if (i.param_code) m.set(i.param_code, i); });
+    lineItems
+      .filter((i) => i.category_code === 'guvenlik' && i.row_type === 'param')
+      .forEach((i) => { if (i.param_code) m.set(i.param_code, i); });
     return m;
   }, [lineItems]);
 

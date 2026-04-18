@@ -230,7 +230,10 @@ export default function Home() {
         const dbYear    = yearsRes.data?.find((y) => y.year === 2025 && y.status === 'active') ?? null;
         if (dbCompany && dbYear) {
           const items = await fetchBudgetLineItems(dbCompany.id, dbYear.id);
-          setLineItemsData(items as Record<string, unknown>[]);
+          const uniqueItems = items.filter((item, idx, arr) =>
+            arr.findIndex((i) => i.id === item.id) === idx
+          );
+          setLineItemsData(uniqueItems);
         }
       } catch (e) {
         console.error('[debug] loadFromDb error:', e);
@@ -581,7 +584,10 @@ export default function Home() {
             if (result.errors.length > 0) console.warn('[DB] budget_line_items errors:', result.errors);
             // Refresh lineItemsData state so UI reflects the newly imported data
             const refreshed = await fetchBudgetLineItems(dbCompany.id, dbYear.id);
-            setLineItemsData(refreshed as Record<string, unknown>[]);
+            const uniqueRefreshed = refreshed.filter((item, idx, arr) =>
+              arr.findIndex((i) => i.id === item.id) === idx
+            );
+            setLineItemsData(uniqueRefreshed);
           }
         } catch (e) {
           console.error('[DB] budget_line_items failed:', e);
@@ -1285,7 +1291,20 @@ export default function Home() {
                   </thead>
                   <tbody>
                     {CATEGORIES.map((cat) => {
-                      const catTotal    = categoryAnnual(staticMonthlyData, cat.id);
+                      // guvenlik was moved to budget_line_items — read annual sum from there
+                      const guvenlikLI = cat.id === 'guvenlik'
+                        ? (lineItemsData as any[]).find(
+                            (i: any) => i.category_code === 'guvenlik' && i.row_type === 'total'
+                          )
+                        : null;
+                      const guvenlikAnnual = guvenlikLI
+                        ? (Array.isArray(guvenlikLI.monthly_budget)
+                            ? (guvenlikLI.monthly_budget as number[]).reduce((a: number, b: number) => a + b, 0)
+                            : 0)
+                        : 0;
+                      const catTotal = cat.id === 'guvenlik'
+                        ? guvenlikAnnual
+                        : categoryAnnual(staticMonthlyData, cat.id);
                       const share       = categoryShare(catTotal, total2025);
                       const isOpen      = selectedCategory === cat.id;
                       const catColor    = CATEGORY_COLORS[cat.id];

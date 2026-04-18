@@ -20,7 +20,19 @@ export async function upsertBudgetLineItems(
   const errors: string[] = [];
   let upserted = 0;
 
-  // Process in batches of 50 to avoid Supabase payload limits
+  // Delete all existing rows for this company+year first to avoid duplicate
+  // issues caused by NULL columns not being equal in PostgreSQL UNIQUE constraints.
+  const { error: delError } = await supabase
+    .from('budget_line_items')
+    .delete()
+    .eq('company_id', companyId)
+    .eq('fiscal_year_id', fiscalYearId);
+
+  if (delError) {
+    return { success: false, upserted: 0, errors: [`Delete failed: ${delError.message}`] };
+  }
+
+  // Insert fresh in batches of 50
   const BATCH_SIZE = 50;
   const records = data.lineItems.map(item => ({
     company_id:     companyId,
@@ -40,10 +52,7 @@ export async function upsertBudgetLineItems(
     const batch = records.slice(i, i + BATCH_SIZE);
     const { error, count } = await supabase
       .from('budget_line_items')
-      .upsert(batch, {
-        onConflict: 'company_id,fiscal_year_id,category_code,dept_code,item_code,param_code',
-        count: 'exact',
-      });
+      .insert(batch, { count: 'exact' });
     if (error) {
       errors.push(`Batch ${i}–${i + BATCH_SIZE}: ${error.message}`);
     } else {
