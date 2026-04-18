@@ -285,13 +285,12 @@ export const COMPANY_CONFIG: Record<string, SheetConfig> = {
           {
             code: "gyg", row: 239, label: "GYG",
             itemRows: [],
-            // ~20 GYG routes are mixed with Operasyon params in rows 247-280
-            // Will be added in a follow-up iteration
+            // GYG = merkez binaları servisi. Rotalar detay blokları içinde (rows 295+)
           },
           {
             code: "operasyon", row: 240, label: "Operasyon",
             itemRows: [],
-            // ~340 routes — too many for static config, handled dynamically
+            // Operasyon = saha servisi. ~41 rota, rows 247-293 (özet), 295-603 (detay)
           },
           {
             code: "kilyos", row: 604, label: "Kilyos",
@@ -299,10 +298,11 @@ export const COMPANY_CONFIG: Record<string, SheetConfig> = {
           },
         ],
         params: [
-          { code: "birim_fiyat_ort",   row: 246, label: "Birim Fiyat Ortalama (TL/ay)", unit: "TL"    },
-          { code: "yakit_barem",        row: 243, label: "Yakıt Artış Baremi",           unit: "TL"    },
-          { code: "asgari_ucret_fark",  row: 245, label: "Asgari Ücret Farkı",           unit: "TL"    },
-          { code: "kira_sayisi",        row: 605, label: "Kiralık Araç Sayısı Toplam",   unit: "Adet"  },
+          { code: "birim_fiyat_ort",   row: 246, label: "Birim Fiyat Ort. (TL/araç/ay)",      unit: "TL"   },
+          { code: "tufe_ufe_oran",      row: 242, label: "TÜFE+ÜFE/2 Uygulanacak Oran (%)",    unit: "TL"   },
+          { code: "yakit_barem",        row: 244, label: "Yakıt Artış Uygulama Oranı (%)",      unit: "TL"   },
+          { code: "asgari_ucret_fark",  row: 245, label: "Asgari Ücret Farkı (TL/araç)",        unit: "TL"   },
+          { code: "arac_sayisi",        row: 605, label: "Kiralık Araç Sayısı Toplam",           unit: "Adet" },
         ],
       },
       arac_kira: {
