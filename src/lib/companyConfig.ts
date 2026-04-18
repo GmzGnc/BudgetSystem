@@ -281,8 +281,29 @@ export const COMPANY_CONFIG: Record<string, SheetConfig> = {
       },
       servis: {
         total: { row: 238, label: "Servis Giderleri", unit: "TL Karşılığı" },
-        depts: [],
-        params: [],
+        depts: [
+          {
+            code: "gyg", row: 239, label: "GYG",
+            itemRows: [],
+            // ~20 GYG routes are mixed with Operasyon params in rows 247-280
+            // Will be added in a follow-up iteration
+          },
+          {
+            code: "operasyon", row: 240, label: "Operasyon",
+            itemRows: [],
+            // ~340 routes — too many for static config, handled dynamically
+          },
+          {
+            code: "kilyos", row: 604, label: "Kilyos",
+            itemRows: [],
+          },
+        ],
+        params: [
+          { code: "birim_fiyat_ort",   row: 246, label: "Birim Fiyat Ortalama (TL/ay)", unit: "TL"    },
+          { code: "yakit_barem",        row: 243, label: "Yakıt Artış Baremi",           unit: "TL"    },
+          { code: "asgari_ucret_fark",  row: 245, label: "Asgari Ücret Farkı",           unit: "TL"    },
+          { code: "kira_sayisi",        row: 605, label: "Kiralık Araç Sayısı Toplam",   unit: "Adet"  },
+        ],
       },
       arac_kira: {
         total: { row: 606, label: "Araç Kira Giderleri", unit: "TL Karşılığı" },
