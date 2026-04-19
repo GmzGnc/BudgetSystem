@@ -353,11 +353,16 @@ export const COMPANY_CONFIG: Record<string, SheetConfig> = {
       arac_bakim: {
         total: { row: 1163, label: "Taşıt Bakım Onarım", unit: "TL Karşılığı" },
         depts: [
-          { code: "gyg",       row: 1165, label: "Genel Müdürlük", itemRows: [] },
-          { code: "kamu",      row: 1191, label: "Kamu",            itemRows: [] },
-          { code: "operasyon", row: 1207, label: "Operasyon",       itemRows: [] },
+          { code: "gyg",       row: 1165, label: "Genel Yönetim", itemRows: [] },
+          { code: "kamu",      row: 1191, label: "Kamu",           itemRows: [] },
+          { code: "operasyon", row: 1207, label: "Operasyon",      itemRows: [] },
         ],
-        params: [],
+        params: [
+          { code: "arac_toplam",           row: 1162, label: "Toplam Araç Sayısı",    unit: "Adet" },
+          { code: "arac_sayisi_gyg",       row: 1164, label: "GYG Araç Sayısı",       unit: "Adet" },
+          { code: "arac_sayisi_kamu",      row: 1190, label: "Kamu Araç Sayısı",      unit: "Adet" },
+          { code: "arac_sayisi_operasyon", row: 1206, label: "Operasyon Araç Sayısı", unit: "Adet" },
+        ],
       },
       diger_hizmet: {
         total: { row: 1273, label: "Diğer Hizmet Giderleri", unit: "TL Karşılığı" },
