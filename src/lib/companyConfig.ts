@@ -327,13 +327,19 @@ export const COMPANY_CONFIG: Record<string, SheetConfig> = {
       hgs: {
         total: { row: 785, label: "HGS Giderleri", unit: "TL Karşılığı" },
         depts: [
-          { code: "gyg",       row: 787, label: "Genel Yönetim", itemRows: [] },
-          { code: "operasyon", row: 815, label: "Operasyon",     itemRows: [] },
-          { code: "ictas",     row: 871, label: "İçtaş",         itemRows: [] },
-          { code: "kamu",      row: 893, label: "Kamu",          itemRows: [] },
-          { code: "kilyos",    row: 910, label: "Kilyos",        itemRows: [] },
+          { code: "gyg",              row: 787, label: "Genel Yönetim",     itemRows: [] },
+          { code: "operasyon",        row: 815, label: "Operasyon",         itemRows: [] },
+          { code: "operasyon_ictas",  row: 871, label: "Operasyon - İçtaş", itemRows: [] },
+          { code: "kamu",             row: 893, label: "Kamu",              itemRows: [] },
+          { code: "kilyos",           row: 910, label: "Kilyos",            itemRows: [] },
         ],
-        params: [],
+        params: [
+          { code: "arac_sayisi_gyg",              row: 786, label: "GYG Araç Sayısı",             unit: "Adet" },
+          { code: "arac_sayisi_operasyon",        row: 814, label: "Operasyon Araç Sayısı",       unit: "Adet" },
+          { code: "arac_sayisi_operasyon_ictas",  row: 870, label: "Operasyon-İçtaş Araç Sayısı", unit: "Adet" },
+          { code: "arac_sayisi_kamu",             row: 892, label: "Kamu Araç Sayısı",            unit: "Adet" },
+          { code: "arac_sayisi_kilyos",           row: 909, label: "Kilyos Araç Sayısı",          unit: "Adet" },
+        ],
       },
       arac_yakit: {
         total: { row: 970, label: "Araç Yakıt Giderleri", unit: "TL Karşılığı" },
