@@ -344,11 +344,17 @@ export const COMPANY_CONFIG: Record<string, SheetConfig> = {
       arac_yakit: {
         total: { row: 970, label: "Araç Yakıt Giderleri", unit: "TL Karşılığı" },
         depts: [
-          { code: "gyg",       row: 973,  label: "GYG",       itemRows: [] },
-          { code: "operasyon", row: 1025, label: "Operasyon", itemRows: [] },
-          { code: "kamu",      row: 1128, label: "Kamu",      itemRows: [] },
+          { code: "gyg",       row: 973,  label: "Genel Yönetim", itemRows: [] },
+          { code: "operasyon", row: 1025, label: "Operasyon",      itemRows: [] },
+          { code: "kamu",      row: 1128, label: "Kamu",           itemRows: [] },
         ],
-        params: [],
+        params: [
+          { code: "arac_toplam",           row: 969,  label: "Toplam Araç Sayısı",    unit: "Adet",  noRound: false },
+          { code: "birim_fiyat",           row: 971,  label: "Birim Fiyat (TL/L)",    unit: "TL/L",  noRound: true  },
+          { code: "arac_sayisi_gyg",       row: 972,  label: "GYG Araç Sayısı",       unit: "Adet",  noRound: false },
+          { code: "arac_sayisi_operasyon", row: 1024, label: "Operasyon Araç Sayısı", unit: "Adet",  noRound: false },
+          { code: "arac_sayisi_kamu",      row: 1127, label: "Kamu Araç Sayısı",      unit: "Adet",  noRound: false },
+        ],
       },
       arac_bakim: {
         total: { row: 1163, label: "Taşıt Bakım Onarım", unit: "TL Karşılığı" },
