@@ -239,12 +239,14 @@ Matematiksel kurallar (ZORUNLU):
 Onemli kurallar:
 - Tum metin Turkce olacak (ama Turkce ozel karakter KULLANMA)
 - Analizde YALNIZCA fiili verisi olan aylari (activeMonths) dikkate al. [FIILI YOK] etiketli aylar analiz kapsamina dahil edilmez.
-- effects: en az 2, en fazla 6 etki. driver alani somut ve olcumlenebilir (yuzde, adet, TL).
+- effects: en az 2, en fazla 4 etki. driver alani somut ve olcumlenebilir (yuzde, adet, TL). Her explanation MAKSIMUM 100 karakter.
 - Sayisal degerler TL cinsinden olacak (yuzde degil).
-- recommendations: en az 4, en fazla 6 oneri.
+- recommendations: MAKSIMUM 2 oneri (daha fazla yazma).
+- monthlyTrend: MAKSIMUM 2 cumle (daha fazla yazma).
 - optimization: subItems verisi varsa her alt kalem icin ayri items satiri olustur. Yoksa mevcut parametrelerden makul tahminle doldur.
 - Yeterli parametre (hem adet hem fiyat) yoksa optimization alani JSON'a dahil edilmez.
-- Turkce ozel karakter yasagi: hic istisna yok (s,g,u,o,c,i kullan).`;
+- Turkce ozel karakter yasagi: hic istisna yok (s,g,u,o,c,i kullan).
+- JSON BOYUTU: Yaniti MUMKUN OLDUGU KADAR KISA tut. Gereksiz aciklama ekleme.`;
 
 
 export async function POST(req: NextRequest) {
@@ -369,7 +371,7 @@ Lütfen bu varyansı analiz et ve JSON formatında yanıt ver.`;
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 3000,
+        max_tokens: 4000,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userMessage }],
       }),
@@ -390,10 +392,7 @@ Lütfen bu varyansı analiz et ve JSON formatında yanıt ver.`;
     try {
       analysisResult = JSON.parse(rawText);
     } catch {
-      return NextResponse.json({
-        error: 'JSON parse failed',
-        rawResponse: rawText.substring(0, 3000),
-      }, { status: 500 });
+      return NextResponse.json({ error: 'Analiz başarısız', details: 'JSON parse hatası' }, { status: 500 });
     }
     return NextResponse.json(analysisResult);
   } catch (err) {
