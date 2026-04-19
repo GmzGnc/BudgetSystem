@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ComposedChart, Bar, Line,
   PieChart, Pie, Cell,
@@ -56,6 +56,8 @@ export default function GenericCategoryPanel({
 
   const [openDepts, setOpenDepts] = useState<Set<string>>(new Set());
   const [paramOpen, setParamOpen] = useState(false);
+  const [mounted,   setMounted]   = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   // ── derive totals ──────────────────────────────────────────────────────────
 
@@ -172,22 +174,24 @@ export default function GenericCategoryPanel({
             Aylık Bütçe vs Fiili — {categoryLabel} 2025
           </p>
           <div style={{ width: '100%', height: 180 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartMonthly} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
-              <XAxis dataKey="label" tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} />
-              <YAxis tickFormatter={fmtM} tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} width={56} />
-              <Tooltip
-                formatter={(v: unknown, name: unknown) => [fmtFull(v as number), name as string]}
-                contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 6, fontSize: 11 }}
-              />
-              <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 10, paddingTop: 6, color: axisColor }} />
-              <Bar dataKey="Fiili" fill={barColor} radius={[3, 3, 0, 0]} maxBarSize={18} />
-              {annualBudget > 0 && (
-                <Line type="monotone" dataKey="Bütçe" stroke={lineColor} strokeWidth={2} strokeDasharray="4 2" dot={{ r: 2.5, fill: lineColor }} activeDot={{ r: 4 }} />
-              )}
-            </ComposedChart>
-          </ResponsiveContainer>
+            {mounted ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={chartMonthly} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                  <XAxis dataKey="label" tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} />
+                  <YAxis tickFormatter={fmtM} tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} width={56} />
+                  <Tooltip
+                    formatter={(v: unknown, name: unknown) => [fmtFull(v as number), name as string]}
+                    contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 6, fontSize: 11 }}
+                  />
+                  <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 10, paddingTop: 6, color: axisColor }} />
+                  <Bar dataKey="Fiili" fill={barColor} radius={[3, 3, 0, 0]} maxBarSize={18} />
+                  {annualBudget > 0 && (
+                    <Line type="monotone" dataKey="Bütçe" stroke={lineColor} strokeWidth={2} strokeDasharray="4 2" dot={{ r: 2.5, fill: lineColor }} activeDot={{ r: 4 }} />
+                  )}
+                </ComposedChart>
+              </ResponsiveContainer>
+            ) : null}
           </div>
         </div>
 
@@ -205,20 +209,24 @@ export default function GenericCategoryPanel({
               {useActForDonut ? 'Departman Dağılımı — Yıllık Fiili' : 'Departman Dağılımı — Yıllık Bütçe'}
             </p>
             <div className="flex items-center gap-2">
-              <ResponsiveContainer width={140} height={140}>
-                <PieChart>
-                  <Pie
-                    data={depts.map((d, i) => ({ name: d.label, value: deptDonutVals[i] }))}
-                    dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={38} outerRadius={58} paddingAngle={2}
-                  >
-                    {depts.map((_d, i) => <Cell key={i} fill={FALLBACK_COLORS[i % FALLBACK_COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip
-                    formatter={(v: unknown, name: unknown) => [fmtM(v as number), name as string]}
-                    contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 6, fontSize: 11 }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              <div style={{ width: 140, height: 140, flexShrink: 0 }}>
+                {mounted ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={depts.map((d, i) => ({ name: d.label, value: deptDonutVals[i] }))}
+                        dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={38} outerRadius={58} paddingAngle={2}
+                      >
+                        {depts.map((_d, i) => <Cell key={i} fill={FALLBACK_COLORS[i % FALLBACK_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip
+                        formatter={(v: unknown, name: unknown) => [fmtM(v as number), name as string]}
+                        contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 6, fontSize: 11 }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : null}
+              </div>
               <div className="flex-1 space-y-1">
                 {depts.map((d, i) => {
                   const share = donutTotal > 0 ? (deptDonutVals[i] / donutTotal) * 100 : 0;
