@@ -1440,8 +1440,8 @@ export default function Home() {
                                       ))}
                                     </div>
 
-                                    {/* grafikler */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {/* grafikler — generic categories use GenericCategoryPanel below; skip old static charts for them */}
+                                    {!(['arac_kira','hgs','arac_yakit','arac_bakim','diger_hizmet','icme_suyu','diger_cesitli'] as const).includes(cat.id as never) && <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
                                       {/* aylık trend */}
                                       <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3 shadow-sm">
@@ -1498,7 +1498,7 @@ export default function Home() {
                                           </p>
                                         </div>
                                       )}
-                                    </div>
+                                    </div>}
 
                                     {/* ── Güvenlik 3-level panel ── */}
                                     {cat.id === 'guvenlik' && (

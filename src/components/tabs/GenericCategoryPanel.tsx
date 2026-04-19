@@ -104,6 +104,16 @@ export default function GenericCategoryPanel({
   const sapmaPct     = ytdBudget > 0 ? (sapmaTL / ytdBudget) * 100 : 0;
   const activeLabel  = MONTH_LABELS[activeMonth] ?? '';
 
+  // ── diagnostic (remove after HGS verified) ─────────────────────────────
+  if (categoryCode === 'hgs') {
+    console.log('[HGS] lineItems total:', lineItems.length,
+      '| depts:', depts.length, '| params:', params.length);
+    console.log('[HGS] totalItem monthly_actual:', monthlyActual);
+    console.log('[HGS] effectiveMonthlyActual:', effectiveMonthlyActual);
+    console.log('[HGS] dept monthly_actuals:',
+      depts.map((d) => ({ label: d.label, actual: d.monthly_actual })));
+  }
+
   const chartMonthly = MONTH_LABELS.map((label, i) => ({
     label,
     ...(annualBudget > 0 ? { 'Bütçe': monthlyBudget[i] ?? 0 } : {}),
