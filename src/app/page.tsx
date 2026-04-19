@@ -80,7 +80,7 @@ const CAT_ROW_RANGES: Record<string, [number, number]> = {
   arac_bakim:    [1163, 1272],
   diger_hizmet:  [1273, 1311],
   icme_suyu:     [1312, 1336],
-  diger_cesitli: [1337, 1376],
+  diger_cesitli: [1337, 1372],
 };
 
 /**

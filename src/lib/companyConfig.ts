@@ -510,7 +510,16 @@ export const COMPANY_CONFIG: Record<string, SheetConfig> = {
       },
       diger_cesitli: {
         total: { row: 1337, label: "Diğer Çeşitli Giderler", unit: "TL Karşılığı" },
-        depts: [],
+        depts: [
+          { code: "temizlik_malzeme", row: 1338, label: "Temizlik Malzemesi Giderleri",         itemRows: [] },
+          { code: "kucuk_demirbas",   row: 1341, label: "Gider Yazılan Küçük Demirbaşlar",      itemRows: [] },
+          { code: "cep_telefonu",     row: 1344, label: "Cep Telefonu Giderleri",               itemRows: [] },
+          { code: "posta_kargo",      row: 1347, label: "Posta ve Kargo Giderleri",             itemRows: [] },
+          { code: "cay_ocagi",        row: 1350, label: "Çay Ocağı Giderleri",                  itemRows: [] },
+          { code: "kirtasiye",        row: 1353, label: "Kırtasiye Giderleri",                  itemRows: [] },
+          { code: "sehirici_ulasim",  row: 1356, label: "Şehiriçi Ulaşım, Otopark",             itemRows: [] },
+          { code: "diger_kamu",       row: 1358, label: "Diğer Çeşitli - Kamu Giderleri",       itemRows: [] },
+        ],
         params: [],
       },
     },
