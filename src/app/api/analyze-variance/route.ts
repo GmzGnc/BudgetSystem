@@ -41,11 +41,11 @@ export interface VarianceAnalysisRequest {
     variancePct: number;
   }>;
   departmentBreakdown?: Array<{
-    department: string;
+    name: string;
     budget: number;
     actual: number;
     variance: number;
-    variancePct: number;
+    variancePercent: number;
   }>;
   analysisScope?: 'category' | 'department' | 'monthly' | 'full';
 }
@@ -317,7 +317,7 @@ export async function POST(req: NextRequest) {
 
   const deptBreakdownLines = departmentBreakdown && departmentBreakdown.length > 0
     ? '\nDEPARTMAN BREAKDOWN:\n' + departmentBreakdown
-        .map((d) => `  ${d.department}: Bütçe ${d.budget.toLocaleString('tr-TR')} ₺, Fiili ${d.actual.toLocaleString('tr-TR')} ₺, Varyans ${d.variance >= 0 ? '+' : ''}${d.variance.toLocaleString('tr-TR')} ₺`)
+        .map((d) => `  ${d.name}: Bütçe ${d.budget.toLocaleString('tr-TR')} ₺, Fiili ${d.actual.toLocaleString('tr-TR')} ₺, Varyans ${d.variance >= 0 ? '+' : ''}${d.variance.toLocaleString('tr-TR')} ₺`)
         .join('\n')
     : '';
 
@@ -369,7 +369,7 @@ Lütfen bu varyansı analiz et ve JSON formatında yanıt ver.`;
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 8000,
+        max_tokens: 3000,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userMessage }],
       }),
