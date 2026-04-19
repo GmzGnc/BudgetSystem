@@ -31,10 +31,12 @@ const DEPT_COLORS  = ['#6366f1', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
 // Headcount group hierarchy — defines which param_code is the group total
 // and which param_code prefix identifies its children
 const HC_GROUPS = [
-  { id: 'toplam',    label: 'Toplam',        parentCode: 'kisi_toplam',    childPrefix: null        as string | null },
-  { id: 'gyg',       label: 'GYG',           parentCode: 'kisi_gyg',       childPrefix: 'kisi_gyg_' as string | null },
-  { id: 'oht',       label: 'OHT',           parentCode: 'kisi_oht',       childPrefix: 'kisi_oht_' as string | null },
-  { id: 'operasyon', label: 'Operasyon',     parentCode: 'kisi_operasyon', childPrefix: 'kisi_ops_' as string | null },
+  { id: 'toplam',    label: 'Toplam',          parentCode: 'kisi_toplam',    childPrefix: null            as string | null },
+  { id: 'gyg',       label: 'GYG',             parentCode: 'kisi_gyg',       childPrefix: 'kisi_gyg_'     as string | null },
+  { id: 'oht',       label: 'OHT',             parentCode: 'kisi_oht',       childPrefix: 'kisi_oht_'     as string | null },
+  { id: 'operasyon', label: 'Operasyon',       parentCode: 'kisi_operasyon', childPrefix: 'kisi_ops_'     as string | null },
+  { id: 'ictas',     label: 'İçtaş Güvenlik', parentCode: 'kisi_ictas',     childPrefix: 'kisi_ictas_'   as string | null },
+  { id: 'kilyos',    label: 'Kilyos',          parentCode: 'kisi_kilyos',    childPrefix: 'kisi_kilyos_'  as string | null },
 ];
 
 function fmtM(n: number): string {
@@ -426,42 +428,65 @@ export default function GuvenlikDetailPanel({ dark, lineItems }: Props) {
           <div className="overflow-hidden">
             <div className="border-t border-gray-100 dark:border-gray-700 p-3 space-y-3">
 
-              {/* Birim Ücret tablosu */}
+              {/* ── Birim Ücret — 12 ay kolonlu ────────────────────────────── */}
               <div>
                 <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
-                  Birim Ücret Parametreleri (Aylık)
+                  Birim Ücret Parametreleri
                 </p>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                <div className="overflow-x-auto rounded border border-gray-200 dark:border-gray-700">
+                  <table className="min-w-[1000px] text-xs table-fixed">
+                    <colgroup>
+                      <col style={{ width: 180 }} />
+                      {MONTH_LABELS.map((m) => <col key={m} style={{ width: 52 }} />)}
+                      <col style={{ width: 72 }} />
+                    </colgroup>
                     <thead className="bg-gray-50 dark:bg-gray-800">
                       <tr>
-                        {['Pozisyon', 'Bütçe (Aylık)', 'Fiili (Aylık)', 'Fark %'].map((h, i) => (
-                          <th key={h} className={`px-3 py-1.5 font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide ${i === 0 ? 'text-left' : 'text-right'}`}>
-                            {h}
+                        <th className="px-2 py-1.5 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Pozisyon</th>
+                        {MONTH_LABELS.map((m) => (
+                          <th key={m} className="px-1 py-1.5 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">
+                            {m}
                           </th>
                         ))}
+                        <th className="px-2 py-1.5 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Yıllık</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+                    <tbody>
                       {unitWages.map((w) => {
-                        const budMonthly = w.monthly_budget[activeMonth] ?? 0;
-                        const actMonthly = w.monthly_actual[activeMonth] ?? 0;
-                        const diff = budMonthly > 0 ? ((actMonthly - budMonthly) / budMonthly) * 100 : 0;
+                        const bud        = ensureArray(w.monthly_budget);
+                        const act        = ensureArray(w.monthly_actual);
+                        const budAnnual  = bud.reduce((a, b) => a + b, 0);
+                        const actAnnual  = act.reduce((a, b) => a + b, 0);
+                        const hasActual  = act.some((v) => v !== 0);
                         return (
-                          <tr key={w.param_code} className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
-                            <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300">{w.label}</td>
-                            <td className="px-3 py-1.5 text-right font-mono text-gray-600 dark:text-gray-400">
-                              {budMonthly > 0 ? fmtM(budMonthly) : '—'}
-                            </td>
-                            <td className="px-3 py-1.5 text-right font-mono text-amber-600 dark:text-amber-400">
-                              {actMonthly > 0 ? fmtM(actMonthly) : '—'}
-                            </td>
-                            <td className={`px-3 py-1.5 text-right font-semibold ${
-                              diff > 0 ? 'text-red-500 dark:text-red-400' : diff < 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'
-                            }`}>
-                              {budMonthly > 0 && actMonthly > 0 ? `${diff >= 0 ? '+' : ''}${diff.toFixed(1)}%` : '—'}
-                            </td>
-                          </tr>
+                          <React.Fragment key={w.param_code}>
+                            {/* bütçe row */}
+                            <tr className="border-t border-gray-100 dark:border-gray-800 bg-gray-50/30 dark:bg-gray-800/20 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
+                              <td className="px-2 py-1 text-gray-700 dark:text-gray-300 font-medium truncate">{w.label}</td>
+                              {bud.map((v, mi) => (
+                                <td key={mi} className="px-1 py-1 text-right font-mono text-gray-600 dark:text-gray-400">
+                                  {v === 0 ? '—' : fmtM(v)}
+                                </td>
+                              ))}
+                              <td className="px-2 py-1 text-right font-mono font-semibold text-gray-700 dark:text-gray-300">
+                                {budAnnual === 0 ? '—' : fmtM(budAnnual)}
+                              </td>
+                            </tr>
+                            {/* fiili row — amber, only if any actual */}
+                            {hasActual && (
+                              <tr className="bg-amber-50/20 dark:bg-amber-900/10 hover:bg-amber-50/40 dark:hover:bg-amber-900/20 transition-colors">
+                                <td className="px-2 py-1 pl-5 text-amber-600 dark:text-amber-400 italic text-[10px]">fiili</td>
+                                {act.map((v, mi) => (
+                                  <td key={mi} className="px-1 py-1 text-right font-mono text-amber-600 dark:text-amber-400">
+                                    {v === 0 ? '—' : fmtM(v)}
+                                  </td>
+                                ))}
+                                <td className="px-2 py-1 text-right font-mono font-semibold text-amber-600 dark:text-amber-400">
+                                  {actAnnual === 0 ? '—' : fmtM(actAnnual)}
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
                         );
                       })}
                     </tbody>
@@ -469,102 +494,143 @@ export default function GuvenlikDetailPanel({ dark, lineItems }: Props) {
                 </div>
               </div>
 
-              {/* Kişi Sayısı — headcount groups */}
+              {/* ── Kişi Sayısı — 12 ay kolonlu, accordion ─────────────────── */}
               <div>
                 <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
                   Kişi Sayısı Parametreleri
                 </p>
-                <div className="rounded border border-gray-200 dark:border-gray-700 overflow-hidden">
-                  {HC_GROUPS.map((grp) => {
-                    const parentItem   = grp.parentCode ? paramByCode.get(grp.parentCode) : null;
-                    const budgetVal    = parentItem ? (parentItem.monthly_budget[activeMonth] ?? 0) : 0;
-                    const actualVal    = parentItem ? (parentItem.monthly_actual[activeMonth] ?? 0) : 0;
-                    const diff         = actualVal - budgetVal;
-                    const childItems   = grp.childPrefix
-                      ? Array.from(paramByCode.values()).filter(
-                          (i) => i.param_code?.startsWith(grp.childPrefix!) && i.param_code !== grp.parentCode
-                        )
-                      : [];
-                    const hasChildren  = childItems.length > 0;
-                    const isGrpOpen    = openParamDepts.has(grp.id);
+                <div className="overflow-x-auto rounded border border-gray-200 dark:border-gray-700">
+                  <table className="min-w-[1000px] text-xs table-fixed">
+                    <colgroup>
+                      <col style={{ width: 180 }} />
+                      {MONTH_LABELS.map((m) => <col key={m} style={{ width: 52 }} />)}
+                      <col style={{ width: 72 }} />
+                    </colgroup>
+                    <thead className="bg-gray-50 dark:bg-gray-800">
+                      <tr>
+                        <th className="px-2 py-1.5 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Kalem</th>
+                        {MONTH_LABELS.map((m) => (
+                          <th key={m} className="px-1 py-1.5 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">
+                            {m}
+                          </th>
+                        ))}
+                        <th className="px-2 py-1.5 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Yıllık</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {HC_GROUPS.map((grp) => {
+                        const parentItem  = grp.parentCode ? paramByCode.get(grp.parentCode) : null;
+                        const bud         = ensureArray(parentItem?.monthly_budget);
+                        const act         = ensureArray(parentItem?.monthly_actual);
+                        const budAnnual   = bud.reduce((a, b) => a + b, 0);
+                        const actAnnual   = act.reduce((a, b) => a + b, 0);
+                        const hasActual   = act.some((v) => v !== 0);
+                        const childItems  = grp.childPrefix
+                          ? Array.from(paramByCode.values()).filter(
+                              (i) => i.param_code?.startsWith(grp.childPrefix!) && i.param_code !== grp.parentCode
+                            )
+                          : [];
+                        const hasChildren = childItems.length > 0;
+                        const isOpen      = openParamDepts.has(grp.id);
+                        const isToplam    = grp.id === 'toplam';
+                        const fmtK        = (v: number) => v === 0 ? '—' : v.toLocaleString('tr-TR');
 
-                    return (
-                      <div key={grp.id} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
-                        <div
-                          role={hasChildren ? 'button' : undefined}
-                          onClick={hasChildren ? () => setOpenParamDepts((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(grp.id)) next.delete(grp.id); else next.add(grp.id);
-                            return next;
-                          }) : undefined}
-                          className={`flex items-center gap-2 px-3 py-2 text-xs ${
-                            hasChildren ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/60' : ''
-                          } ${grp.id === 'toplam' ? 'bg-gray-50 dark:bg-gray-800/40 font-semibold' : ''} transition-colors`}
-                        >
-                          {hasChildren ? (
-                            <span
-                              className="text-gray-400 dark:text-gray-500 text-[9px] flex-shrink-0 transition-transform duration-200"
-                              style={{ display: 'inline-block', transform: isGrpOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
+                        const toggleGrp = hasChildren
+                          ? () => setOpenParamDepts((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(grp.id)) next.delete(grp.id); else next.add(grp.id);
+                              return next;
+                            })
+                          : undefined;
+
+                        return (
+                          <React.Fragment key={grp.id}>
+                            {/* dept başlık / bütçe satırı — accordion header */}
+                            <tr
+                              className={`border-t-2 border-gray-200 dark:border-gray-700 transition-colors ${
+                                isToplam
+                                  ? 'bg-gray-100 dark:bg-gray-800/80'
+                                  : 'bg-gray-50/70 dark:bg-gray-800/40'
+                              } ${hasChildren ? 'cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-800/70' : 'hover:bg-gray-50 dark:hover:bg-gray-800/30'}`}
+                              onClick={toggleGrp}
                             >
-                              ▶
-                            </span>
-                          ) : (
-                            <span className="w-[9px] flex-shrink-0" />
-                          )}
-                          <span className="flex-1 text-gray-700 dark:text-gray-300">{grp.label}</span>
-                          <span className="w-10 text-right font-mono text-gray-600 dark:text-gray-400">{budgetVal}</span>
-                          <span className="w-10 text-right font-mono text-amber-600 dark:text-amber-400">{actualVal}</span>
-                          <span className={`w-8 text-right font-semibold ${
-                            diff > 0 ? 'text-red-500 dark:text-red-400' : diff < 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'
-                          }`}>
-                            {diff !== 0 ? `${diff > 0 ? '+' : ''}${diff}` : '='}
-                          </span>
-                        </div>
-
-                        {hasChildren && (
-                          <div
-                            style={{
-                              display: 'grid',
-                              gridTemplateRows: isGrpOpen ? '1fr' : '0fr',
-                              transition: 'grid-template-rows 0.2s ease',
-                            }}
-                          >
-                            <div className="overflow-hidden">
-                              <table className="w-full text-xs border-t border-gray-100 dark:border-gray-800">
-                                <thead className="bg-gray-50/80 dark:bg-gray-800/50">
-                                  <tr>
-                                    <th className="px-3 pl-8 py-1 text-left font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Kalem</th>
-                                    <th className="px-3 py-1 text-right font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide w-12">Büt.</th>
-                                    <th className="px-3 py-1 text-right font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide w-12">Fili</th>
-                                    <th className="px-3 py-1 text-right font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide w-10">Fark</th>
+                              <td className={`px-2 py-1.5 ${isToplam ? 'font-bold text-gray-800 dark:text-gray-100' : 'font-semibold text-gray-700 dark:text-gray-200'}`}>
+                                <div className="flex items-center justify-between gap-1">
+                                  <span>{grp.label}</span>
+                                  {hasChildren && (
+                                    <span className="text-gray-400 dark:text-gray-500 text-[10px] flex-shrink-0">
+                                      {isOpen ? '▼' : '▶'}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              {bud.map((v, mi) => (
+                                <td key={mi} className={`px-1 py-1.5 text-right font-mono ${isToplam ? 'font-semibold text-gray-700 dark:text-gray-200' : 'text-gray-600 dark:text-gray-400'}`}>
+                                  {fmtK(v)}
+                                </td>
+                              ))}
+                              <td className={`px-2 py-1.5 text-right font-mono font-semibold ${isToplam ? 'text-gray-800 dark:text-gray-100' : 'text-gray-700 dark:text-gray-300'}`}>
+                                {fmtK(budAnnual)}
+                              </td>
+                            </tr>
+                            {/* fiili satırı — amber */}
+                            {hasActual && (
+                              <tr className="bg-amber-50/20 dark:bg-amber-900/10 hover:bg-amber-50/40 dark:hover:bg-amber-900/20 transition-colors">
+                                <td className="px-2 py-1 pl-5 text-amber-600 dark:text-amber-400 italic text-[10px]">fiili</td>
+                                {act.map((v, mi) => (
+                                  <td key={mi} className="px-1 py-1 text-right font-mono text-amber-600 dark:text-amber-400">
+                                    {v === 0 ? '—' : v.toLocaleString('tr-TR')}
+                                  </td>
+                                ))}
+                                <td className="px-2 py-1 text-right font-mono font-semibold text-amber-600 dark:text-amber-400">
+                                  {actAnnual === 0 ? '—' : actAnnual.toLocaleString('tr-TR')}
+                                </td>
+                              </tr>
+                            )}
+                            {/* child param satırları — accordion açıkken göster */}
+                            {hasChildren && isOpen && childItems.map((ci) => {
+                              const ciBud       = ensureArray(ci.monthly_budget);
+                              const ciAct       = ensureArray(ci.monthly_actual);
+                              const ciBudAnnual = ciBud.reduce((a, b) => a + b, 0);
+                              const ciActAnnual = ciAct.reduce((a, b) => a + b, 0);
+                              const ciHasActual = ciAct.some((v) => v !== 0);
+                              return (
+                                <React.Fragment key={ci.param_code}>
+                                  <tr className="bg-white dark:bg-gray-900/60 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors">
+                                    <td className="px-2 py-1 pl-5 text-gray-600 dark:text-gray-400 text-[11px] truncate">
+                                      <span className="text-gray-300 dark:text-gray-600 mr-1 select-none">└</span>
+                                      {ci.label}
+                                    </td>
+                                    {ciBud.map((v, mi) => (
+                                      <td key={mi} className="px-1 py-1 text-right font-mono text-gray-500 dark:text-gray-500 text-[11px]">
+                                        {v === 0 ? '—' : v.toLocaleString('tr-TR')}
+                                      </td>
+                                    ))}
+                                    <td className="px-2 py-1 text-right font-mono text-gray-600 dark:text-gray-400 text-[11px]">
+                                      {ciBudAnnual === 0 ? '—' : ciBudAnnual.toLocaleString('tr-TR')}
+                                    </td>
                                   </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                                  {childItems.map((ci) => {
-                                    const ciBud  = ci.monthly_budget[activeMonth] ?? 0;
-                                    const ciAct  = ci.monthly_actual[activeMonth] ?? 0;
-                                    const ciDiff = ciAct - ciBud;
-                                    return (
-                                      <tr key={ci.param_code} className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
-                                        <td className="px-3 pl-8 py-1 text-gray-600 dark:text-gray-400">{ci.label}</td>
-                                        <td className="px-3 py-1 text-right font-mono text-gray-500 dark:text-gray-500">{ciBud}</td>
-                                        <td className="px-3 py-1 text-right font-mono text-amber-500 dark:text-amber-500">{ciAct}</td>
-                                        <td className={`px-3 py-1 text-right font-semibold ${
-                                          ciDiff > 0 ? 'text-red-400 dark:text-red-500' : ciDiff < 0 ? 'text-green-500 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'
-                                        }`}>
-                                          {ciDiff !== 0 ? `${ciDiff > 0 ? '+' : ''}${ciDiff}` : '='}
+                                  {ciHasActual && (
+                                    <tr className="bg-amber-50/10 dark:bg-amber-900/5">
+                                      <td className="px-2 py-1 pl-9 text-amber-500 dark:text-amber-500 italic text-[10px]">fiili</td>
+                                      {ciAct.map((v, mi) => (
+                                        <td key={mi} className="px-1 py-1 text-right font-mono text-amber-500 dark:text-amber-500 text-[11px]">
+                                          {v === 0 ? '—' : v.toLocaleString('tr-TR')}
                                         </td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                                      ))}
+                                      <td className="px-2 py-1 text-right font-mono text-amber-500 dark:text-amber-500 text-[11px]">
+                                        {ciActAnnual === 0 ? '—' : ciActAnnual.toLocaleString('tr-TR')}
+                                      </td>
+                                    </tr>
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
