@@ -67,20 +67,6 @@ export default function GenericCategoryPanel({
   const monthlyBudget = ensureArray(totalItem?.monthly_budget);
   const monthlyActual = ensureArray(totalItem?.monthly_actual);
 
-  const activeMonth = useMemo(() => {
-    for (let i = 11; i >= 0; i--) {
-      if (monthlyActual[i] > 0) return i;
-    }
-    return 0;
-  }, [monthlyActual]);
-
-  const annualBudget = monthlyBudget.reduce((a, b) => a + b, 0);
-  const ytdBudget    = monthlyBudget.slice(0, activeMonth + 1).reduce((a, b) => a + b, 0);
-  const ytdActual    = monthlyActual.slice(0, activeMonth + 1).reduce((a, b) => a + b, 0);
-  const sapmaTL      = ytdActual - ytdBudget;
-  const sapmaPct     = ytdBudget > 0 ? (sapmaTL / ytdBudget) * 100 : 0;
-  const activeLabel  = MONTH_LABELS[activeMonth] ?? '';
-
   const depts = useMemo(
     () => lineItems.filter((i) => i.category_code === categoryCode && i.row_type === 'dept'),
     [lineItems, categoryCode]
@@ -91,10 +77,37 @@ export default function GenericCategoryPanel({
     [lineItems, categoryCode]
   );
 
+  // If total row actuals are all zero, sum dept actuals as fallback (e.g. HGS pass-through)
+  const effectiveMonthlyActual = useMemo(() => {
+    if (monthlyActual.some((v) => v > 0)) return monthlyActual;
+    if (depts.length === 0) return monthlyActual;
+    return depts.reduce(
+      (acc, d) => {
+        const da = ensureArray(d.monthly_actual);
+        return acc.map((v, i) => v + (da[i] ?? 0));
+      },
+      Array(12).fill(0) as number[],
+    );
+  }, [monthlyActual, depts]);
+
+  const activeMonth = useMemo(() => {
+    for (let i = 11; i >= 0; i--) {
+      if (effectiveMonthlyActual[i] > 0) return i;
+    }
+    return 0;
+  }, [effectiveMonthlyActual]);
+
+  const annualBudget = monthlyBudget.reduce((a, b) => a + b, 0);
+  const ytdBudget    = monthlyBudget.slice(0, activeMonth + 1).reduce((a, b) => a + b, 0);
+  const ytdActual    = effectiveMonthlyActual.slice(0, activeMonth + 1).reduce((a, b) => a + b, 0);
+  const sapmaTL      = ytdActual - ytdBudget;
+  const sapmaPct     = ytdBudget > 0 ? (sapmaTL / ytdBudget) * 100 : 0;
+  const activeLabel  = MONTH_LABELS[activeMonth] ?? '';
+
   const chartMonthly = MONTH_LABELS.map((label, i) => ({
     label,
-    'Bütçe': monthlyBudget[i] ?? 0,
-    'Fiili': (monthlyActual[i] ?? 0) > 0 ? (monthlyActual[i] ?? 0) : undefined,
+    ...(annualBudget > 0 ? { 'Bütçe': monthlyBudget[i] ?? 0 } : {}),
+    'Fiili': (effectiveMonthlyActual[i] ?? 0) > 0 ? (effectiveMonthlyActual[i] ?? 0) : undefined,
   }));
 
   function toggleDept(id: string) {
@@ -169,22 +182,31 @@ export default function GenericCategoryPanel({
               />
               <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 10, paddingTop: 6, color: axisColor }} />
               <Bar dataKey="Fiili" fill={barColor} radius={[3, 3, 0, 0]} maxBarSize={18} />
-              <Line type="monotone" dataKey="Bütçe" stroke={lineColor} strokeWidth={2} strokeDasharray="4 2" dot={{ r: 2.5, fill: lineColor }} activeDot={{ r: 4 }} />
+              {annualBudget > 0 && (
+                <Line type="monotone" dataKey="Bütçe" stroke={lineColor} strokeWidth={2} strokeDasharray="4 2" dot={{ r: 2.5, fill: lineColor }} activeDot={{ r: 4 }} />
+              )}
             </ComposedChart>
           </ResponsiveContainer>
         </div>
 
         {/* Dept donut — only if depts exist */}
-        {depts.length > 0 ? (
+        {depts.length > 0 ? (() => {
+          const deptBudSums   = depts.map((d) => ensureArray(d.monthly_budget).reduce((a, b) => a + b, 0));
+          const useActForDonut = deptBudSums.every((v) => v === 0);
+          const deptDonutVals  = useActForDonut
+            ? depts.map((d) => ensureArray(d.monthly_actual).reduce((a, b) => a + b, 0))
+            : deptBudSums;
+          const donutTotal     = deptDonutVals.reduce((a, b) => a + b, 0);
+          return (
           <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3 shadow-sm">
             <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">
-              Departman Dağılımı — Yıllık Bütçe
+              {useActForDonut ? 'Departman Dağılımı — Yıllık Fiili' : 'Departman Dağılımı — Yıllık Bütçe'}
             </p>
             <div className="flex items-center gap-2">
               <ResponsiveContainer width={140} height={140}>
                 <PieChart>
                   <Pie
-                    data={depts.map((d) => ({ name: d.label, value: ensureArray(d.monthly_budget).reduce((a, b) => a + b, 0) }))}
+                    data={depts.map((d, i) => ({ name: d.label, value: deptDonutVals[i] }))}
                     dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={38} outerRadius={58} paddingAngle={2}
                   >
                     {depts.map((_d, i) => <Cell key={i} fill={FALLBACK_COLORS[i % FALLBACK_COLORS.length]} />)}
@@ -197,8 +219,7 @@ export default function GenericCategoryPanel({
               </ResponsiveContainer>
               <div className="flex-1 space-y-1">
                 {depts.map((d, i) => {
-                  const da    = ensureArray(d.monthly_budget).reduce((a, b) => a + b, 0);
-                  const share = annualBudget > 0 ? (da / annualBudget) * 100 : 0;
+                  const share = donutTotal > 0 ? (deptDonutVals[i] / donutTotal) * 100 : 0;
                   return (
                     <div key={d.dept_code} className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: FALLBACK_COLORS[i % FALLBACK_COLORS.length] }} />
@@ -210,7 +231,8 @@ export default function GenericCategoryPanel({
               </div>
             </div>
           </div>
-        ) : (
+          );
+        })() : (
           /* Fallback: monthly detail table when no depts */
           <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3 shadow-sm">
             <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-2">Aylık Detay</p>
