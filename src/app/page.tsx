@@ -2069,20 +2069,20 @@ export default function Home() {
                                                       variancePct: bv > 0 ? (vv / bv) * 100 : 0,
                                                     };
                                                   });
-                                                  // Departman bazlı breakdown (ICA için ICA_DEPT'ten al)
-                                                  const deptRow = ICA_DEPT.find((r) => r.categoryId === cat.id);
-                                                  const departmentBreakdown = deptRow
-                                                    ? DEPARTMENTS.map((d) => {
-                                                        const bv = deptRow[d] ?? 0;
-                                                        return {
-                                                          department: d,
-                                                          budget: bv,
-                                                          actual: bv,
-                                                          variance: 0,
-                                                          variancePct: 0,
-                                                        };
-                                                      }).filter((d) => d.budget > 0)
-                                                    : [];
+                                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                                  const departmentBreakdown = (varDepts as any[]).map((d) => {
+                                                    const dBudget = ensureArr(d.monthly_budget);
+                                                    const dActual = ensureArr(d.monthly_actual);
+                                                    const activeBudget = activeMonthIdxs.reduce((s: number, i: number) => s + (dBudget[i] ?? 0), 0);
+                                                    const activeActual = activeMonthIdxs.reduce((s: number, i: number) => s + (dActual[i] ?? 0), 0);
+                                                    return {
+                                                      name: d.label,
+                                                      budget: activeBudget,
+                                                      actual: activeActual,
+                                                      variance: activeActual - activeBudget,
+                                                      variancePercent: activeBudget > 0 ? ((activeActual - activeBudget) / activeBudget) * 100 : 0,
+                                                    };
+                                                  });
                                                   // Aktif ay bazlı bütçe/fiili hesabı
                                                   const activeMonthIdxs = MONTH_LABELS
                                                     .map((_, mi) => mi)
@@ -2202,10 +2202,20 @@ export default function Home() {
                                                       return { month: m.month, budget: m.budget, actual: m.actual, variance: vv, variancePct: m.budget > 0 ? (vv / m.budget) * 100 : 0 };
                                                     });
 
-                                                    const deptRow = ICA_DEPT.find((r) => r.categoryId === cat.id);
-                                                    const departmentBreakdown = deptRow
-                                                      ? DEPARTMENTS.map((d) => ({ department: d, budget: deptRow[d] ?? 0, actual: deptRow[d] ?? 0, variance: 0, variancePct: 0 })).filter((d) => d.budget > 0)
-                                                      : [];
+                                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                                    const departmentBreakdown = (varDepts as any[]).map((d) => {
+                                                      const dBudget = ensureArr(d.monthly_budget);
+                                                      const dActual = ensureArr(d.monthly_actual);
+                                                      const activeBudget = activeIdxs.reduce((s: number, i: number) => s + (dBudget[i] ?? 0), 0);
+                                                      const activeActual = activeIdxs.reduce((s: number, i: number) => s + (dActual[i] ?? 0), 0);
+                                                      return {
+                                                        name: d.label,
+                                                        budget: activeBudget,
+                                                        actual: activeActual,
+                                                        variance: activeActual - activeBudget,
+                                                        variancePercent: activeBudget > 0 ? ((activeActual - activeBudget) / activeBudget) * 100 : 0,
+                                                      };
+                                                    });
 
                                                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                                     const allParams = ((varParams as any[])
