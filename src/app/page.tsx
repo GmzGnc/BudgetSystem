@@ -1883,102 +1883,66 @@ export default function Home() {
 
                                     {/* ── TAB: Varyans Analizi ── */}
                                     {ddActiveTab === 'variance' && (() => {
-                                      if (!importedModelData) {
-                                        return (
-                                          <div className="bg-white dark:bg-gray-900 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 p-8 text-center">
-                                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Varyans analizi için Excel dosyasını yükleyin</p>
-                                            <p className="text-xs text-gray-400 dark:text-gray-500">Model Gider sheet seçin — fiili sütunlar (AC–AN) dolu olmalı</p>
-                                          </div>
-                                        );
-                                      }
-
-                                      const range = CAT_ROW_RANGES[cat.id];
-                                      const catRows = importedModelData
-                                        ? (range ? importedModelData.filter((r) => r.rowNum >= range[0] && r.rowNum <= range[1]) : importedModelData)
-                                        : (dbModelRows?.get(cat.id) ?? []);
-
-                                      if (catRows.length === 0) {
+                                      const ensureArr = (v: unknown): number[] => {
+                                        if (!v) return Array(12).fill(0);
+                                        if (typeof v === 'string') { try { return JSON.parse(v); } catch { return Array(12).fill(0); } }
+                                        return Array.isArray(v) ? v as number[] : Array(12).fill(0);
+                                      };
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      const varLineItems = (lineItemsData as any[]).filter((i: any) => i.category_code === cat.id);
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      const varTotal = varLineItems.find((i: any) => i.row_type === 'total');
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      const varDepts  = varLineItems.filter((i: any) => i.row_type === 'dept');
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      const varParams = varLineItems.filter((i: any) => i.row_type === 'param');
+                                      if (!varTotal) {
                                         return (
                                           <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-6 text-center">
-                                            <p className="text-sm text-gray-400">Bu kategori için satır aralığında veri bulunamadı</p>
+                                            <p className="text-sm text-gray-400">Bu kategori için veri bulunamadı</p>
                                           </div>
                                         );
                                       }
 
-                                      // ── row classifiers (L sütununa göre) ──
-                                      const isTLRow  = (r: ModelRow) => /^TL/i.test(r.unitType);
-                                      const isToplam = (r: ModelRow) => /TOPLAM/i.test(r.paramName);
+                                      const totalBudgetArr = ensureArr(varTotal.monthly_budget);
+                                      const totalActualArr = ensureArr(varTotal.monthly_actual);
 
-                                      // ── değer formatlayıcılar ──
-                                      const fmtVal = (n: number, r: ModelRow): string => {
-                                        if (n === 0) return '—';
-                                        if (isTLRow(r)) {
-                                          if (n >= 1_000_000) return `₺${(n / 1_000_000).toFixed(1)}M`;
-                                          if (n >= 1_000)     return `₺${(n / 1_000).toFixed(0)}B`;
-                                          return `₺${n.toFixed(0)}`;
-                                        }
-                                        // miktar/oran — ₺ yok
-                                        if (n >= 1_000) return n.toLocaleString('tr-TR', { maximumFractionDigits: 0 });
-                                        return n % 1 === 0 ? n.toFixed(0) : n.toFixed(2);
-                                      };
-
-                                      const fmtDiffVal = (n: number, r: ModelRow): string => {
-                                        const sign = n >= 0 ? '+' : '-';
-                                        const abs = Math.abs(n);
-                                        if (isTLRow(r)) {
-                                          if (abs >= 1_000_000) return `${sign}₺${(abs / 1_000_000).toFixed(1)}M`;
-                                          if (abs >= 1_000)     return `${sign}₺${(abs / 1_000).toFixed(0)}B`;
-                                          return `${sign}₺${abs.toFixed(0)}`;
-                                        }
-                                        return `${sign}${abs % 1 === 0 ? abs.toFixed(0) : abs.toFixed(2)}`;
-                                      };
-
-                                      // ── ana kategori toplam satırı (özet kartlar + trend için) ──
-                                      // findMainTotalRow: rowNum pin (CAT_TOTAL_ROWS) takes priority over regex
-                                      const mainTotalRow = findMainTotalRow(cat.id, catRows) ?? catRows[0];
-
-                                      // ── departman toplam satırları (top-5 grafik için — ana toplam hariç) ──
-                                      const deptTotalRows = catRows.filter((r) => isTLRow(r) && isToplam(r) && r !== mainTotalRow);
-
-                                      const hasActual = (mainTotalRow?.actual ?? []).some((v) => v !== 0);
-                                      const monthsWithData = hasActual
-                                        ? MONTH_LABELS.map((_, mi) => (mainTotalRow?.actual[mi] ?? 0) !== 0 ? mi : -1).filter((mi) => mi >= 0)
-                                        : [];
-
-                                      const safeMonth = monthsWithData.includes(varMonth)
+                                      const hasActual = totalActualArr.some((v) => v !== 0);
+                                      const monthsWithActual = totalActualArr
+                                        .map((v, i) => v !== 0 ? i : -1)
+                                        .filter((i) => i >= 0);
+                                      const safeMonth = monthsWithActual.includes(varMonth)
                                         ? varMonth
-                                        : (monthsWithData[monthsWithData.length - 1] ?? 0);
+                                        : (monthsWithActual[monthsWithActual.length - 1] ?? 0);
 
-                                      // Excel budget > 0 → Excel kullan; 0 → budget-data.ts statik fallback
-                                      // (Supabase'den gelen dbMonthlyData değil — Supabase'de yanlış değer olabilir)
-                                      const excelBudget = mainTotalRow?.budget[safeMonth] ?? 0;
-                                      const staticBudget = (staticMonthlyData[safeMonth]?.[cat.id] as number) ?? 0;
-                                      const budgetTotal = excelBudget > 0 ? excelBudget : staticBudget;
-                                      const actualTotal = mainTotalRow?.actual[safeMonth] ?? 0;
+                                      const budgetTotal = totalBudgetArr[safeMonth] ?? 0;
+                                      const actualTotal = totalActualArr[safeMonth] ?? 0;
                                       const diffTotal   = actualTotal - budgetTotal;
                                       const diffPctVar  = budgetTotal > 0 ? (diffTotal / budgetTotal) * 100 : 0;
 
-                                      // top 5 sapma — sadece departman toplam satırları
-                                      const top5 = [...deptTotalRows]
-                                        .map((r) => ({
-                                          name: r.paramName.length > 22 ? r.paramName.slice(0, 22) + '…' : r.paramName,
-                                          diff: Math.abs(r.actual[safeMonth] - r.budget[safeMonth]),
-                                          raw:  r.actual[safeMonth] - r.budget[safeMonth],
-                                        }))
+                                      // top 5 sapma — dept satırları
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      const top5 = (varDepts as any[])
+                                        .map((d) => {
+                                          const dBudArr = ensureArr(d.monthly_budget);
+                                          const dActArr = ensureArr(d.monthly_actual);
+                                          const lbl = (d.label ?? d.dept_code ?? '') as string;
+                                          return {
+                                            name: lbl.length > 22 ? lbl.slice(0, 22) + '…' : lbl,
+                                            diff: Math.abs(dActArr[safeMonth] - dBudArr[safeMonth]),
+                                            raw:  dActArr[safeMonth] - dBudArr[safeMonth],
+                                          };
+                                        })
                                         .filter((r) => r.diff > 0)
                                         .sort((a, b) => b.diff - a.diff)
                                         .slice(0, 5);
 
-                                      // trend — Excel budget > 0 → Excel, yoksa statik fallback
-                                      const trendVarData = MONTH_LABELS.map((label, mi) => {
-                                        const eb = mainTotalRow?.budget[mi] ?? 0;
-                                        const sb = (staticMonthlyData[mi]?.[cat.id] as number) ?? 0;
-                                        return {
-                                          label,
-                                          Bütçe: eb > 0 ? eb : sb,
-                                          Fiili: mainTotalRow?.actual[mi] ?? 0,
-                                        };
-                                      });
+                                      // trend — lineItemsData total satırından
+                                      const trendVarData = MONTH_LABELS.map((label, mi) => ({
+                                        label,
+                                        Bütçe: totalBudgetArr[mi] ?? 0,
+                                        Fiili: totalActualArr[mi] ?? 0,
+                                      }));
 
                                       return (
                                         <div className="space-y-4">
@@ -1992,8 +1956,8 @@ export default function Home() {
                                               className="text-xs px-2.5 py-1 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 outline-none focus:border-indigo-400"
                                             >
                                               {MONTH_LABELS.map((m, mi) => (
-                                                <option key={m} value={mi} disabled={hasActual && !monthsWithData.includes(mi)}>
-                                                  {m}{hasActual && !monthsWithData.includes(mi) ? ' (veri yok)' : ''}
+                                                <option key={m} value={mi} disabled={hasActual && !monthsWithActual.includes(mi)}>
+                                                  {m}{hasActual && !monthsWithActual.includes(mi) ? ' (veri yok)' : ''}
                                                 </option>
                                               ))}
                                             </select>
@@ -2046,7 +2010,7 @@ export default function Home() {
                                               {/* trend — mainTotalRow */}
                                               <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3 shadow-sm">
                                                 <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Bütçe vs Fiili Trend</p>
-                                                <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-2">{mainTotalRow?.paramName}</p>
+                                                <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-2">{varTotal.label ?? cat.name}</p>
                                                 <ChartWrapper height={165}>
                                                   {(w, h) => (
                                                     <LineChart width={w} height={h} data={trendVarData} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
@@ -2075,34 +2039,27 @@ export default function Home() {
                                                   setVarDrawerResult(null);
                                                   setVarDrawerError(null);
                                                   setVarDrawerLoading(true);
-                                                  const params = catRows
-                                                    .filter((r) => {
-                                                      const bv = r.budget[safeMonth];
-                                                      const av = r.actual[safeMonth];
-                                                      if (bv === 0 && av === 0) return false;
-                                                      const name = r.paramName.trim();
-                                                      if (/Toplam$/i.test(name) && name !== 'Toplam' && !/^TOPLAM$/i.test(name)) return false;
-                                                      return true;
-                                                    })
-                                                    .sort((a, b) => (isKeyParam(a.paramName, cat.id) ? 0 : 1) - (isKeyParam(b.paramName, cat.id) ? 0 : 1))
-                                                    .slice(0, 50)
+                                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                                  const params = (varParams as any[])
                                                     .map((r) => {
-                                                      const bv = r.budget[safeMonth];
-                                                      const av = r.actual[safeMonth];
+                                                      const bv = ensureArr(r.monthly_budget)[safeMonth] ?? 0;
+                                                      const av = ensureArr(r.monthly_actual)[safeMonth] ?? 0;
                                                       const dv = av - bv;
-                                                      const isTL = /^TL/i.test(r.unitType);
-                                                      const dp = (isTL && bv > 0) ? (dv / bv) * 100 : null;
-                                                      return { paramName: r.paramName, unitType: r.unitType, budget: bv, actual: av, diff: dv, diffPct: dp };
-                                                    });
+                                                      const pName = (r.label ?? r.param_code ?? '') as string;
+                                                      return { paramName: pName, unitType: (r.unit_type ?? 'TL') as string, budget: bv, actual: av, diff: dv, diffPct: bv > 0 ? (dv / bv) * 100 : null };
+                                                    })
+                                                    .filter((p) => p.budget !== 0 || p.actual !== 0)
+                                                    .sort((a, b) => (isKeyParam(a.paramName, cat.id) ? 0 : 1) - (isKeyParam(b.paramName, cat.id) ? 0 : 1))
+                                                    .slice(0, 50);
                                                   const monthly = MONTH_LABELS.map((m, mi) => ({
                                                     month: m,
-                                                    budget: mainTotalRow?.budget[mi] ?? 0,
-                                                    actual: mainTotalRow?.actual[mi] ?? 0,
+                                                    budget: totalBudgetArr[mi] ?? 0,
+                                                    actual: totalActualArr[mi] ?? 0,
                                                   }));
                                                   // Ay bazlı breakdown
                                                   const monthBreakdown = MONTH_LABELS.map((m, mi) => {
-                                                    const bv = mainTotalRow?.budget[mi] ?? 0;
-                                                    const av = mainTotalRow?.actual[mi] ?? 0;
+                                                    const bv = totalBudgetArr[mi] ?? 0;
+                                                    const av = totalActualArr[mi] ?? 0;
                                                     const vv = av - bv;
                                                     return {
                                                       month: m,
@@ -2129,11 +2086,11 @@ export default function Home() {
                                                   // Aktif ay bazlı bütçe/fiili hesabı
                                                   const activeMonthIdxs = MONTH_LABELS
                                                     .map((_, mi) => mi)
-                                                    .filter((mi) => (mainTotalRow?.actual[mi] ?? 0) > 0);
+                                                    .filter((mi) => (totalActualArr[mi] ?? 0) > 0);
                                                   const activeBudgetTotal = activeMonthIdxs.length > 0
-                                                    ? activeMonthIdxs.reduce((s, mi) => s + (mainTotalRow?.budget[mi] ?? 0), 0)
+                                                    ? activeMonthIdxs.reduce((s, mi) => s + (totalBudgetArr[mi] ?? 0), 0)
                                                     : budgetTotal;
-                                                  const activeActualTotal = activeMonthIdxs.reduce((s, mi) => s + (mainTotalRow?.actual[mi] ?? 0), 0);
+                                                  const activeActualTotal = activeMonthIdxs.reduce((s, mi) => s + (totalActualArr[mi] ?? 0), 0);
                                                   const activeVarianceAmount = activeActualTotal - activeBudgetTotal;
                                                   const activeVariancePct = activeBudgetTotal > 0 ? (activeVarianceAmount / activeBudgetTotal) * 100 : 0;
                                                   // Build subItems: match TL params with corresponding adet params by name similarity
@@ -2227,15 +2184,15 @@ export default function Home() {
                                                   try {
                                                     const monthly = MONTH_LABELS.map((m, mi) => ({
                                                       month: m,
-                                                      budget: mainTotalRow?.budget[mi] ?? 0,
-                                                      actual: mainTotalRow?.actual[mi] ?? 0,
+                                                      budget: totalBudgetArr[mi] ?? 0,
+                                                      actual: totalActualArr[mi] ?? 0,
                                                     }));
 
                                                     const activeIdxs = monthly.map((_, i) => i).filter((i) => monthly[i].actual > 0);
 
                                                     const activeBudget = activeIdxs.length > 0
                                                       ? activeIdxs.reduce((s, i) => s + monthly[i].budget, 0)
-                                                      : (mainTotalRow?.budget.reduce((s, v) => s + v, 0) ?? 0);
+                                                      : totalBudgetArr.reduce((s, v) => s + v, 0);
                                                     const activeActual = activeIdxs.reduce((s, i) => s + monthly[i].actual, 0);
                                                     const activeVar = activeActual - activeBudget;
                                                     const activeVarPct = activeBudget > 0 ? (activeVar / activeBudget) * 100 : 0;
@@ -2250,30 +2207,21 @@ export default function Home() {
                                                       ? DEPARTMENTS.map((d) => ({ department: d, budget: deptRow[d] ?? 0, actual: deptRow[d] ?? 0, variance: 0, variancePct: 0 })).filter((d) => d.budget > 0)
                                                       : [];
 
-                                                    const allParams = catRows
-                                                      .filter((r) => {
-                                                        const bv = activeIdxs.length > 0
-                                                          ? activeIdxs.reduce((s, i) => s + r.budget[i], 0)
-                                                          : r.budget.reduce((s, v) => s + v, 0);
-                                                        const av = activeIdxs.reduce((s, i) => s + r.actual[i], 0);
-                                                        if (bv === 0 && av === 0) return false;
-                                                        const name = r.paramName.trim();
-                                                        if (/Toplam$/i.test(name) && name !== 'Toplam' && !/^TOPLAM$/i.test(name)) return false;
-                                                        return true;
-                                                      })
-                                                      .sort((a, b) => {
-                                                        const aKey = isKeyParam(a.paramName, cat.id) ? 0 : 1;
-                                                        const bKey = isKeyParam(b.paramName, cat.id) ? 0 : 1;
-                                                        return aKey - bKey;
-                                                      })
+                                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                                    const allParams = ((varParams as any[])
                                                       .map((r) => {
+                                                        const rBud = ensureArr(r.monthly_budget);
+                                                        const rAct = ensureArr(r.monthly_actual);
                                                         const bv = activeIdxs.length > 0
-                                                          ? activeIdxs.reduce((s, i) => s + r.budget[i], 0)
-                                                          : r.budget.reduce((s, v) => s + v, 0);
-                                                        const av = activeIdxs.reduce((s, i) => s + r.actual[i], 0);
+                                                          ? activeIdxs.reduce((s, i) => s + (rBud[i] ?? 0), 0)
+                                                          : rBud.reduce((s, v) => s + v, 0);
+                                                        const av = activeIdxs.reduce((s, i) => s + (rAct[i] ?? 0), 0);
+                                                        if (bv === 0 && av === 0) return null;
                                                         const dv = av - bv;
-                                                        return { paramName: r.paramName, unitType: r.unitType, budget: bv, actual: av, diff: dv, diffPct: bv > 0 ? (dv / bv) * 100 : null, isKey: isKeyParam(r.paramName, cat.id) };
-                                                      });
+                                                        const pName = (r.label ?? r.param_code ?? '') as string;
+                                                        return { paramName: pName, unitType: (r.unit_type ?? 'TL') as string, budget: bv, actual: av, diff: dv, diffPct: bv > 0 ? (dv / bv) * 100 : null, isKey: isKeyParam(pName, cat.id) };
+                                                      })
+                                                      .filter(Boolean)) as { paramName: string; unitType: string; budget: number; actual: number; diff: number; diffPct: number | null; isKey: boolean }[];
 
                                                     // Eğer drawer'dan daha önce analiz yapıldıysa yeniden API çağrısı yapmadan kullan
                                                     let aiResult: typeof varDrawerResult | null = varDrawerResult ?? null;
@@ -2315,8 +2263,8 @@ export default function Home() {
 
                                                     const cMonthly = Array.from({ length: 12 }, (_, mi) => ({
                                                       month: mi + 1,
-                                                      budget: mainTotalRow?.budget[mi] ?? 0,
-                                                      actual: mainTotalRow?.actual[mi] ?? 0,
+                                                      budget: totalBudgetArr[mi] ?? 0,
+                                                      actual: totalActualArr[mi] ?? 0,
                                                     }));
 
                                                     const aiEff = aiResult?.effects?.map((eff: { name: string; amount: number; explanation: string; driver: string }) => ({
