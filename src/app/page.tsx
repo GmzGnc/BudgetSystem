@@ -4,8 +4,9 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import {
   BarChart, Bar, LineChart, Line, Cell,
   PieChart, Pie,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts';
+import ChartWrapper from '@/components/ChartWrapper';
 import { Sun, Moon, Download, Upload, FileSpreadsheet, X, ChevronRight } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -211,7 +212,6 @@ export default function Home() {
     async function loadFromDb() {
       setDbLoading(true);
       const companyCode = company === 'GRUP' ? 'ICA' : company;
-      console.log('[debug] loadFromDb started, company:', companyCode);
       try {
         const [monthlyRes, sapRes, budgetRowsRes, companiesRes, yearsRes] = await Promise.all([
           getBudgetMonthlyData(companyCode),
@@ -222,12 +222,10 @@ export default function Home() {
         ]);
         setDbMonthlyData(monthlyRes);
         setDbSapData(sapRes);
-        console.log('[debug] budgetRowsRes:', budgetRowsRes);
         if (budgetRowsRes) {
           const map = new Map<string, ModelRow[]>();
           budgetRowsRes.forEach(({ categoryCode, rows }) => map.set(categoryCode, rows));
           setDbModelRows(map);
-          console.log('[debug] dbModelRows map:', map);
         }
         // ── budget_line_items fetch ──
         const dbCompany = companiesRes.data?.find((c) => c.code === companyCode) ?? null;
@@ -240,7 +238,7 @@ export default function Home() {
           setLineItemsData(uniqueItems);
         }
       } catch (e) {
-        console.error('[debug] loadFromDb error:', e);
+        console.error('[loadFromDb] error:', e);
         // DB erişilemiyorsa statik JSON kullan
       } finally {
         setDbLoading(false);
@@ -492,11 +490,6 @@ export default function Home() {
         };
         const budget: number[] = [];
         const actual: number[] = [];
-        if (i < 3) console.log('[excel] row sample:', row[13], row[14], row[15], 'unitType:', row[11], 'paramName:', row[10]);
-        if (parsed.length === 0) {
-          console.log('[excel] full row sample (first TL row):', JSON.stringify(row));
-          console.log('[excel] row length:', row.length);
-        }
         for (let m = 0; m < 12; m++) {
           budget.push(toNum(row[13 + m]));
           actual.push(toNum(row[28 + m]));
@@ -550,7 +543,6 @@ export default function Home() {
             const excelCompanyCode = company === 'ICE' ? '2415' : '2410';
             const parsedLineItems = parseExcelFile(importBuffer, excelCompanyCode, dbYear.year);
             const result = await upsertBudgetLineItems(parsedLineItems, dbCompany.id, dbYear.id);
-            console.log('[DB] budget_line_items:', result.upserted, 'rows upserted');
             if (result.errors.length > 0) console.warn('[DB] budget_line_items errors:', result.errors);
             // Refresh lineItemsData state so UI reflects the newly imported data
             const refreshed = await fetchBudgetLineItems(dbCompany.id, dbYear.id);
@@ -1071,20 +1063,20 @@ export default function Home() {
               <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">
                 2025 Aylık Gider Dağılımı — {companyLabel}
               </h2>
-              <div className="h-48 sm:h-72 lg:h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyData} margin={{ top: 4, right: 8, bottom: 4, left: 16 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
-                  <XAxis dataKey="monthLabel" tick={{ fontSize: 11, fill: axisColor }} axisLine={false} tickLine={false} />
-                  <YAxis tickFormatter={fmt} tick={{ fontSize: 11, fill: axisColor }} axisLine={false} tickLine={false} width={68} />
-                  <Tooltip content={<BarTooltip />} />
-                  <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 11, paddingTop: 8, color: axisColor }} />
-                  {CATEGORIES.map((cat) => (
-                    <Bar key={cat.id} dataKey={cat.id} name={cat.name} stackId="a" fill={CATEGORY_COLORS[cat.id]} />
-                  ))}
-                </BarChart>
-              </ResponsiveContainer>
-              </div>
+              <ChartWrapper height={320}>
+                {(w, h) => (
+                  <BarChart width={w} height={h} data={monthlyData} margin={{ top: 4, right: 8, bottom: 4, left: 16 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                    <XAxis dataKey="monthLabel" tick={{ fontSize: 11, fill: axisColor }} axisLine={false} tickLine={false} />
+                    <YAxis tickFormatter={fmt} tick={{ fontSize: 11, fill: axisColor }} axisLine={false} tickLine={false} width={68} />
+                    <Tooltip content={<BarTooltip />} />
+                    <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 11, paddingTop: 8, color: axisColor }} />
+                    {CATEGORIES.map((cat) => (
+                      <Bar key={cat.id} dataKey={cat.id} name={cat.name} stackId="a" fill={CATEGORY_COLORS[cat.id]} />
+                    ))}
+                  </BarChart>
+                )}
+              </ChartWrapper>
             </div>
 
             {/* category table */}
@@ -1407,18 +1399,20 @@ export default function Home() {
                                       {/* aylık trend */}
                                       <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3 shadow-sm">
                                         <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-3">Aylık Trend — 2025</p>
-                                        <ResponsiveContainer width="100%" height={180}>
-                                          <LineChart data={catTrendData} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
-                                            <XAxis dataKey="month" tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} />
-                                            <YAxis tickFormatter={fmt} tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} width={52} />
-                                            <Tooltip
-                                              formatter={(v) => [fmtFull(Number(v)), cat.name]}
-                                              contentStyle={{ background: dark ? '#1f2937' : '#fff', border: `1px solid ${dark ? '#374151' : '#e5e7eb'}`, borderRadius: 6, fontSize: 11 }}
-                                            />
-                                            <Line type="monotone" dataKey="value" stroke={catColor} strokeWidth={2} dot={{ r: 2.5, fill: catColor }} activeDot={{ r: 4 }} />
-                                          </LineChart>
-                                        </ResponsiveContainer>
+                                        <ChartWrapper height={180}>
+                                          {(w, h) => (
+                                            <LineChart width={w} height={h} data={catTrendData} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
+                                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                                              <XAxis dataKey="month" tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} />
+                                              <YAxis tickFormatter={fmt} tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} width={52} />
+                                              <Tooltip
+                                                formatter={(v) => [fmtFull(Number(v)), cat.name]}
+                                                contentStyle={{ background: dark ? '#1f2937' : '#fff', border: `1px solid ${dark ? '#374151' : '#e5e7eb'}`, borderRadius: 6, fontSize: 11 }}
+                                              />
+                                              <Line type="monotone" dataKey="value" stroke={catColor} strokeWidth={2} dot={{ r: 2.5, fill: catColor }} activeDot={{ r: 4 }} />
+                                            </LineChart>
+                                          )}
+                                        </ChartWrapper>
                                       </div>
 
                                       {/* departman bar chart */}
@@ -1427,24 +1421,26 @@ export default function Home() {
                                           <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-3">
                                             Departman Dağılımı — ICA
                                           </p>
-                                          <ResponsiveContainer width="100%" height={180}>
-                                            <BarChart layout="vertical" data={deptBarData} margin={{ top: 0, right: 52, bottom: 0, left: 8 }}>
-                                              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridColor} />
-                                              <XAxis type="number" tickFormatter={fmt} tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} />
-                                              <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: axisColor }} axisLine={false} tickLine={false} width={62} />
-                                              <Tooltip
-                                                formatter={(v) => [fmtFull(Number(v)), 'Tutar']}
-                                                contentStyle={{ background: dark ? '#1f2937' : '#fff', border: `1px solid ${dark ? '#374151' : '#e5e7eb'}`, borderRadius: 6, fontSize: 11 }}
-                                              />
-                                              <Bar dataKey="value" radius={[0, 3, 3, 0]}
-                                                label={{ position: 'right', formatter: (v: unknown) => fmt(v as number), fontSize: 9, fill: axisColor }}
-                                              >
-                                                {deptBarData.map((d) => (
-                                                  <Cell key={d.name} fill={d.color} />
-                                                ))}
-                                              </Bar>
-                                            </BarChart>
-                                          </ResponsiveContainer>
+                                          <ChartWrapper height={180}>
+                                            {(w, h) => (
+                                              <BarChart layout="vertical" width={w} height={h} data={deptBarData} margin={{ top: 0, right: 52, bottom: 0, left: 8 }}>
+                                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridColor} />
+                                                <XAxis type="number" tickFormatter={fmt} tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} />
+                                                <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: axisColor }} axisLine={false} tickLine={false} width={62} />
+                                                <Tooltip
+                                                  formatter={(v) => [fmtFull(Number(v)), 'Tutar']}
+                                                  contentStyle={{ background: dark ? '#1f2937' : '#fff', border: `1px solid ${dark ? '#374151' : '#e5e7eb'}`, borderRadius: 6, fontSize: 11 }}
+                                                />
+                                                <Bar dataKey="value" radius={[0, 3, 3, 0]}
+                                                  label={{ position: 'right', formatter: (v: unknown) => fmt(v as number), fontSize: 9, fill: axisColor }}
+                                                >
+                                                  {deptBarData.map((d) => (
+                                                    <Cell key={d.name} fill={d.color} />
+                                                  ))}
+                                                </Bar>
+                                              </BarChart>
+                                            )}
+                                          </ChartWrapper>
                                         </div>
                                       ) : company === 'ICE' ? (
                                         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3 shadow-sm flex items-center justify-center">
@@ -1906,17 +1902,19 @@ export default function Home() {
                                               {top5.length > 0 ? (
                                                 <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3 shadow-sm">
                                                   <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-3">Departman Sapmaları — {MONTH_LABELS[safeMonth]}</p>
-                                                  <ResponsiveContainer width="100%" height={180}>
-                                                    <BarChart layout="vertical" data={top5} margin={{ top: 0, right: 60, bottom: 0, left: 8 }}>
-                                                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridColor} />
-                                                      <XAxis type="number" tickFormatter={fmt} tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} />
-                                                      <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} width={120} />
-                                                      <Tooltip formatter={(v) => [fmtFull(Number(v)), 'Sapma']} contentStyle={{ background: dark ? '#1f2937' : '#fff', border: `1px solid ${dark ? '#374151' : '#e5e7eb'}`, borderRadius: 6, fontSize: 11 }} />
-                                                      <Bar dataKey="diff" radius={[0, 3, 3, 0]} label={{ position: 'right', formatter: (v: unknown) => fmt(v as number), fontSize: 9, fill: axisColor }}>
-                                                        {top5.map((d) => <Cell key={d.name} fill={d.raw > 0 ? '#ef4444' : '#22c55e'} />)}
-                                                      </Bar>
-                                                    </BarChart>
-                                                  </ResponsiveContainer>
+                                                  <ChartWrapper height={180}>
+                                                    {(w, h) => (
+                                                      <BarChart layout="vertical" width={w} height={h} data={top5} margin={{ top: 0, right: 60, bottom: 0, left: 8 }}>
+                                                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridColor} />
+                                                        <XAxis type="number" tickFormatter={fmt} tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} />
+                                                        <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} width={120} />
+                                                        <Tooltip formatter={(v) => [fmtFull(Number(v)), 'Sapma']} contentStyle={{ background: dark ? '#1f2937' : '#fff', border: `1px solid ${dark ? '#374151' : '#e5e7eb'}`, borderRadius: 6, fontSize: 11 }} />
+                                                        <Bar dataKey="diff" radius={[0, 3, 3, 0]} label={{ position: 'right', formatter: (v: unknown) => fmt(v as number), fontSize: 9, fill: axisColor }}>
+                                                          {top5.map((d) => <Cell key={d.name} fill={d.raw > 0 ? '#ef4444' : '#22c55e'} />)}
+                                                        </Bar>
+                                                      </BarChart>
+                                                    )}
+                                                  </ChartWrapper>
                                                 </div>
                                               ) : (
                                                 <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3 shadow-sm flex items-center justify-center">
@@ -1927,17 +1925,19 @@ export default function Home() {
                                               <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3 shadow-sm">
                                                 <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Bütçe vs Fiili Trend</p>
                                                 <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-2">{mainTotalRow?.paramName}</p>
-                                                <ResponsiveContainer width="100%" height={165}>
-                                                  <LineChart data={trendVarData} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
-                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
-                                                    <XAxis dataKey="label" tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} />
-                                                    <YAxis tickFormatter={fmt} tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} width={52} />
-                                                    <Tooltip formatter={(v) => [fmtFull(Number(v)), '']} contentStyle={{ background: dark ? '#1f2937' : '#fff', border: `1px solid ${dark ? '#374151' : '#e5e7eb'}`, borderRadius: 6, fontSize: 11 }} />
-                                                    <Legend wrapperStyle={{ fontSize: 10 }} />
-                                                    <Line type="monotone" dataKey="Bütçe" stroke="#6366f1" strokeWidth={2} dot={{ r: 2 }} strokeDasharray="4 2" />
-                                                    <Line type="monotone" dataKey="Fiili" stroke="#f59e0b" strokeWidth={2} dot={{ r: 2.5 }} />
-                                                  </LineChart>
-                                                </ResponsiveContainer>
+                                                <ChartWrapper height={165}>
+                                                  {(w, h) => (
+                                                    <LineChart width={w} height={h} data={trendVarData} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
+                                                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                                                      <XAxis dataKey="label" tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} />
+                                                      <YAxis tickFormatter={fmt} tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} width={52} />
+                                                      <Tooltip formatter={(v) => [fmtFull(Number(v)), '']} contentStyle={{ background: dark ? '#1f2937' : '#fff', border: `1px solid ${dark ? '#374151' : '#e5e7eb'}`, borderRadius: 6, fontSize: 11 }} />
+                                                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                                                      <Line type="monotone" dataKey="Bütçe" stroke="#6366f1" strokeWidth={2} dot={{ r: 2 }} strokeDasharray="4 2" />
+                                                      <Line type="monotone" dataKey="Fiili" stroke="#f59e0b" strokeWidth={2} dot={{ r: 2.5 }} />
+                                                    </LineChart>
+                                                  )}
+                                                </ChartWrapper>
                                               </div>
                                             </div>
                                           )}
@@ -2719,7 +2719,6 @@ export default function Home() {
                           <h4 className="font-semibold text-sm mb-3 text-gray-800 dark:text-gray-200">🎯 Optimizasyon Senaryolari</h4>
                           <div className="space-y-2">
                             {scenarios.map(([label, s]) => {
-                              console.log('[opt] scenario', label, s?.title, !!s);
                               return (
                               <details key={label} className="group rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
                                 <summary className="flex items-center justify-between gap-2 px-3 py-2.5 cursor-pointer list-none select-none hover:bg-gray-50 dark:hover:bg-gray-700/50">

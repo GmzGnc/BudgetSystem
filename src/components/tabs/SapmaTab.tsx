@@ -3,8 +3,9 @@
 import React from 'react';
 import {
   BarChart, Bar, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
+import ChartWrapper from '@/components/ChartWrapper';
 import { CATEGORY_COLORS } from '@/data/categories';
 import { fmt, fmtFull, pctTextColor, sapamaColor, sapamaStatus } from '@/lib/utils';
 
@@ -53,9 +54,9 @@ export default function SapmaTab({
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-red-500 inline-block" /> Kritik (&gt;25%)</span>
           </div>
         </div>
-        <div className="h-64 sm:h-80 lg:h-[360px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart layout="vertical" data={sapamaData} margin={{ top: 4, right: 48, bottom: 4, left: 8 }}>
+        <ChartWrapper height={360}>
+          {(w, h) => (
+            <BarChart layout="vertical" width={w} height={h} data={sapamaData} margin={{ top: 4, right: 48, bottom: 4, left: 8 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridColor} />
               <XAxis
                 type="number"
@@ -80,8 +81,8 @@ export default function SapmaTab({
                 ))}
               </Bar>
             </BarChart>
-          </ResponsiveContainer>
-        </div>
+          )}
+        </ChartWrapper>
       </div>
 
       {/* sapma table */}

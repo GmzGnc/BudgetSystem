@@ -3,8 +3,9 @@
 import React from 'react';
 import {
   LineChart, Line,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts';
+import ChartWrapper from '@/components/ChartWrapper';
 import { CATEGORIES, CATEGORY_COLORS, INDEX_BADGE_COLORS } from '@/data/categories';
 import { categoryAnnual, variancePct } from '@/lib/calculations';
 import type { MonthlyEntry, ProjectionCoefficients, ModelRow } from '@/types';
@@ -150,9 +151,9 @@ export default function ProjectionTab({
         <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">
           2025 Bütçe vs 2026 Projeksiyon — Aylık Trend
         </h2>
-        <div className="h-44 sm:h-64 lg:h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={trendData} margin={{ top: 4, right: 8, bottom: 4, left: 16 }}>
+        <ChartWrapper height={288}>
+          {(w, h) => (
+            <LineChart width={w} height={h} data={trendData} margin={{ top: 4, right: 8, bottom: 4, left: 16 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: axisColor }} axisLine={false} tickLine={false} />
               <YAxis tickFormatter={fmt} tick={{ fontSize: 11, fill: axisColor }} axisLine={false} tickLine={false} width={68} />
@@ -161,8 +162,8 @@ export default function ProjectionTab({
               <Line type="monotone" dataKey="2025 Bütçe" stroke="#6366f1" strokeWidth={2} dot={{ r: 3, fill: '#6366f1' }} activeDot={{ r: 5 }} />
               <Line type="monotone" dataKey="2026 Projeksiyon" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3, fill: '#f59e0b' }} activeDot={{ r: 5 }} />
             </LineChart>
-          </ResponsiveContainer>
-        </div>
+          )}
+        </ChartWrapper>
       </div>
 
       {/* Yemek model paneli — sadece ICA veya ICE seçiliyken göster */}

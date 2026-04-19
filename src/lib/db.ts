@@ -215,14 +215,12 @@ export async function getBudgetEntries(
   fiscalYearId: string,
 ): Promise<DbResult<BudgetEntry[]>> {
   try {
-    console.log('[db] getBudgetEntries called with:', companyId, fiscalYearId);
     const { data, error } = await supabase
       .from('budget_entries')
       .select('*')
       .eq('company_id', companyId)
       .eq('fiscal_year_id', fiscalYearId)
       .order('month');
-    console.log('[db] getBudgetEntries result count:', data?.length, 'error:', error?.message);
     if (error) return fail(error.message);
     return ok(data as BudgetEntry[]);
   } catch (e) {
@@ -414,25 +412,18 @@ export async function getBudgetEntriesAsModelRows(
       getFiscalYears(),
     ]);
     const company    = companiesRes.data?.find((c) => c.code === companyCode);
-    console.log('[db] company:', company);
     const fiscalYear = yearsRes.data?.find((y) => y.year === year && y.status === 'active');
-    console.log('[db] fiscalYear:', fiscalYear);
     if (!company || !fiscalYear) return null;
 
     const [entriesRes, catsRes] = await Promise.all([
       getBudgetEntries(company.id, fiscalYear.id),
       getCategories(),
     ]);
-    console.log('[db] entries count:', entriesRes.data?.length);
     if (!entriesRes.data || entriesRes.data.length === 0) return null;
 
     const cats = catsRes.data ?? [];
-    console.log('[db] sample entry category_id:', entriesRes.data![0]?.category_id);
-    console.log('[db] sample cat id:', cats[0]?.id, 'name:', cats[0]?.name);
-
     const result = cats.map((cat) => {
       const catEntries = entriesRes.data!.filter((e) => e.category_id === cat.id);
-      console.log(`[db] cat ${cat.name}: ${catEntries.length} entries, sample budget_amount:`, catEntries[0]?.budget_amount);
 
       const budget = Array.from({ length: 12 }, (_, mi) => {
         const rows = catEntries.filter((e) => e.month === mi + 1);
@@ -450,7 +441,6 @@ export async function getBudgetEntriesAsModelRows(
         }],
       };
     });
-    console.log('[db] result:', JSON.stringify(result).slice(0, 200));
     return result;
   } catch (e) {
     console.error('[db] getBudgetEntriesAsModelRows error:', e);

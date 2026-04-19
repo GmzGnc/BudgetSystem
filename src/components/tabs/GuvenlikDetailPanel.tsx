@@ -4,8 +4,9 @@ import React, { useState, useMemo } from 'react';
 import {
   ComposedChart, Bar, Line,
   PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts';
+import ChartWrapper from '@/components/ChartWrapper';
 
 export interface LineItem {
   category_code: string;
@@ -188,20 +189,22 @@ export default function GuvenlikDetailPanel({ dark, lineItems }: Props) {
           <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-3">
             Aylık Bütçe vs Fiili — Güvenlik 2025
           </p>
-          <ResponsiveContainer width="100%" height={180}>
-            <ComposedChart data={chartMonthly} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
-              <XAxis dataKey="label" tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} />
-              <YAxis tickFormatter={fmtM} tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} width={56} />
-              <Tooltip
-                formatter={(v: unknown, name: unknown) => [fmtFull(v as number), name as string]}
-                contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 6, fontSize: 11 }}
-              />
-              <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 10, paddingTop: 6, color: axisColor }} />
-              <Bar dataKey="Fiili" fill="#f59e0b" radius={[3, 3, 0, 0]} maxBarSize={18} />
-              <Line type="monotone" dataKey="Bütçe" stroke="#6366f1" strokeWidth={2} dot={{ r: 2.5, fill: '#6366f1' }} activeDot={{ r: 4 }} />
-            </ComposedChart>
-          </ResponsiveContainer>
+          <ChartWrapper height={180}>
+            {(w, h) => (
+              <ComposedChart width={w} height={h} data={chartMonthly} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                <XAxis dataKey="label" tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} />
+                <YAxis tickFormatter={fmtM} tick={{ fontSize: 9, fill: axisColor }} axisLine={false} tickLine={false} width={56} />
+                <Tooltip
+                  formatter={(v: unknown, name: unknown) => [fmtFull(v as number), name as string]}
+                  contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 6, fontSize: 11 }}
+                />
+                <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 10, paddingTop: 6, color: axisColor }} />
+                <Bar dataKey="Fiili" fill="#f59e0b" radius={[3, 3, 0, 0]} maxBarSize={18} />
+                <Line type="monotone" dataKey="Bütçe" stroke="#6366f1" strokeWidth={2} dot={{ r: 2.5, fill: '#6366f1' }} activeDot={{ r: 4 }} />
+              </ComposedChart>
+            )}
+          </ChartWrapper>
         </div>
 
         {/* Dept dağılımı — Pie */}
@@ -210,29 +213,27 @@ export default function GuvenlikDetailPanel({ dark, lineItems }: Props) {
             Departman Dağılımı — Yıllık Bütçe
           </p>
           <div className="flex items-center gap-2">
-            <ResponsiveContainer width={140} height={140}>
-              <PieChart>
-                <Pie
-                  data={depts.map((d) => ({
-                    name: d.label,
-                    value: d.monthly_budget.reduce((a, b) => a + b, 0),
-                  }))}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%" cy="50%"
-                  innerRadius={38} outerRadius={58}
-                  paddingAngle={2}
-                >
-                  {depts.map((_d, i) => (
-                    <Cell key={i} fill={DEPT_COLORS[i % DEPT_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(v: unknown, name: unknown) => [fmtM(v as number), name as string]}
-                  contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 6, fontSize: 11 }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            <PieChart width={140} height={140}>
+              <Pie
+                data={depts.map((d) => ({
+                  name: d.label,
+                  value: d.monthly_budget.reduce((a, b) => a + b, 0),
+                }))}
+                dataKey="value"
+                nameKey="name"
+                cx="50%" cy="50%"
+                innerRadius={38} outerRadius={58}
+                paddingAngle={2}
+              >
+                {depts.map((_d, i) => (
+                  <Cell key={i} fill={DEPT_COLORS[i % DEPT_COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip
+                formatter={(v: unknown, name: unknown) => [fmtM(v as number), name as string]}
+                contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 6, fontSize: 11 }}
+              />
+            </PieChart>
             <div className="flex-1 space-y-1">
               {depts.map((d, i) => {
                 const deptAnnual = d.monthly_budget.reduce((a, b) => a + b, 0);

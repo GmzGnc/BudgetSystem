@@ -4,8 +4,9 @@ import React from 'react';
 import {
   BarChart, Bar, Cell,
   PieChart, Pie,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts';
+import ChartWrapper from '@/components/ChartWrapper';
 import { DEPARTMENTS, ICA_DEPT, DEPT_COLORS } from '@/data/department-data';
 import type { Department } from '@/data/department-data';
 import { CATEGORY_COLORS } from '@/data/categories';
@@ -102,9 +103,9 @@ export default function DeptTab({
               <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">
                 Departman Payları — ICA 2025
               </h3>
-              <div className="h-48 sm:h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
+              <ChartWrapper height={256}>
+                {(w, h) => (
+                  <PieChart width={w} height={h}>
                     <Pie
                       data={deptPieData}
                       dataKey="value"
@@ -128,8 +129,8 @@ export default function DeptTab({
                       formatter={(value) => <span style={{ fontSize: 11, color: dark ? '#9ca3af' : '#6b7280' }}>{value}</span>}
                     />
                   </PieChart>
-                </ResponsiveContainer>
-              </div>
+                )}
+              </ChartWrapper>
             </div>
 
             {/* bar chart — seçilen departman veya tüm kategoriler */}
@@ -139,38 +140,36 @@ export default function DeptTab({
                   ? 'Kategori Bazlı Dağılım — Tüm Departmanlar'
                   : `${selectedDept} — Kategori Dağılımı`}
               </h3>
-              <div className="h-48 sm:h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  {selectedDept === 'ALL' ? (
-                    <BarChart data={deptBarData} margin={{ top: 4, right: 8, bottom: 4, left: 16 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={dark ? '#374151' : '#f0f0f0'} />
-                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: dark ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} />
-                      <YAxis tickFormatter={fmt} tick={{ fontSize: 10, fill: dark ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} width={60} />
-                      <Tooltip
-                        formatter={(v) => fmtFull(Number(v))}
-                        contentStyle={{ background: dark ? '#1f2937' : '#fff', border: `1px solid ${dark ? '#374151' : '#e5e7eb'}`, borderRadius: 8, fontSize: 11 }}
-                      />
-                      <Legend iconType="square" iconSize={9} wrapperStyle={{ fontSize: 10, paddingTop: 8, color: dark ? '#9ca3af' : '#6b7280' }} />
-                      {DEPARTMENTS.map((dept) => (
-                        <Bar key={dept} dataKey={dept} name={dept} stackId="a" fill={DEPT_COLORS[dept]} />
-                      ))}
-                    </BarChart>
-                  ) : (
-                    <BarChart data={deptBarData} layout="vertical" margin={{ top: 4, right: 48, bottom: 4, left: 8 }}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={dark ? '#374151' : '#f0f0f0'} />
-                      <XAxis type="number" tickFormatter={fmt} tick={{ fontSize: 10, fill: dark ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} />
-                      <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: dark ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} width={100} />
-                      <Tooltip
-                        formatter={(v) => [fmtFull(Number(v)), selectedDept]}
-                        contentStyle={{ background: dark ? '#1f2937' : '#fff', border: `1px solid ${dark ? '#374151' : '#e5e7eb'}`, borderRadius: 8, fontSize: 11 }}
-                      />
-                      <Bar dataKey="value" name={selectedDept} fill={DEPT_COLORS[selectedDept as Department]} radius={[0, 4, 4, 0]}
-                        label={{ position: 'right', formatter: (v: unknown) => fmt(v as number), fontSize: 10, fill: dark ? '#9ca3af' : '#6b7280' }}
-                      />
-                    </BarChart>
-                  )}
-                </ResponsiveContainer>
-              </div>
+              <ChartWrapper height={256}>
+                {(w, h) => selectedDept === 'ALL' ? (
+                  <BarChart width={w} height={h} data={deptBarData} margin={{ top: 4, right: 8, bottom: 4, left: 16 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={dark ? '#374151' : '#f0f0f0'} />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: dark ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} />
+                    <YAxis tickFormatter={fmt} tick={{ fontSize: 10, fill: dark ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} width={60} />
+                    <Tooltip
+                      formatter={(v) => fmtFull(Number(v))}
+                      contentStyle={{ background: dark ? '#1f2937' : '#fff', border: `1px solid ${dark ? '#374151' : '#e5e7eb'}`, borderRadius: 8, fontSize: 11 }}
+                    />
+                    <Legend iconType="square" iconSize={9} wrapperStyle={{ fontSize: 10, paddingTop: 8, color: dark ? '#9ca3af' : '#6b7280' }} />
+                    {DEPARTMENTS.map((dept) => (
+                      <Bar key={dept} dataKey={dept} name={dept} stackId="a" fill={DEPT_COLORS[dept]} />
+                    ))}
+                  </BarChart>
+                ) : (
+                  <BarChart width={w} height={h} data={deptBarData} layout="vertical" margin={{ top: 4, right: 48, bottom: 4, left: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={dark ? '#374151' : '#f0f0f0'} />
+                    <XAxis type="number" tickFormatter={fmt} tick={{ fontSize: 10, fill: dark ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: dark ? '#9ca3af' : '#6b7280' }} axisLine={false} tickLine={false} width={100} />
+                    <Tooltip
+                      formatter={(v) => [fmtFull(Number(v)), selectedDept]}
+                      contentStyle={{ background: dark ? '#1f2937' : '#fff', border: `1px solid ${dark ? '#374151' : '#e5e7eb'}`, borderRadius: 8, fontSize: 11 }}
+                    />
+                    <Bar dataKey="value" name={selectedDept} fill={DEPT_COLORS[selectedDept as Department]} radius={[0, 4, 4, 0]}
+                      label={{ position: 'right', formatter: (v: unknown) => fmt(v as number), fontSize: 10, fill: dark ? '#9ca3af' : '#6b7280' }}
+                    />
+                  </BarChart>
+                )}
+              </ChartWrapper>
             </div>
           </div>
 
