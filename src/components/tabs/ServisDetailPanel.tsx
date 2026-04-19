@@ -447,84 +447,105 @@ export default function ServisDetailPanel({ dark, lineItems }: Props) {
                     ))}
                   </div>
 
-                  {/* Birim Fiyat — monthly (aylık değişken) */}
+                  {/* Birim Fiyat — 12 ay kolonlu */}
                   <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                    Birim Fiyat Aylık (TL/araç/ay)
+                    Birim Fiyat (₺/araç/ay)
                   </p>
-                  <table className="text-[10px]" style={{ width: '100%', tableLayout: 'fixed' }}>
-                    <colgroup>
-                      <col style={{ width: 80 }} />
-                      <col />
-                    </colgroup>
-                    <thead>
-                      <tr className="text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-gray-700">
-                        <th style={{ padding: '8px 12px', textAlign: 'left' }} className="font-medium">Ay</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'right' }} className="font-medium">Birim Fiyat (₺/araç/ay)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {MONTH_LABELS.map((lbl, mi) => {
-                        const active = mi === activeMonth;
-                        const bf = birimFiyatArr[mi] ?? 0;
-                        return (
-                          <tr
-                            key={lbl}
-                            className={active ? 'bg-purple-50/60 dark:bg-purple-950/20 font-semibold' : 'border-b border-gray-50 dark:border-gray-800'}
-                          >
-                            <td style={{ padding: '6px 12px' }} className="text-gray-500 dark:text-gray-400">{lbl}</td>
-                            <td style={{ padding: '6px 12px', textAlign: 'right' }} className="font-mono text-gray-700 dark:text-gray-300">{bf > 0 ? fmtFull(bf) : '—'}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                  {(() => {
+                    const bfAct     = paramArr('birim_fiyat_ort', 'actual');
+                    const budAnnual = birimFiyatArr.reduce((a, b) => a + b, 0);
+                    const actAnnual = bfAct.reduce((a, b) => a + b, 0);
+                    const hasActual = bfAct.some((v) => v !== 0);
+                    return (
+                      <div className="overflow-x-auto rounded border border-gray-200 dark:border-gray-700">
+                        <table className="min-w-[1000px] text-xs table-fixed">
+                          <colgroup>
+                            <col style={{ width: 120 }} />
+                            {MONTH_LABELS.map((m) => <col key={m} style={{ width: 52 }} />)}
+                            <col style={{ width: 72 }} />
+                          </colgroup>
+                          <thead className="bg-gray-50 dark:bg-gray-800">
+                            <tr>
+                              <th className="px-2 py-1.5 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Kalem</th>
+                              {MONTH_LABELS.map((m) => (
+                                <th key={m} className="px-1 py-1.5 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">{m}</th>
+                              ))}
+                              <th className="px-2 py-1.5 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Yıllık</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr className="bg-gray-50/30 dark:bg-gray-800/20 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
+                              <td className="px-2 py-1 text-gray-700 dark:text-gray-300 font-medium">Bütçe</td>
+                              {birimFiyatArr.map((v, mi) => (
+                                <td key={mi} className={`px-1 py-1 text-right font-mono ${mi === activeMonth ? 'text-purple-600 dark:text-purple-400 font-semibold' : 'text-gray-600 dark:text-gray-400'}`}>
+                                  {v === 0 ? '—' : fmtFull(v)}
+                                </td>
+                              ))}
+                              <td className="px-2 py-1 text-right font-mono font-semibold text-gray-700 dark:text-gray-300">{budAnnual === 0 ? '—' : fmtFull(budAnnual)}</td>
+                            </tr>
+                            {hasActual && (
+                              <tr className="bg-amber-50/20 dark:bg-amber-900/10 hover:bg-amber-50/40 dark:hover:bg-amber-900/20 transition-colors">
+                                <td className="px-2 py-1 pl-4 text-amber-600 dark:text-amber-400 italic text-[10px]">fiili</td>
+                                {bfAct.map((v, mi) => (
+                                  <td key={mi} className="px-1 py-1 text-right font-mono text-amber-600 dark:text-amber-400">{v === 0 ? '—' : fmtFull(v)}</td>
+                                ))}
+                                <td className="px-2 py-1 text-right font-mono font-semibold text-amber-600 dark:text-amber-400">{actAnnual === 0 ? '—' : fmtFull(actAnnual)}</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
-              {/* ── Section 2: Araç Sayısı ── */}
-              {paramTab === 'arac' && (
-                <div>
-                  <table className="text-[10px]" style={{ width: '100%', tableLayout: 'fixed' }}>
-                    <colgroup>
-                      <col style={{ width: 80 }} />
-                      <col />
-                      <col />
-                      <col />
-                    </colgroup>
-                    <thead>
-                      <tr className="text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-gray-700">
-                        <th style={{ padding: '8px 12px', textAlign: 'left' }} className="font-medium">Ay</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'right' }} className="font-medium">Bütçe Araç</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'right' }} className="font-medium">Fiili Araç</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'right' }} className="font-medium">Fark</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {MONTH_LABELS.map((lbl, mi) => {
-                        const active = mi === activeMonth;
-                        const bv   = aracSayisiBudArr[mi] ?? 0;
-                        const av   = aracSayisiActArr[mi] ?? 0;
-                        const diff = av - bv;
-                        return (
-                          <tr
-                            key={lbl}
-                            className={active ? 'bg-purple-50/60 dark:bg-purple-950/20 font-semibold' : 'border-b border-gray-50 dark:border-gray-800'}
-                          >
-                            <td style={{ padding: '6px 12px' }} className="text-gray-500 dark:text-gray-400">{lbl}</td>
-                            <td style={{ padding: '6px 12px', textAlign: 'right' }} className="font-mono text-gray-700 dark:text-gray-300">{bv > 0 ? bv.toLocaleString('tr-TR') : '—'}</td>
-                            <td style={{ padding: '6px 12px', textAlign: 'right' }} className={`font-mono ${av > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-gray-300 dark:text-gray-600'}`}>
-                              {av > 0 ? av.toLocaleString('tr-TR') : '—'}
+              {/* ── Section 2: Araç Sayısı — 12 ay kolonlu ── */}
+              {paramTab === 'arac' && (() => {
+                const budAnnual = aracSayisiBudArr.reduce((a, b) => a + b, 0);
+                const actAnnual = aracSayisiActArr.reduce((a, b) => a + b, 0);
+                const hasActual = aracSayisiActArr.some((v) => v !== 0);
+                return (
+                  <div className="overflow-x-auto rounded border border-gray-200 dark:border-gray-700">
+                    <table className="min-w-[1000px] text-xs table-fixed">
+                      <colgroup>
+                        <col style={{ width: 120 }} />
+                        {MONTH_LABELS.map((m) => <col key={m} style={{ width: 52 }} />)}
+                        <col style={{ width: 72 }} />
+                      </colgroup>
+                      <thead className="bg-gray-50 dark:bg-gray-800">
+                        <tr>
+                          <th className="px-2 py-1.5 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Kalem</th>
+                          {MONTH_LABELS.map((m) => (
+                            <th key={m} className="px-1 py-1.5 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">{m}</th>
+                          ))}
+                          <th className="px-2 py-1.5 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Yıllık</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="bg-gray-50/30 dark:bg-gray-800/20 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
+                          <td className="px-2 py-1 text-gray-700 dark:text-gray-300 font-medium">Bütçe Araç</td>
+                          {aracSayisiBudArr.map((v, mi) => (
+                            <td key={mi} className={`px-1 py-1 text-right font-mono ${mi === activeMonth ? 'text-purple-600 dark:text-purple-400 font-semibold' : 'text-gray-600 dark:text-gray-400'}`}>
+                              {v === 0 ? '—' : v.toLocaleString('tr-TR')}
                             </td>
-                            <td style={{ padding: '6px 12px', textAlign: 'right' }} className={`font-mono ${diff > 0 ? 'text-red-500 dark:text-red-400' : diff < 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                              {bv > 0 ? `${diff >= 0 ? '+' : ''}${diff}` : '—'}
-                            </td>
+                          ))}
+                          <td className="px-2 py-1 text-right font-mono font-semibold text-gray-700 dark:text-gray-300">{budAnnual === 0 ? '—' : budAnnual.toLocaleString('tr-TR')}</td>
+                        </tr>
+                        {hasActual && (
+                          <tr className="bg-amber-50/20 dark:bg-amber-900/10 hover:bg-amber-50/40 dark:hover:bg-amber-900/20 transition-colors">
+                            <td className="px-2 py-1 pl-5 text-amber-600 dark:text-amber-400 italic text-[10px]">fiili</td>
+                            {aracSayisiActArr.map((v, mi) => (
+                              <td key={mi} className="px-1 py-1 text-right font-mono text-amber-600 dark:text-amber-400">{v === 0 ? '—' : v.toLocaleString('tr-TR')}</td>
+                            ))}
+                            <td className="px-2 py-1 text-right font-mono font-semibold text-amber-600 dark:text-amber-400">{actAnnual === 0 ? '—' : actAnnual.toLocaleString('tr-TR')}</td>
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
 
               {/* ── Section 3: Rotalar ── */}
               {paramTab === 'rotalar' && (

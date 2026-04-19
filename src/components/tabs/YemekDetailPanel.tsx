@@ -340,138 +340,220 @@ export default function YemekDetailPanel({ dark, lineItems }: Props) {
           <div className="overflow-hidden">
             <div className="border-t border-gray-100 dark:border-gray-700 p-3 space-y-4">
 
-              {/* Birim Fiyat */}
-              {birimFiyat && (
-                <div>
-                  <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Birim Fiyat</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {[
-                      { label: 'Bütçe (Aylık)',  value: fmtM(ensureArray(birimFiyat.monthly_budget)[activeMonth] ?? 0) },
-                      { label: 'Fiili (Aylık)',   value: fmtM(ensureArray(birimFiyat.monthly_actual)[activeMonth] ?? 0) },
-                      { label: 'Birim',           value: birimFiyat.unit_type ?? 'TL/öğün' },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 px-3 py-2">
-                        <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wide">{label}</p>
-                        <p className="text-xs font-bold mt-0.5 font-mono text-gray-800 dark:text-gray-100">{value}</p>
-                      </div>
-                    ))}
+              {/* ── Birim Fiyat — 12 ay kolonlu ─────────────────────────────── */}
+              {birimFiyat && (() => {
+                const bud       = ensureArray(birimFiyat.monthly_budget);
+                const act       = ensureArray(birimFiyat.monthly_actual);
+                const budAnnual = bud.reduce((a, b) => a + b, 0);
+                const actAnnual = act.reduce((a, b) => a + b, 0);
+                const hasActual = act.some((v) => v !== 0);
+                return (
+                  <div>
+                    <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
+                      Birim Fiyat ({birimFiyat.unit_type ?? 'TL/öğün'})
+                    </p>
+                    <div className="overflow-x-auto rounded border border-gray-200 dark:border-gray-700">
+                      <table className="min-w-[1000px] text-xs table-fixed">
+                        <colgroup>
+                          <col style={{ width: 120 }} />
+                          {MONTH_LABELS.map((m) => <col key={m} style={{ width: 52 }} />)}
+                          <col style={{ width: 72 }} />
+                        </colgroup>
+                        <thead className="bg-gray-50 dark:bg-gray-800">
+                          <tr>
+                            <th className="px-2 py-1.5 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Kalem</th>
+                            {MONTH_LABELS.map((m) => (
+                              <th key={m} className="px-1 py-1.5 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">{m}</th>
+                            ))}
+                            <th className="px-2 py-1.5 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Yıllık</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="bg-gray-50/30 dark:bg-gray-800/20 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
+                            <td className="px-2 py-1 text-gray-700 dark:text-gray-300 font-medium">Bütçe</td>
+                            {bud.map((v, mi) => (
+                              <td key={mi} className="px-1 py-1 text-right font-mono text-gray-600 dark:text-gray-400">{v === 0 ? '—' : fmtM(v)}</td>
+                            ))}
+                            <td className="px-2 py-1 text-right font-mono font-semibold text-gray-700 dark:text-gray-300">{budAnnual === 0 ? '—' : fmtM(budAnnual)}</td>
+                          </tr>
+                          {hasActual && (
+                            <tr className="bg-amber-50/20 dark:bg-amber-900/10 hover:bg-amber-50/40 dark:hover:bg-amber-900/20 transition-colors">
+                              <td className="px-2 py-1 pl-4 text-amber-600 dark:text-amber-400 italic text-[10px]">fiili</td>
+                              {act.map((v, mi) => (
+                                <td key={mi} className="px-1 py-1 text-right font-mono text-amber-600 dark:text-amber-400">{v === 0 ? '—' : fmtM(v)}</td>
+                              ))}
+                              <td className="px-2 py-1 text-right font-mono font-semibold text-amber-600 dark:text-amber-400">{actAnnual === 0 ? '—' : fmtM(actAnnual)}</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
-              {/* Öğün Sayısı groups */}
+              {/* ── Öğün Sayısı — 12 ay kolonlu, accordion ──────────────────── */}
               <div>
                 <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Günlük Öğün Sayısı</p>
-                <div className="rounded border border-gray-200 dark:border-gray-700 overflow-hidden">
-                  {OGUN_GROUPS.map((grp) => {
-                    const parentItem  = grp.parentCode ? paramByCode.get(grp.parentCode) : null;
-                    const pb          = parentItem ? ensureArray(parentItem.monthly_budget) : [];
-                    const pa          = parentItem ? ensureArray(parentItem.monthly_actual) : [];
-                    const budgetVal   = pb[activeMonth] ?? 0;
-                    const actualVal   = pa[activeMonth] ?? 0;
-                    const diff        = actualVal - budgetVal;
-                    const childItems  = grp.childPrefix
-                      ? Array.from(paramByCode.values()).filter(
-                          (i) => i.param_code?.startsWith(grp.childPrefix!) && i.param_code !== grp.parentCode
-                        )
-                      : [];
-                    const hasChildren = childItems.length > 0;
-                    const isGrpOpen   = openOgunGroups.has(grp.id);
+                <div className="overflow-x-auto rounded border border-gray-200 dark:border-gray-700">
+                  <table className="min-w-[1000px] text-xs table-fixed">
+                    <colgroup>
+                      <col style={{ width: 160 }} />
+                      {MONTH_LABELS.map((m) => <col key={m} style={{ width: 52 }} />)}
+                      <col style={{ width: 72 }} />
+                    </colgroup>
+                    <thead className="bg-gray-50 dark:bg-gray-800">
+                      <tr>
+                        <th className="px-2 py-1.5 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Kalem</th>
+                        {MONTH_LABELS.map((m) => (
+                          <th key={m} className="px-1 py-1.5 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">{m}</th>
+                        ))}
+                        <th className="px-2 py-1.5 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Yıllık</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {OGUN_GROUPS.map((grp) => {
+                        const parentItem  = grp.parentCode ? paramByCode.get(grp.parentCode) : null;
+                        const bud         = ensureArray(parentItem?.monthly_budget);
+                        const act         = ensureArray(parentItem?.monthly_actual);
+                        const budAnnual   = bud.reduce((a, b) => a + b, 0);
+                        const actAnnual   = act.reduce((a, b) => a + b, 0);
+                        const hasActual   = act.some((v) => v !== 0);
+                        const childItems  = grp.childPrefix
+                          ? Array.from(paramByCode.values()).filter(
+                              (i) => i.param_code?.startsWith(grp.childPrefix!) && i.param_code !== grp.parentCode
+                            )
+                          : [];
+                        const hasChildren = childItems.length > 0;
+                        const isOpen      = openOgunGroups.has(grp.id);
+                        const isToplam    = grp.id === 'toplam';
+                        const fmtK        = (v: number) => v === 0 ? '—' : v.toLocaleString('tr-TR');
 
-                    return (
-                      <div key={grp.id} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
-                        <div
-                          role={hasChildren ? 'button' : undefined}
-                          onClick={hasChildren ? () => setOpenOgunGroups((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(grp.id)) next.delete(grp.id); else next.add(grp.id);
-                            return next;
-                          }) : undefined}
-                          className={`flex items-center gap-2 px-3 py-2 text-xs ${hasChildren ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/60' : ''} ${grp.id === 'toplam' ? 'bg-gray-50 dark:bg-gray-800/40 font-semibold' : ''} transition-colors`}
-                        >
-                          {hasChildren ? (
-                            <span className="text-gray-400 dark:text-gray-500 text-[9px] flex-shrink-0" style={{ display: 'inline-block', transform: isGrpOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▶</span>
-                          ) : (
-                            <span className="w-[9px] flex-shrink-0" />
-                          )}
-                          <span className="flex-1 text-gray-700 dark:text-gray-300">{grp.label}</span>
-                          <span className="w-12 text-right font-mono text-gray-600 dark:text-gray-400">{fmtNum(budgetVal)}</span>
-                          <span className="w-12 text-right font-mono text-amber-600 dark:text-amber-400">{fmtNum(actualVal)}</span>
-                          <span className={`w-8 text-right font-semibold ${diff > 0 ? 'text-red-500 dark:text-red-400' : diff < 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                            {diff !== 0 ? `${diff > 0 ? '+' : ''}${diff}` : '='}
-                          </span>
-                        </div>
+                        const toggleGrp = hasChildren
+                          ? () => setOpenOgunGroups((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(grp.id)) next.delete(grp.id); else next.add(grp.id);
+                              return next;
+                            })
+                          : undefined;
 
-                        {hasChildren && (
-                          <div style={{ display: 'grid', gridTemplateRows: isGrpOpen ? '1fr' : '0fr', transition: 'grid-template-rows 0.2s ease' }}>
-                            <div className="overflow-hidden">
-                              <table className="w-full text-xs border-t border-gray-100 dark:border-gray-800">
-                                <thead className="bg-gray-50/80 dark:bg-gray-800/50">
-                                  <tr>
-                                    <th className="px-3 pl-8 py-1 text-left font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Kalem</th>
-                                    <th className="px-3 py-1 text-right font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide w-14">Büt.</th>
-                                    <th className="px-3 py-1 text-right font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide w-14">Fili</th>
-                                    <th className="px-3 py-1 text-right font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide w-10">Fark</th>
+                        return (
+                          <React.Fragment key={grp.id}>
+                            <tr
+                              className={`border-t-2 border-gray-200 dark:border-gray-700 transition-colors ${
+                                isToplam ? 'bg-gray-100 dark:bg-gray-800/80' : 'bg-gray-50/70 dark:bg-gray-800/40'
+                              } ${hasChildren ? 'cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-800/70' : 'hover:bg-gray-50 dark:hover:bg-gray-800/30'}`}
+                              onClick={toggleGrp}
+                            >
+                              <td className={`px-2 py-1.5 ${isToplam ? 'font-bold text-gray-800 dark:text-gray-100' : 'font-semibold text-gray-700 dark:text-gray-200'}`}>
+                                <div className="flex items-center justify-between gap-1">
+                                  <span>{grp.label}</span>
+                                  {hasChildren && (
+                                    <span className="text-gray-400 dark:text-gray-500 text-[10px] flex-shrink-0">{isOpen ? '▼' : '▶'}</span>
+                                  )}
+                                </div>
+                              </td>
+                              {bud.map((v, mi) => (
+                                <td key={mi} className={`px-1 py-1.5 text-right font-mono ${isToplam ? 'font-semibold text-gray-700 dark:text-gray-200' : 'text-gray-600 dark:text-gray-400'}`}>
+                                  {fmtK(v)}
+                                </td>
+                              ))}
+                              <td className={`px-2 py-1.5 text-right font-mono font-semibold ${isToplam ? 'text-gray-800 dark:text-gray-100' : 'text-gray-700 dark:text-gray-300'}`}>
+                                {fmtK(budAnnual)}
+                              </td>
+                            </tr>
+                            {hasActual && (
+                              <tr className="bg-amber-50/20 dark:bg-amber-900/10 hover:bg-amber-50/40 dark:hover:bg-amber-900/20 transition-colors">
+                                <td className="px-2 py-1 pl-5 text-amber-600 dark:text-amber-400 italic text-[10px]">fiili</td>
+                                {act.map((v, mi) => (
+                                  <td key={mi} className="px-1 py-1 text-right font-mono text-amber-600 dark:text-amber-400">{v === 0 ? '—' : v.toLocaleString('tr-TR')}</td>
+                                ))}
+                                <td className="px-2 py-1 text-right font-mono font-semibold text-amber-600 dark:text-amber-400">{actAnnual === 0 ? '—' : actAnnual.toLocaleString('tr-TR')}</td>
+                              </tr>
+                            )}
+                            {hasChildren && isOpen && childItems.map((ci) => {
+                              const ciBud       = ensureArray(ci.monthly_budget);
+                              const ciAct       = ensureArray(ci.monthly_actual);
+                              const ciBudAnnual = ciBud.reduce((a, b) => a + b, 0);
+                              const ciActAnnual = ciAct.reduce((a, b) => a + b, 0);
+                              const ciHasActual = ciAct.some((v) => v !== 0);
+                              return (
+                                <React.Fragment key={ci.param_code}>
+                                  <tr className="bg-white dark:bg-gray-900/60 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors">
+                                    <td className="px-2 py-1 pl-5 text-gray-600 dark:text-gray-400 text-[11px] truncate">
+                                      <span className="text-gray-300 dark:text-gray-600 mr-1 select-none">└</span>{ci.label}
+                                    </td>
+                                    {ciBud.map((v, mi) => (
+                                      <td key={mi} className="px-1 py-1 text-right font-mono text-gray-500 dark:text-gray-500 text-[11px]">{v === 0 ? '—' : v.toLocaleString('tr-TR')}</td>
+                                    ))}
+                                    <td className="px-2 py-1 text-right font-mono text-gray-600 dark:text-gray-400 text-[11px]">{ciBudAnnual === 0 ? '—' : ciBudAnnual.toLocaleString('tr-TR')}</td>
                                   </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                                  {childItems.map((ci) => {
-                                    const cb     = ensureArray(ci.monthly_budget);
-                                    const ca     = ensureArray(ci.monthly_actual);
-                                    const ciBud  = cb[activeMonth] ?? 0;
-                                    const ciAct  = ca[activeMonth] ?? 0;
-                                    const ciDiff = ciAct - ciBud;
-                                    return (
-                                      <tr key={ci.param_code} className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
-                                        <td className="px-3 pl-8 py-1 text-gray-600 dark:text-gray-400">{ci.label}</td>
-                                        <td className="px-3 py-1 text-right font-mono text-gray-500 dark:text-gray-500">{fmtNum(ciBud)}</td>
-                                        <td className="px-3 py-1 text-right font-mono text-amber-500 dark:text-amber-500">{fmtNum(ciAct)}</td>
-                                        <td className={`px-3 py-1 text-right font-semibold ${ciDiff > 0 ? 'text-red-400 dark:text-red-500' : ciDiff < 0 ? 'text-green-500 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                                          {ciDiff !== 0 ? `${ciDiff > 0 ? '+' : ''}${ciDiff}` : '='}
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                                  {ciHasActual && (
+                                    <tr className="bg-amber-50/10 dark:bg-amber-900/5">
+                                      <td className="px-2 py-1 pl-9 text-amber-500 dark:text-amber-500 italic text-[10px]">fiili</td>
+                                      {ciAct.map((v, mi) => (
+                                        <td key={mi} className="px-1 py-1 text-right font-mono text-amber-500 dark:text-amber-500 text-[11px]">{v === 0 ? '—' : v.toLocaleString('tr-TR')}</td>
+                                      ))}
+                                      <td className="px-2 py-1 text-right font-mono text-amber-500 dark:text-amber-500 text-[11px]">{ciActAnnual === 0 ? '—' : ciActAnnual.toLocaleString('tr-TR')}</td>
+                                    </tr>
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
-              {/* Gün Sayısı */}
+              {/* ── Gün Sayısı — 12 ay kolonlu ──────────────────────────────── */}
               {gunParams.length > 0 && (
                 <div>
                   <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Gün Sayısı Ortalaması</p>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
+                  <div className="overflow-x-auto rounded border border-gray-200 dark:border-gray-700">
+                    <table className="min-w-[1000px] text-xs table-fixed">
+                      <colgroup>
+                        <col style={{ width: 160 }} />
+                        {MONTH_LABELS.map((m) => <col key={m} style={{ width: 52 }} />)}
+                        <col style={{ width: 72 }} />
+                      </colgroup>
                       <thead className="bg-gray-50 dark:bg-gray-800">
                         <tr>
-                          {['Grup', 'Bütçe (Aylık)', 'Fiili (Aylık)', 'Fark'].map((h, i) => (
-                            <th key={h} className={`px-3 py-1.5 font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide ${i === 0 ? 'text-left' : 'text-right'}`}>{h}</th>
+                          <th className="px-2 py-1.5 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Grup</th>
+                          {MONTH_LABELS.map((m) => (
+                            <th key={m} className="px-1 py-1.5 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">{m}</th>
                           ))}
+                          <th className="px-2 py-1.5 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Yıllık</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+                      <tbody>
                         {gunParams.map((g) => {
-                          const gb   = ensureArray(g.monthly_budget);
-                          const ga   = ensureArray(g.monthly_actual);
-                          const bud  = gb[activeMonth] ?? 0;
-                          const act  = ga[activeMonth] ?? 0;
-                          const diff = act - bud;
+                          const bud       = ensureArray(g.monthly_budget);
+                          const act       = ensureArray(g.monthly_actual);
+                          const budAnnual = bud.reduce((a, b) => a + b, 0);
+                          const actAnnual = act.reduce((a, b) => a + b, 0);
+                          const hasActual = act.some((v) => v !== 0);
                           return (
-                            <tr key={g.param_code} className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
-                              <td className="px-3 py-1.5 text-gray-700 dark:text-gray-300">{g.label}</td>
-                              <td className="px-3 py-1.5 text-right font-mono text-gray-600 dark:text-gray-400">{bud > 0 ? bud : '—'}</td>
-                              <td className="px-3 py-1.5 text-right font-mono text-amber-600 dark:text-amber-400">{act > 0 ? act : '—'}</td>
-                              <td className={`px-3 py-1.5 text-right font-semibold ${diff > 0 ? 'text-red-500 dark:text-red-400' : diff < 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                                {diff !== 0 ? `${diff > 0 ? '+' : ''}${diff}` : '='}
-                              </td>
-                            </tr>
+                            <React.Fragment key={g.param_code}>
+                              <tr className="border-t border-gray-100 dark:border-gray-800 bg-gray-50/30 dark:bg-gray-800/20 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
+                                <td className="px-2 py-1 text-gray-700 dark:text-gray-300 font-medium truncate">{g.label}</td>
+                                {bud.map((v, mi) => (
+                                  <td key={mi} className="px-1 py-1 text-right font-mono text-gray-600 dark:text-gray-400">{v === 0 ? '—' : v.toLocaleString('tr-TR')}</td>
+                                ))}
+                                <td className="px-2 py-1 text-right font-mono font-semibold text-gray-700 dark:text-gray-300">{budAnnual === 0 ? '—' : budAnnual.toLocaleString('tr-TR')}</td>
+                              </tr>
+                              {hasActual && (
+                                <tr className="bg-amber-50/20 dark:bg-amber-900/10 hover:bg-amber-50/40 dark:hover:bg-amber-900/20 transition-colors">
+                                  <td className="px-2 py-1 pl-5 text-amber-600 dark:text-amber-400 italic text-[10px]">fiili</td>
+                                  {act.map((v, mi) => (
+                                    <td key={mi} className="px-1 py-1 text-right font-mono text-amber-600 dark:text-amber-400">{v === 0 ? '—' : v.toLocaleString('tr-TR')}</td>
+                                  ))}
+                                  <td className="px-2 py-1 text-right font-mono font-semibold text-amber-600 dark:text-amber-400">{actAnnual === 0 ? '—' : actAnnual.toLocaleString('tr-TR')}</td>
+                                </tr>
+                              )}
+                            </React.Fragment>
                           );
                         })}
                       </tbody>
