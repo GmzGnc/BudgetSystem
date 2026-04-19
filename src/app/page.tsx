@@ -31,7 +31,7 @@ import { getDrillDownData, MONTH_LABELS } from '@/data/drill-down-data';
 import type { DrillDownGroup } from '@/data/drill-down-data';
 import {
   getCompanies, getFiscalYears, getCategories,
-  upsertSapEntries, logExcelImport,
+  upsertSapEntries,
   getBudgetMonthlyData, getSapMonthlyData, getBudgetEntriesAsModelRows, CATEGORY_CODE_MAP,
 } from '@/lib/db';
 import type { SapEntry as DbSapEntry } from '@/lib/db';
@@ -563,12 +563,7 @@ export default function Home() {
           console.error('[DB] budget_line_items failed:', e);
         }
 
-        // ── Block 3: import log ──
-        try {
-          await logExcelImport({ company_id: dbCompany.id, fiscal_year_id: dbYear.id, sheet_name: selectedSheet, row_count: parsed.length, import_type: 'model' });
-        } catch (e) {
-          console.warn('[DB] logExcelImport failed (non-fatal):', e);
-        }
+        // excel_imports log skipped — table not available
       })();
       return;
     }
@@ -655,7 +650,7 @@ export default function Home() {
         }));
         const res = await upsertSapEntries(dbEntries);
         if (res.error) console.warn('[DB] sap_entries upsert:', res.error);
-        await logExcelImport({ company_id: dbCompany.id, fiscal_year_id: dbYear.id, sheet_name: selectedSheet, row_count: parsed.length, import_type: 'sap' });
+        // excel_imports log skipped — table not available
       } catch (e) {
         console.warn('[DB] SAP import DB write failed:', e);
       }
