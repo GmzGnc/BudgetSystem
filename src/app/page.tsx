@@ -2069,6 +2069,10 @@ export default function Home() {
                                                       variancePct: bv > 0 ? (vv / bv) * 100 : 0,
                                                     };
                                                   });
+                                                  // Aktif ay bazlı bütçe/fiili hesabı
+                                                  const activeMonthIdxs = MONTH_LABELS
+                                                    .map((_, mi) => mi)
+                                                    .filter((mi) => (totalActualArr[mi] ?? 0) > 0);
                                                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                                   const departmentBreakdown = (varDepts as any[]).map((d) => {
                                                     const dBudget = ensureArr(d.monthly_budget);
@@ -2083,10 +2087,6 @@ export default function Home() {
                                                       variancePercent: activeBudget > 0 ? ((activeActual - activeBudget) / activeBudget) * 100 : 0,
                                                     };
                                                   });
-                                                  // Aktif ay bazlı bütçe/fiili hesabı
-                                                  const activeMonthIdxs = MONTH_LABELS
-                                                    .map((_, mi) => mi)
-                                                    .filter((mi) => (totalActualArr[mi] ?? 0) > 0);
                                                   const activeBudgetTotal = activeMonthIdxs.length > 0
                                                     ? activeMonthIdxs.reduce((s, mi) => s + (totalBudgetArr[mi] ?? 0), 0)
                                                     : budgetTotal;
