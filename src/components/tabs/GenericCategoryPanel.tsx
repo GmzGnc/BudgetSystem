@@ -106,12 +106,21 @@ export default function GenericCategoryPanel({
 
   // ── diagnostic (remove after HGS verified) ─────────────────────────────
   if (categoryCode === 'hgs') {
-    console.log('[HGS] lineItems total:', lineItems.length,
-      '| depts:', depts.length, '| params:', params.length);
-    console.log('[HGS] totalItem monthly_actual:', monthlyActual);
-    console.log('[HGS] effectiveMonthlyActual:', effectiveMonthlyActual);
-    console.log('[HGS] dept monthly_actuals:',
-      depts.map((d) => ({ label: d.label, actual: d.monthly_actual })));
+    console.log('[HGS] lineItems total:', lineItems.length, '| depts:', depts.length, '| params:', params.length);
+    console.log('[HGS] totalItem monthly_budget:', JSON.stringify(monthlyBudget));
+    console.log('[HGS] totalItem monthly_actual:', JSON.stringify(monthlyActual));
+    console.log('[HGS] effectiveMonthlyActual:', JSON.stringify(effectiveMonthlyActual));
+    console.log('[HGS] activeMonth:', activeMonth, '| annualBudget:', annualBudget);
+    if (depts.length > 0) {
+      const d0 = depts[0];
+      console.log('[HGS] depts[0] label:', d0.label);
+      console.log('[HGS] depts[0] monthly_budget raw:', d0.monthly_budget);
+      console.log('[HGS] depts[0] monthly_actual raw:', d0.monthly_actual);
+      console.log('[HGS] depts[0] monthly_budget ensured:', JSON.stringify(ensureArray(d0.monthly_budget)));
+      console.log('[HGS] depts[0] monthly_actual ensured:', JSON.stringify(ensureArray(d0.monthly_actual)));
+    }
+    console.log('[HGS] chartMonthly (next tick):');
+    // log after chartMonthly is built — see next log below
   }
 
   const chartMonthly = MONTH_LABELS.map((label, i) => ({
@@ -119,6 +128,10 @@ export default function GenericCategoryPanel({
     ...(annualBudget > 0 ? { 'Bütçe': monthlyBudget[i] ?? 0 } : {}),
     'Fiili': (effectiveMonthlyActual[i] ?? 0) > 0 ? (effectiveMonthlyActual[i] ?? 0) : undefined,
   }));
+
+  if (categoryCode === 'hgs') {
+    console.log('[HGS] chartMonthly Fiili values:', JSON.stringify(chartMonthly.map((r) => r['Fiili'])));
+  }
 
   function toggleDept(id: string) {
     setOpenDepts((prev) => {

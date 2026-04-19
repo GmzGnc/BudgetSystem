@@ -31,10 +31,10 @@ import { getDrillDownData, MONTH_LABELS } from '@/data/drill-down-data';
 import type { DrillDownGroup } from '@/data/drill-down-data';
 import {
   getCompanies, getFiscalYears, getCategories,
-  upsertBudgetEntries, upsertSapEntries, logExcelImport,
+  upsertSapEntries, logExcelImport,
   getBudgetMonthlyData, getSapMonthlyData, getBudgetEntriesAsModelRows, CATEGORY_CODE_MAP,
 } from '@/lib/db';
-import type { BudgetEntry, SapEntry as DbSapEntry } from '@/lib/db';
+import type { SapEntry as DbSapEntry } from '@/lib/db';
 import { parseExcelFile } from '@/lib/excelParser';
 import { upsertBudgetLineItems, fetchBudgetLineItems } from '@/lib/budgetLineItemsService';
 import {
@@ -540,41 +540,7 @@ export default function Home() {
         const { dbCompany, dbYear, dbCats } = await resolveDbIds();
         if (!dbCompany || !dbYear) return; // DB tabloları henüz kurulmamış
 
-        // ── Block 1: budget_entries (legacy single-total per category) ──
-        try {
-          const entries: BudgetEntry[] = [];
-          for (const [catCode, range] of Object.entries(CAT_ROW_RANGES)) {
-            const catRows = parsed.filter((r) => r.rowNum >= range[0] && r.rowNum <= range[1]);
-            const tlRows  = catRows.filter((r) => /^TL/i.test(r.unitType));
-            const mainRow = findMainTotalRow(catCode, catRows);
-            if (!mainRow) continue;
-            const dbCat = dbCats.find((c) => (CATEGORY_CODE_MAP[c.name] ?? c.name) === catCode);
-            if (!dbCat) continue;
-            for (let m = 0; m < 12; m++) {
-              const budgetFromToplam = mainRow.budget[m] ?? 0;
-              const budgetAmount = budgetFromToplam > 0
-                ? budgetFromToplam
-                : tlRows.reduce((s, r) => s + (r.budget[m] ?? 0), 0);
-              console.log('[excel] pushing entry budget_amount:', budgetAmount, 'actual:', mainRow.actual[m]);
-              entries.push({
-                company_id:     dbCompany.id,
-                fiscal_year_id: dbYear.id,
-                category_id:    dbCat.id,
-                department_id:  null,
-                month:          m + 1,
-                budget_amount:  budgetAmount,
-                actual_amount:  mainRow.actual[m] ?? 0,
-                unit_type:      mainRow.unitType,
-              });
-            }
-          }
-          if (entries.length > 0) {
-            const res = await upsertBudgetEntries(entries);
-            if (res.error) console.warn('[DB] budget_entries upsert:', res.error);
-          }
-        } catch (e) {
-          console.warn('[DB] budget_entries failed (non-fatal):', e);
-        }
+        // budget_entries (legacy) write removed — budget_line_items is the source of truth
 
         // ── Block 2: budget_line_items (granular row hierarchy) ──
         try {
