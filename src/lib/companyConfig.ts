@@ -17,6 +17,8 @@ export interface DeptConfig {
   row: number;
   label: string;
   itemRows?: RowConfig[];
+  /** Paired rows for TL + Litre items (e.g. arac_yakit vehicles): [tlRow, litreRow] */
+  itemPairs?: [number, number][];
 }
 
 export interface ParamConfig {
@@ -25,6 +27,7 @@ export interface ParamConfig {
   label: string;
   unit: string;
   noRound?: boolean; // true for decimal ratio/percentage params (prevents Math.round mangling)
+  deptCode?: string; // optional: groups param under a specific dept in the UI
 }
 
 export interface CategoryConfig {
@@ -327,10 +330,34 @@ export const COMPANY_CONFIG: Record<string, SheetConfig> = {
       hgs: {
         total: { row: 785, label: "HGS Giderleri", unit: "TL Karşılığı" },
         depts: [
-          { code: "gyg",              row: 787, label: "Genel Yönetim",     itemRows: [] },
-          { code: "operasyon",        row: 815, label: "Operasyon",         itemRows: [] },
+          { code: "gyg", row: 787, label: "Genel Yönetim", itemRows: [
+            { row: 788, label: "Araç 1" },  { row: 791, label: "Araç 2" },
+            { row: 793, label: "Araç 3" },  { row: 795, label: "Araç 4" },
+            { row: 797, label: "Araç 5" },  { row: 799, label: "Araç 6" },
+            { row: 800, label: "Araç 7" },  { row: 802, label: "Araç 8" },
+            { row: 804, label: "Araç 9" },  { row: 805, label: "Araç 10" },
+            { row: 807, label: "Araç 11" }, { row: 808, label: "Araç 12" },
+          ] },
+          { code: "operasyon", row: 815, label: "Operasyon", itemRows: [
+            { row: 816, label: "Araç 1" },  { row: 818, label: "Araç 2" },
+            { row: 820, label: "Araç 3" },  { row: 822, label: "Araç 4" },
+            { row: 824, label: "Araç 5" },  { row: 826, label: "Araç 6" },
+            { row: 828, label: "Araç 7" },  { row: 830, label: "Araç 8" },
+            { row: 832, label: "Araç 9" },  { row: 834, label: "Araç 10" },
+            { row: 836, label: "Araç 11" }, { row: 837, label: "Araç 12" },
+            { row: 838, label: "Araç 13" }, { row: 839, label: "Araç 14" },
+            { row: 840, label: "Araç 15" }, { row: 841, label: "Araç 16" },
+            { row: 842, label: "Araç 17" }, { row: 843, label: "Araç 18" },
+            { row: 844, label: "Araç 19" }, { row: 845, label: "Araç 20" },
+            { row: 846, label: "Araç 21" },
+          ] },
           { code: "operasyon_ictas",  row: 871, label: "Operasyon - İçtaş", itemRows: [] },
-          { code: "kamu",             row: 893, label: "Kamu",              itemRows: [] },
+          { code: "kamu", row: 893, label: "Kamu", itemRows: [
+            { row: 894, label: "Araç 1" }, { row: 896, label: "Araç 2" },
+            { row: 898, label: "Araç 3" }, { row: 899, label: "Araç 4" },
+            { row: 900, label: "Araç 5" }, { row: 902, label: "Araç 6" },
+            { row: 905, label: "Araç 7" },
+          ] },
           { code: "kilyos",           row: 910, label: "Kilyos",            itemRows: [] },
         ],
         params: [
@@ -344,9 +371,19 @@ export const COMPANY_CONFIG: Record<string, SheetConfig> = {
       arac_yakit: {
         total: { row: 970, label: "Araç Yakıt Giderleri", unit: "TL Karşılığı" },
         depts: [
-          { code: "gyg",       row: 973,  label: "Genel Yönetim", itemRows: [] },
-          { code: "operasyon", row: 1025, label: "Operasyon",      itemRows: [] },
-          { code: "kamu",      row: 1128, label: "Kamu",           itemRows: [] },
+          { code: "gyg", row: 973, label: "Genel Yönetim", itemRows: [], itemPairs: [
+            [974,975],[980,981],[984,985],[988,989],[992,993],
+            [994,995],[996,997],[1000,1001],[1004,1005],[1006,1007],[1012,1013],
+          ] },
+          { code: "operasyon", row: 1025, label: "Operasyon", itemRows: [], itemPairs: [
+            [1026,1027],[1030,1031],[1038,1039],[1042,1043],[1046,1047],
+            [1050,1051],[1058,1059],[1062,1063],[1066,1067],[1068,1069],
+            [1070,1071],[1072,1073],[1073,1074],[1075,1076],[1078,1079],
+            [1080,1081],[1082,1083],[1084,1085],[1086,1087],
+          ] },
+          { code: "kamu", row: 1128, label: "Kamu", itemRows: [], itemPairs: [
+            [1129,1130],[1133,1134],[1137,1138],[1141,1142],[1145,1146],[1149,1150],
+          ] },
         ],
         params: [
           { code: "arac_toplam",           row: 969,  label: "Toplam Araç Sayısı",    unit: "Adet",  noRound: false },
@@ -359,9 +396,33 @@ export const COMPANY_CONFIG: Record<string, SheetConfig> = {
       arac_bakim: {
         total: { row: 1163, label: "Taşıt Bakım Onarım", unit: "TL Karşılığı" },
         depts: [
-          { code: "gyg",       row: 1165, label: "Genel Yönetim", itemRows: [] },
-          { code: "kamu",      row: 1191, label: "Kamu",           itemRows: [] },
-          { code: "operasyon", row: 1207, label: "Operasyon",      itemRows: [] },
+          { code: "gyg", row: 1165, label: "Genel Yönetim", itemRows: [
+            { row: 1166, label: "Araç 1" },  { row: 1169, label: "Araç 2" },
+            { row: 1171, label: "Araç 3" },  { row: 1173, label: "Araç 4" },
+            { row: 1175, label: "Araç 5" },  { row: 1177, label: "Araç 6" },
+            { row: 1178, label: "Araç 7" },  { row: 1180, label: "Araç 8" },
+            { row: 1182, label: "Araç 9" },  { row: 1183, label: "Araç 10" },
+            { row: 1185, label: "Araç 11" }, { row: 1186, label: "Araç 12" },
+          ] },
+          { code: "kamu", row: 1191, label: "Kamu", itemRows: [
+            { row: 1192, label: "Araç 1" }, { row: 1194, label: "Araç 2" },
+            { row: 1196, label: "Araç 3" }, { row: 1197, label: "Araç 4" },
+            { row: 1198, label: "Araç 5" }, { row: 1200, label: "Araç 6" },
+            { row: 1203, label: "Araç 7" },
+          ] },
+          { code: "operasyon", row: 1207, label: "Operasyon", itemRows: [
+            { row: 1208, label: "Araç 1" },  { row: 1210, label: "Araç 2" },
+            { row: 1212, label: "Araç 3" },  { row: 1214, label: "Araç 4" },
+            { row: 1216, label: "Araç 5" },  { row: 1218, label: "Araç 6" },
+            { row: 1220, label: "Araç 7" },  { row: 1222, label: "Araç 8" },
+            { row: 1224, label: "Araç 9" },  { row: 1226, label: "Araç 10" },
+            { row: 1228, label: "Araç 11" }, { row: 1229, label: "Araç 12" },
+            { row: 1230, label: "Araç 13" }, { row: 1231, label: "Araç 14" },
+            { row: 1232, label: "Araç 15" }, { row: 1233, label: "Araç 16" },
+            { row: 1234, label: "Araç 17" }, { row: 1235, label: "Araç 18" },
+            { row: 1236, label: "Araç 19" }, { row: 1237, label: "Araç 20" },
+            { row: 1238, label: "Araç 21" },
+          ] },
         ],
         params: [
           { code: "arac_toplam",           row: 1162, label: "Toplam Araç Sayısı",    unit: "Adet" },
@@ -373,18 +434,79 @@ export const COMPANY_CONFIG: Record<string, SheetConfig> = {
       diger_hizmet: {
         total: { row: 1273, label: "Diğer Hizmet Giderleri", unit: "TL Karşılığı" },
         depts: [
-          { code: "cop_kamyon", row: 1274, label: "Kiralık Çöp Kamyoneti + Çöp Döküm", itemRows: [] },
-          { code: "su_nakliye", row: 1303, label: "Su Nakliye Giderleri-Operasyon",     itemRows: [] },
+          { code: "bakim_merkezi", row: 1274, label: "Bakım Merkezi Grubu", itemRows: [] },
+          { code: "vidanjor",      row: 1299, label: "Vidanjör/Fosseptik",  itemRows: [] },
+          { code: "su_tankeri",    row: 1303, label: "Su Tankeri Grubu",    itemRows: [] },
         ],
-        params: [],
+        params: [
+          // ── Bakım Merkezi ────────────────────────────────────────────
+          { code: "kamyonet_cop",       row: 1275, label: "Kiralık Kamyonet Çöp Aracı",        unit: "TL",    deptCode: "bakim_merkezi" },
+          { code: "kamyonet_fiyat",     row: 1276, label: "Kamyonet Birim Fiyat",              unit: "TL",    deptCode: "bakim_merkezi" },
+          { code: "kamyonet_adet",      row: 1277, label: "Kamyonet Araç Sayısı",              unit: "Adet",  deptCode: "bakim_merkezi" },
+          { code: "cop_avrupa_bakim",   row: 1278, label: "Çöp Döküm - Avrupa (Bakım)",        unit: "TL",    deptCode: "bakim_merkezi" },
+          { code: "cop_avrupa_fiyat",   row: 1279, label: "Çöp Döküm Avrupa Birim Fiyat",      unit: "TL",    deptCode: "bakim_merkezi" },
+          { code: "cop_avrupa_ton",     row: 1280, label: "Çöp Döküm Avrupa Ton",              unit: "Ton",   deptCode: "bakim_merkezi" },
+          { code: "cop_asya_bakim",     row: 1281, label: "Çöp Döküm - Asya (Bakım)",          unit: "TL",    deptCode: "bakim_merkezi" },
+          { code: "cop_asya_fiyat",     row: 1282, label: "Çöp Döküm Asya Birim Fiyat",        unit: "TL",    deptCode: "bakim_merkezi" },
+          { code: "cop_asya_ton",       row: 1283, label: "Çöp Döküm Asya Ton",                unit: "Ton",   deptCode: "bakim_merkezi" },
+          { code: "cop_avrupa_ica",     row: 1284, label: "Çöp Döküm - Avrupa (ICA+OHT)",      unit: "TL",    deptCode: "bakim_merkezi" },
+          { code: "cop_avrupa_ica_f",   row: 1285, label: "Çöp Döküm Avrupa ICA Birim Fiyat",  unit: "TL",    deptCode: "bakim_merkezi" },
+          { code: "cop_avrupa_ica_t",   row: 1286, label: "Çöp Döküm Avrupa ICA Ton",          unit: "Ton",   deptCode: "bakim_merkezi" },
+          { code: "cop_asya_ica",       row: 1287, label: "Çöp Döküm - Asya (ICA+OHT)",        unit: "TL",    deptCode: "bakim_merkezi" },
+          { code: "cop_asya_ica_f",     row: 1288, label: "Çöp Döküm Asya ICA Birim Fiyat",    unit: "TL",    deptCode: "bakim_merkezi" },
+          { code: "cop_asya_ica_t",     row: 1289, label: "Çöp Döküm Asya ICA Ton",            unit: "Ton",   deptCode: "bakim_merkezi" },
+          { code: "hafriyat_avrupa",    row: 1290, label: "Hafriyat Döküm - Avrupa",            unit: "TL",    deptCode: "bakim_merkezi" },
+          { code: "hafriyat_avr_fiyat", row: 1291, label: "Hafriyat Avrupa Birim Fiyat",        unit: "TL",    deptCode: "bakim_merkezi" },
+          { code: "hafriyat_avr_sefer", row: 1292, label: "Hafriyat Avrupa Sefer Sayısı",       unit: "Sefer", deptCode: "bakim_merkezi" },
+          { code: "hafriyat_asya",      row: 1293, label: "Hafriyat Döküm - Asya",              unit: "TL",    deptCode: "bakim_merkezi" },
+          { code: "hafriyat_asya_f",    row: 1294, label: "Hafriyat Asya Birim Fiyat",          unit: "TL",    deptCode: "bakim_merkezi" },
+          { code: "hafriyat_asya_s",    row: 1295, label: "Hafriyat Asya Sefer Sayısı",         unit: "Sefer", deptCode: "bakim_merkezi" },
+          { code: "kamyonet_oht_payi",  row: 1297, label: "Kiralık Kamyonet OHT Payı",          unit: "TL",    deptCode: "bakim_merkezi" },
+          { code: "cop_oht_payi",       row: 1298, label: "Çöp Döküm OHT Payı",                 unit: "TL",    deptCode: "bakim_merkezi" },
+          // ── Vidanjör ─────────────────────────────────────────────────
+          { code: "vidanjor_fiyat",     row: 1300, label: "Vidanjör Birim Fiyat",               unit: "TL",    deptCode: "vidanjor" },
+          { code: "vidanjor_adet",      row: 1301, label: "Vidanjör Araç Sayısı",               unit: "Adet",  deptCode: "vidanjor" },
+          // ── Su Tankeri ───────────────────────────────────────────────
+          { code: "su_tankeri_tutar",   row: 1304, label: "Su Tankeri Taşıma Suyu",             unit: "TL",    deptCode: "su_tankeri" },
+          { code: "su_tankeri_fiyat",   row: 1305, label: "Su Tankeri Birim Fiyat",             unit: "TL",    deptCode: "su_tankeri" },
+          { code: "su_tankeri_adet",    row: 1306, label: "Su Tankeri Araç Sayısı",             unit: "Adet",  deptCode: "su_tankeri" },
+          { code: "su_nakliye",         row: 1309, label: "Su Nakliyesi (Gişeler+Kimyasal)",    unit: "TL",    deptCode: "su_tankeri" },
+          { code: "su_nakliye_fiyat",   row: 1310, label: "Su Nakliye Birim Fiyat",             unit: "TL",    deptCode: "su_tankeri" },
+          { code: "su_nakliye_litre",   row: 1311, label: "Su Nakliye Litre",                   unit: "Litre", deptCode: "su_tankeri" },
+        ],
       },
       icme_suyu: {
         total: { row: 1312, label: "İçme Suyu Giderleri", unit: "TL Karşılığı" },
         depts: [
-          { code: "gyg", row: 1313, label: "GYG",          itemRows: [] },
-          { code: "oht", row: 1329, label: "OHT İçme Suyu", itemRows: [] },
+          { code: "gyg",    row: 1313, label: "GYG Toplam",        itemRows: [] },
+          { code: "oht",    row: 1329, label: "OHT Toplam",         itemRows: [] },
+          { code: "kilyos", row: 1336, label: "Kilyos İçme Suyu",  itemRows: [] },
         ],
-        params: [],
+        params: [
+          // ── GYG ──────────────────────────────────────────────────────
+          { code: "garipce_damacana",     row: 1314, label: "Garipçe Damacana",    unit: "TL",   noRound: true,  deptCode: "gyg" },
+          { code: "garipce_dam_tuketim",  row: 1315, label: "Aylık Tüketim",       unit: "Adet", noRound: false, deptCode: "gyg" },
+          { code: "garipce_dam_fiyat",    row: 1316, label: "Birim Fiyat",         unit: "TL",   noRound: true,  deptCode: "gyg" },
+          { code: "garipce_pet",          row: 1317, label: "Garipçe PET 24'lü",   unit: "TL",   noRound: true,  deptCode: "gyg" },
+          { code: "garipce_pet_tuketim",  row: 1318, label: "Aylık Tüketim",       unit: "Adet", noRound: false, deptCode: "gyg" },
+          { code: "garipce_pet_fiyat",    row: 1319, label: "Birim Fiyat",         unit: "TL",   noRound: true,  deptCode: "gyg" },
+          { code: "sade_soda",            row: 1320, label: "Sade Soda 24'lü",     unit: "TL",   noRound: true,  deptCode: "gyg" },
+          { code: "sade_soda_tuketim",    row: 1321, label: "Aylık Tüketim",       unit: "Adet", noRound: false, deptCode: "gyg" },
+          { code: "sade_soda_fiyat",      row: 1322, label: "Birim Fiyat",         unit: "TL",   noRound: true,  deptCode: "gyg" },
+          { code: "meyveli_soda",         row: 1323, label: "Meyveli Soda 24'lü",  unit: "TL",   noRound: true,  deptCode: "gyg" },
+          { code: "meyveli_soda_tuketim", row: 1324, label: "Aylık Tüketim",       unit: "Adet", noRound: false, deptCode: "gyg" },
+          { code: "meyveli_soda_fiyat",   row: 1325, label: "Birim Fiyat",         unit: "TL",   noRound: true,  deptCode: "gyg" },
+          { code: "cam_sise",             row: 1326, label: "Cam Şişe 12'li",      unit: "TL",   noRound: true,  deptCode: "gyg" },
+          { code: "cam_sise_tuketim",     row: 1327, label: "Aylık Tüketim",       unit: "Adet", noRound: false, deptCode: "gyg" },
+          { code: "cam_sise_fiyat",       row: 1328, label: "Birim Fiyat",         unit: "TL",   noRound: true,  deptCode: "gyg" },
+          // ── OHT ──────────────────────────────────────────────────────
+          { code: "oht_pet",              row: 1330, label: "OHT PET 24'lü",       unit: "TL",   noRound: true,  deptCode: "oht" },
+          { code: "oht_pet_tuketim",      row: 1331, label: "Aylık Tüketim",       unit: "Adet", noRound: false, deptCode: "oht" },
+          { code: "oht_pet_fiyat",        row: 1332, label: "Birim Fiyat",         unit: "TL",   noRound: true,  deptCode: "oht" },
+          { code: "oht_damacana",         row: 1333, label: "OHT Damacana",        unit: "TL",   noRound: true,  deptCode: "oht" },
+          { code: "oht_dam_tuketim",      row: 1334, label: "Aylık Tüketim",       unit: "Adet", noRound: false, deptCode: "oht" },
+          { code: "oht_dam_fiyat",        row: 1335, label: "Birim Fiyat",         unit: "TL",   noRound: true,  deptCode: "oht" },
+        ],
       },
       diger_cesitli: {
         total: { row: 1337, label: "Diğer Çeşitli Giderler", unit: "TL Karşılığı" },

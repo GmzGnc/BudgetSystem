@@ -78,7 +78,8 @@ const CAT_ROW_RANGES: Record<string, [number, number]> = {
   hgs:           [785,  966],
   arac_yakit:    [970,  1162],
   arac_bakim:    [1163, 1272],
-  diger_hizmet:  [1273, 1336],
+  diger_hizmet:  [1273, 1311],
+  icme_suyu:     [1312, 1336],
   diger_cesitli: [1337, 1376],
 };
 
@@ -588,14 +589,14 @@ export default function Home() {
       if (/\bHGS\b/.test(n))                            return 'HGS';
       if (/YAKIT|YAKITI|FUEL/.test(n))                  return 'Araç Yakıt';
       if (/BAKIM|ONARIM|SERVIS|SERVİS/.test(n))         return 'Araç Bakım';
-      if (/İÇME SUYU|ICME SUYU|\bSU\b|SU GİD/.test(n)) return 'Su';
+      if (/İÇME SUYU|ICME SUYU|\bSU\b|SU GİD/.test(n)) return 'İçme Suyu';
       if (/TEMİZLİK|TEMIZLIK|TAŞERON|TASERON/.test(n))  return 'Temizlik';
       if (/^26DE19/.test(code))                          return 'Yemek';
       if (/^26DE21|^26DE07/.test(code))                  return 'Araç Kira';
       if (/^26DE22|^26DE06/.test(code))                  return 'HGS';
       if (/^26DE24|^26DE03/.test(code))                  return 'Araç Yakıt';
       if (/^26DE25|^26DE05/.test(code))                  return 'Araç Bakım';
-      if (/^26DE29|^26DE04/.test(code))                  return 'Su';
+      if (/^26DE29|^26DE04/.test(code))                  return 'İçme Suyu';
       if (/^26DE30|^26DE08|^26DE09/.test(code))          return 'Temizlik';
       return 'Diğer Çeşitli';
     }
@@ -730,7 +731,7 @@ export default function Home() {
       'Yemek': 'Food/Catering', 'Servis/Ulaşım': 'Transportation',
       'Araç Kira': 'Vehicle Rental', 'HGS': 'HGS/Toll',
       'Araç Yakıt': 'Vehicle Fuel', 'Araç Bakım': 'Vehicle Maintenance',
-      'Su': 'Water', 'Diğer Hizmet': 'Other Services',
+      'İçme Suyu': 'Water', 'Diğer Hizmet': 'Other Services',
       'Diğer Çeşitli': 'Miscellaneous',
     };
 
@@ -1104,7 +1105,7 @@ export default function Home() {
                           'Yemek': 'Food/Catering', 'Servis/Ulaşım': 'Transportation',
                           'Araç Kira': 'Vehicle Rental', 'HGS': 'HGS/Toll',
                           'Araç Yakıt': 'Vehicle Fuel', 'Araç Bakım': 'Vehicle Maintenance',
-                          'Su': 'Water', 'Diğer Hizmet': 'Other Services',
+                          'İçme Suyu': 'Water', 'Diğer Hizmet': 'Other Services',
                           'Diğer Çeşitli': 'Miscellaneous',
                         };
 
@@ -1273,8 +1274,31 @@ export default function Home() {
                       const diff = t26 - t25;
                       const diffPctCat = variancePct(t25, t26);
 
-                      // 2025 Fiili — importedModelData varsa mainTotalRow.actual toplamı
+                      // 2025 Fiili — liCategories için budget_line_items'tan, diğerleri için importedModelData
                       const cat2025Actual = (() => {
+                        if (liCategories.includes(cat.id)) {
+                          // Use lineItemsData with the same HGS/İçme Suyu pass-through fallback:
+                          // if total row actuals are all zero, sum dept actuals instead.
+                          const ensureArr = (v: unknown): number[] => {
+                            if (!v) return Array(12).fill(0);
+                            if (typeof v === 'string') { try { return JSON.parse(v) as number[]; } catch { return Array(12).fill(0); } }
+                            return Array.isArray(v) ? (v as number[]) : Array(12).fill(0);
+                          };
+                          const liItems = (lineItemsData as any[]).filter((i: any) => i.category_code === cat.id);
+                          const liTotal = liItems.find((i: any) => i.row_type === 'total');
+                          const totalActual = ensureArr(liTotal?.monthly_actual);
+                          const effective = totalActual.some((v: number) => v > 0)
+                            ? totalActual
+                            : liItems
+                                .filter((i: any) => i.row_type === 'dept')
+                                .reduce((acc: number[], d: any) => {
+                                  const da = ensureArr(d.monthly_actual);
+                                  return acc.map((v, idx) => v + (da[idx] ?? 0));
+                                }, Array(12).fill(0) as number[]);
+                          const total = effective.reduce((s: number, v: number) => s + v, 0);
+                          return total > 0 ? total : null;
+                        }
+                        // Non-liCategory: use importedModelData
                         if (!importedModelData) return null;
                         const range = CAT_ROW_RANGES[cat.id];
                         const rows = range
@@ -2098,7 +2122,7 @@ export default function Home() {
                                                     'Yemek': 'Food/Catering', 'Servis/Ulaşım': 'Transportation',
                                                     'Araç Kira': 'Vehicle Rental', 'HGS': 'HGS/Toll',
                                                     'Araç Yakıt': 'Vehicle Fuel', 'Araç Bakım': 'Vehicle Maintenance',
-                                                    'Su': 'Water', 'Diğer Hizmet': 'Other Services',
+                                                    'İçme Suyu': 'Water', 'Diğer Hizmet': 'Other Services',
                                                     'Diğer Çeşitli': 'Miscellaneous',
                                                   };
 

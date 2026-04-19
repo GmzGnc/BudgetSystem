@@ -9,7 +9,7 @@ export const CATEGORIES: Category[] = [
   { id: 'hgs',          name: 'HGS',              indexType: 'TÜFE',           rate: 23.1  },
   { id: 'arac_yakit',   name: 'Araç Yakıt',       indexType: 'Motorin',        rate: 15.8  },
   { id: 'arac_bakim',   name: 'Araç Bakım',       indexType: 'ÜFE',            rate: 23.1  },
-  { id: 'su',           name: 'Su',               indexType: 'TÜFE',           rate: 23.1  },
+  { id: 'icme_suyu',    name: 'İçme Suyu',         indexType: 'TÜFE',           rate: 23.1  },
   { id: 'diger_hizmet', name: 'Diğer Hizmet',     indexType: 'ÜFE',            rate: 23.1  },
   { id: 'diger_cesitli',name: 'Diğer Çeşitli',    indexType: 'ÜFE',            rate: 23.1  },
 ];
@@ -23,7 +23,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
   hgs:           '#ec4899',
   arac_yakit:    '#f97316',
   arac_bakim:    '#84cc16',
-  su:            '#06b6d4',
+  icme_suyu:     '#06b6d4',
   diger_hizmet:  '#a78bfa',
   diger_cesitli: '#94a3b8',
 };

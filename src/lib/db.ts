@@ -110,6 +110,7 @@ export const CATEGORY_CODE_MAP: Record<string, string> = {
   'Araç Yakıt':    'arac_yakit',
   'Araç Bakım':    'arac_bakim',
   'Diğer Hizmet':  'diger_hizmet',
+  'İçme Suyu':     'icme_suyu',
   'Diğer Çeşitli': 'diger_cesitli',
 };
 

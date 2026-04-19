@@ -23,7 +23,7 @@ const CAT_ID_MAP: Record<string, string> = {
   hgs:           'HGS',
   arac_yakit:    'Araç Yakıt',
   arac_bakim:    'Araç Bakım',
-  su:            'Su',
+  icme_suyu:     'İçme Suyu',
   diger_hizmet:  'Diğer Hizmet',
   diger_cesitli: 'Diğer Çeşitli',
 };
