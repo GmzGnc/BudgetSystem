@@ -49,8 +49,9 @@ export default function GenericCategoryPanel({
   const tooltipBg     = dark ? '#1f2937' : '#ffffff';
   const tooltipBorder = dark ? '#374151' : '#e5e7eb';
 
-  const [openDepts, setOpenDepts] = useState<Set<string>>(new Set());
-  const [paramOpen, setParamOpen] = useState(false);
+  const [openDepts,      setOpenDepts]      = useState<Set<string>>(new Set());
+  const [paramOpen,      setParamOpen]      = useState(false);
+  const [openDeptParams, setOpenDeptParams] = useState<Set<string>>(new Set());
 
   // ── derive data ────────────────────────────────────────────────────────────
 
@@ -530,7 +531,7 @@ export default function GenericCategoryPanel({
         </div>
       )}
 
-      {/* ── 6. Parametre Detayı ─────────────────────────────────────────────── */}
+      {/* ── 6. Parametre Detayı — param=satır, ay=kolon ─────────────────────── */}
       {params.length > 0 && (() => {
         const globalParams = params.filter((p) => !p.dept_code);
         const deptParamMap = new Map<string, typeof params>(
@@ -540,44 +541,101 @@ export default function GenericCategoryPanel({
           .map((d, di) => ({ dept: d, di, paramList: deptParamMap.get(d.dept_code ?? '') ?? [] }))
           .filter(({ paramList }) => paramList.length > 0);
 
-        const renderParamTable = (paramList: typeof params) => (
-          <div className="overflow-x-auto">
-            <table className="w-full table-fixed text-xs">
-              <colgroup>
-                <col style={{ width: 40 }} />
-                {paramList.map((p) => <col key={p.param_code} style={{ width: 100 }} />)}
-              </colgroup>
-              <thead className="bg-gray-50 dark:bg-gray-800">
-                <tr>
-                  <th className="px-2 py-1.5 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Ay</th>
-                  {paramList.map((p) => (
-                    <th key={p.param_code} className="px-2 py-1.5 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-normal leading-tight">
-                      {p.label}
-                    </th>
+        // Format helper: TL → fmtM (compact), other → toLocaleString
+        const fmtCell = (v: number, unitType: string | null) => {
+          if (v === 0) return '—';
+          const isTL = unitType === 'TL' || unitType === 'TL Karşılığı';
+          return isTL ? fmtM(v) : v.toLocaleString('tr-TR');
+        };
+
+        // Renders bütçe + fiili + fark rows for a single param item
+        const renderParamRows = (p: typeof params[number]) => {
+          const bud       = ensureArray(p.monthly_budget);
+          const act       = ensureArray(p.monthly_actual);
+          const budAnnual = bud.reduce((a, b) => a + b, 0);
+          const actAnnual = act.reduce((a, b) => a + b, 0);
+          const hasActual = act.some((v) => v !== 0);
+          const unit      = p.unit_type ?? null;
+          const key       = p.param_code ?? p.label;
+          return (
+            <React.Fragment key={key}>
+              {/* bütçe satırı */}
+              <tr className="border-t border-gray-100 dark:border-gray-800 bg-gray-50/30 dark:bg-gray-800/20 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
+                <td className="px-2 py-1 text-gray-700 dark:text-gray-300 font-medium truncate">{p.label}</td>
+                <td className="px-1 py-1 text-[10px] text-gray-400 dark:text-gray-500 text-center">{unit ?? ''}</td>
+                {bud.map((v, mi) => (
+                  <td key={mi} className="px-1 py-1 text-right font-mono text-gray-600 dark:text-gray-400">{fmtCell(v, unit)}</td>
+                ))}
+                <td className="px-2 py-1 text-right font-mono font-semibold text-gray-700 dark:text-gray-300">{fmtCell(budAnnual, unit)}</td>
+              </tr>
+              {/* fiili satırı — amber, sadece actual varsa */}
+              {hasActual && (
+                <tr className="bg-amber-50/20 dark:bg-amber-900/10 hover:bg-amber-50/40 dark:hover:bg-amber-900/20 transition-colors">
+                  <td className="px-2 py-1 pl-5 text-amber-600 dark:text-amber-400 italic text-[10px]">fiili</td>
+                  <td />
+                  {act.map((v, mi) => (
+                    <td key={mi} className="px-1 py-1 text-right font-mono text-amber-600 dark:text-amber-400">{v === 0 ? '—' : fmtCell(v, unit)}</td>
                   ))}
+                  <td className="px-2 py-1 text-right font-mono font-semibold text-amber-600 dark:text-amber-400">{actAnnual === 0 ? '—' : fmtCell(actAnnual, unit)}</td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                {MONTH_LABELS.map((lbl, mi) => {
-                  const isActive = mi === activeMonth;
-                  return (
-                    <tr key={lbl} className={`hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors ${isActive ? 'bg-gray-50 dark:bg-gray-800/40 font-semibold' : ''}`}>
-                      <td className="px-2 py-1.5 text-gray-500 dark:text-gray-400">{lbl}</td>
-                      {paramList.map((p) => {
-                        const arr = ensureArray(p.monthly_budget);
-                        const v   = arr[mi] ?? 0;
-                        return (
-                          <td key={p.param_code} className="px-2 py-1.5 text-right font-mono text-gray-700 dark:text-gray-300">
-                            {v !== 0 ? v.toLocaleString('tr-TR') : '—'}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+              )}
+              {/* fark satırı — kırmızı/yeşil, sadece actual varsa */}
+              {hasActual && (
+                <tr className="hover:bg-gray-50/50 dark:hover:bg-gray-800/20 transition-colors">
+                  <td className="px-2 py-1 pl-5 text-gray-400 dark:text-gray-500 italic text-[10px]">fark</td>
+                  <td />
+                  {bud.map((v, mi) => {
+                    const diff = (act[mi] ?? 0) - v;
+                    const hasMonth = act[mi] !== 0 || v !== 0;
+                    return (
+                      <td key={mi} className={`px-1 py-1 text-right font-mono text-[10px] ${
+                        !hasMonth ? 'text-gray-300 dark:text-gray-700'
+                        : diff > 0 ? 'text-red-500 dark:text-red-400'
+                        : diff < 0 ? 'text-green-600 dark:text-green-400'
+                        : 'text-gray-400 dark:text-gray-500'
+                      }`}>
+                        {!hasMonth ? '—' : diff === 0 ? '=' : `${diff > 0 ? '+' : ''}${fmtCell(diff, unit)}`}
+                      </td>
+                    );
+                  })}
+                  {(() => {
+                    const totalDiff = actAnnual - budAnnual;
+                    return (
+                      <td className={`px-2 py-1 text-right font-mono font-semibold text-[10px] ${
+                        totalDiff > 0 ? 'text-red-500 dark:text-red-400'
+                        : totalDiff < 0 ? 'text-green-600 dark:text-green-400'
+                        : 'text-gray-400 dark:text-gray-500'
+                      }`}>
+                        {totalDiff === 0 ? '=' : `${totalDiff > 0 ? '+' : ''}${fmtCell(totalDiff, unit)}`}
+                      </td>
+                    );
+                  })()}
+                </tr>
+              )}
+            </React.Fragment>
+          );
+        };
+
+        // Shared colgroup + thead
+        const tableHeader = (
+          <>
+            <colgroup>
+              <col style={{ width: 160 }} />
+              <col style={{ width: 36 }} />
+              {MONTH_LABELS.map((m) => <col key={m} style={{ width: 52 }} />)}
+              <col style={{ width: 72 }} />
+            </colgroup>
+            <thead className="bg-gray-50 dark:bg-gray-800">
+              <tr>
+                <th className="px-2 py-1.5 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Parametre</th>
+                <th className="px-1 py-1.5 text-center font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">PB</th>
+                {MONTH_LABELS.map((m) => (
+                  <th key={m} className="px-1 py-1.5 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">{m}</th>
+                ))}
+                <th className="px-2 py-1.5 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px]">Yıllık</th>
+              </tr>
+            </thead>
+          </>
         );
 
         return (
@@ -595,19 +653,52 @@ export default function GenericCategoryPanel({
 
             <div style={{ display: 'grid', gridTemplateRows: paramOpen ? '1fr' : '0fr', transition: 'grid-template-rows 0.25s ease' }}>
               <div className="overflow-hidden">
-                <div className="border-t border-gray-100 dark:border-gray-700 p-3 space-y-4">
+                <div className="border-t border-gray-100 dark:border-gray-700 p-3 space-y-3">
 
-                  {globalParams.length > 0 && renderParamTable(globalParams)}
+                  {/* Global params (dept_code null) — önce */}
+                  {globalParams.length > 0 && (
+                    <div className="overflow-x-auto rounded border border-gray-200 dark:border-gray-700">
+                      <table className="min-w-[1000px] text-xs table-fixed">
+                        {tableHeader}
+                        <tbody>{globalParams.map((p) => renderParamRows(p))}</tbody>
+                      </table>
+                    </div>
+                  )}
 
+                  {/* Dept grupları — accordion */}
                   {deptEntries.map(({ dept, di, paramList }) => {
                     const deptColor = DEPT_COLORS[di % DEPT_COLORS.length];
+                    const deptKey   = dept.dept_code ?? `di_${di}`;
+                    const isOpen    = openDeptParams.has(deptKey);
                     return (
-                      <div key={dept.dept_code}>
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: deptColor }} />
-                          <span className="text-[11px] font-semibold text-gray-600 dark:text-gray-300">{dept.label}</span>
+                      <div key={deptKey} className="rounded border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        {/* dept accordion başlığı */}
+                        <button
+                          onClick={() => setOpenDeptParams((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(deptKey)) next.delete(deptKey); else next.add(deptKey);
+                            return next;
+                          })}
+                          className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors select-none"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: deptColor }} />
+                            <span className="text-[11px] font-semibold text-gray-600 dark:text-gray-300">{dept.label}</span>
+                            <span className="text-[10px] text-gray-400 dark:text-gray-500">({paramList.length} param)</span>
+                          </div>
+                          <span className="text-gray-400 dark:text-gray-500 text-[10px]">{isOpen ? '▼' : '▶'}</span>
+                        </button>
+                        {/* dept param tablosu — accordion açıkken */}
+                        <div style={{ display: 'grid', gridTemplateRows: isOpen ? '1fr' : '0fr', transition: 'grid-template-rows 0.25s ease' }}>
+                          <div className="overflow-hidden">
+                            <div className="overflow-x-auto border-t border-gray-100 dark:border-gray-800">
+                              <table className="min-w-[1000px] text-xs table-fixed">
+                                {tableHeader}
+                                <tbody>{paramList.map((p) => renderParamRows(p))}</tbody>
+                              </table>
+                            </div>
+                          </div>
                         </div>
-                        {renderParamTable(paramList)}
                       </div>
                     );
                   })}
