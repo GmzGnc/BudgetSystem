@@ -389,8 +389,9 @@ Lütfen bu varyansı analiz et ve JSON formatında yanıt ver.`;
     let analysisResult: VarianceAnalysisResponse;
     try {
       analysisResult = JSON.parse(rawText);
-    } catch {
-      console.error('[analyze-variance] JSON parse failed. rawText:', rawText);
+    } catch (parseErr) {
+      console.error('[AnalyzeVariance] Raw response:', rawText.substring(0, 2000));
+      console.error('[AnalyzeVariance] JSON parse error:', parseErr);
       return NextResponse.json({
         error: 'Claude yanıtı JSON olarak ayrıştırılamadı',
         preview: rawText?.substring(0, 500),
