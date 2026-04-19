@@ -28,8 +28,7 @@ import { getSapData, SAP_CATEGORY_COLORS } from '@/data/sap-data';
 import type { SapEntry } from '@/data/sap-data';
 import { DEPARTMENTS, ICA_DEPT, DEPT_COLORS } from '@/data/department-data';
 import type { Department } from '@/data/department-data';
-import { getDrillDownData, MONTH_LABELS } from '@/data/drill-down-data';
-import type { DrillDownGroup } from '@/data/drill-down-data';
+import { MONTH_LABELS } from '@/data/drill-down-data';
 import {
   getCompanies, getFiscalYears, getCategories,
   upsertSapEntries,
@@ -1560,12 +1559,73 @@ export default function Home() {
                                     {/* ── TAB: Aylık Detay ── */}
                                     {ddActiveTab === 'detail' && (<>
 
-                                    {/* aylık alt kalem detay tablosu — collapse/expand gruplar */}
+                                    {/* aylık alt kalem detay tablosu — lineItemsData'dan row_type==='item' */}
                                     {(() => {
-                                      const groups: DrillDownGroup[] = getDrillDownData(cat.id, company);
-                                      if (!groups.length) return null;
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      const ensureArr = (v: unknown): number[] => {
+                                        if (!v) return Array(12).fill(0);
+                                        if (typeof v === 'string') { try { return JSON.parse(v) as number[]; } catch { return Array(12).fill(0); } }
+                                        return Array.isArray(v) ? (v as number[]) : Array(12).fill(0);
+                                      };
+
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      const catItems = (lineItemsData as any[]).filter(
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                        (i: any) => i.category_code === cat.id && i.row_type === 'item'
+                                      );
+                                      if (catItems.length === 0) return null;
+
+                                      // dept_code → label map (from dept rows)
+                                      const deptLabelMap = new Map<string, string>();
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      (lineItemsData as any[])
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                        .filter((i: any) => i.category_code === cat.id && i.row_type === 'dept')
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                        .forEach((i: any) => { if (i.dept_code) deptLabelMap.set(i.dept_code, i.label); });
+
+                                      // group items by dept_code
+                                      const groupMap = new Map<string, typeof catItems>();
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      catItems.forEach((item: any) => {
+                                        const key = item.dept_code ?? '__none__';
+                                        if (!groupMap.has(key)) groupMap.set(key, []);
+                                        groupMap.get(key)!.push(item);
+                                      });
+
+                                      // dept'ları tara: itemRows boş olan dept'lar (Kilyos gibi)
+                                      // için dept satırını tek item olarak ekle
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      (lineItemsData as any[])
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                        .filter((i: any) => i.category_code === cat.id && i.row_type === 'dept' && i.dept_code)
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                        .forEach((deptRow: any) => {
+                                          const key = deptRow.dept_code as string;
+                                          if (!groupMap.has(key)) {
+                                            groupMap.set(key, [{
+                                              ...deptRow,
+                                              item_code:  `${key}_dept_fallback`,
+                                              label:      `${deptRow.label} Toplamı`,
+                                              unit_type:  'TL',
+                                            }]);
+                                          }
+                                        });
+
+                                      const groupKeys = Array.from(groupMap.keys());
+
+                                      // grand total — groupMap üzerinden hesapla (fallback dept satırları da dahil)
+                                      const grandTotal = Array(12).fill(0) as number[];
+                                      groupMap.forEach((items) => {
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                        items.forEach((item: any) => {
+                                          ensureArr(item.monthly_budget).forEach((v: number, idx: number) => { grandTotal[idx] += v; });
+                                        });
+                                      });
+                                      const grandAnnual = grandTotal.reduce((s, v) => s + v, 0);
 
                                       const searchLower = ddSearch.trim().toLowerCase();
+                                      const isTL = (unit: string) => unit === 'TL' || unit === 'TL Karşılığı';
 
                                       return (
                                         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
@@ -1585,28 +1645,42 @@ export default function Home() {
                                           </div>
 
                                           {/* gruplar */}
-                                          {groups.map((group) => {
-                                            const isGroupOpen = ddOpenGroups.has(group.department);
+                                          {groupKeys.map((deptKey) => {
+                                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                            const groupItems = groupMap.get(deptKey)! as any[];
+                                            const deptLabel = deptKey === '__none__'
+                                              ? cat.name
+                                              : (deptLabelMap.get(deptKey) ?? deptKey);
+
                                             const filtered = searchLower
-                                              ? group.items.filter((it) => it.name.toLowerCase().includes(searchLower))
-                                              : group.items;
+                                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                              ? groupItems.filter((it: any) => it.label.toLowerCase().includes(searchLower))
+                                              : groupItems;
                                             if (searchLower && filtered.length === 0) return null;
 
-                                            const showCount  = ddShowMore[group.department] ?? 20;
-                                            const visible    = filtered.slice(0, showCount);
-                                            const remaining  = filtered.length - showCount;
-                                            const groupAnnual = group.total.reduce((s, v) => s + v, 0);
+                                            const isGroupOpen = ddOpenGroups.has(deptKey);
+                                            const showCount   = ddShowMore[deptKey] ?? 20;
+                                            const visible     = filtered.slice(0, showCount);
+                                            const remaining   = filtered.length - showCount;
+
+                                            // group total (sum of ALL items in group, not just visible)
+                                            const groupTotal = Array(12).fill(0) as number[];
+                                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                            groupItems.forEach((item: any) => {
+                                              ensureArr(item.monthly_budget).forEach((v: number, idx: number) => { groupTotal[idx] += v; });
+                                            });
+                                            const groupAnnual = groupTotal.reduce((s, v) => s + v, 0);
 
                                             return (
-                                              <div key={group.department} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
+                                              <div key={deptKey} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
                                                 {/* grup başlık butonu */}
                                                 <button
                                                   onClick={(e) => {
                                                     e.stopPropagation();
                                                     setDdOpenGroups((prev) => {
                                                       const next = new Set(prev);
-                                                      if (next.has(group.department)) next.delete(group.department);
-                                                      else next.add(group.department);
+                                                      if (next.has(deptKey)) next.delete(deptKey);
+                                                      else next.add(deptKey);
                                                       return next;
                                                     });
                                                   }}
@@ -1619,10 +1693,10 @@ export default function Home() {
                                                     ▶
                                                   </span>
                                                   <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 flex-1 text-left">
-                                                    {group.department}
+                                                    {deptLabel}
                                                   </span>
                                                   <span className="text-xs text-gray-400 dark:text-gray-500">
-                                                    {group.items.length} kalem
+                                                    {groupItems.length} kalem
                                                   </span>
                                                   <span className="text-xs font-mono font-semibold text-gray-700 dark:text-gray-200 ml-3">
                                                     {fmtShort(groupAnnual)}
@@ -1637,7 +1711,7 @@ export default function Home() {
                                                         <thead className="bg-gray-50 dark:bg-gray-800/60">
                                                           <tr>
                                                             <th className="px-4 py-2 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[180px]">
-                                                              Alt Kalem
+                                                              Kalem
                                                             </th>
                                                             {MONTH_LABELS.map((m) => (
                                                               <th key={m} className="px-1.5 py-2 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[52px]">
@@ -1650,20 +1724,23 @@ export default function Home() {
                                                           </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                                                          {visible.map((item) => {
-                                                            const annual = item.monthly.reduce((s, v) => s + v, 0);
+                                                          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                                                          {visible.map((item: any) => {
+                                                            const mb = ensureArr(item.monthly_budget);
+                                                            const annual = mb.reduce((s: number, v: number) => s + v, 0);
+                                                            const useTL = isTL(item.unit_type ?? 'TL');
                                                             return (
-                                                              <tr key={item.name} className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
+                                                              <tr key={item.item_code ?? item.label} className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
                                                                 <td className="px-4 pl-7 py-1.5 text-gray-700 dark:text-gray-300">
-                                                                  {item.name}
+                                                                  {item.label}
                                                                 </td>
-                                                                {item.monthly.map((v, mi) => (
+                                                                {mb.map((v: number, mi: number) => (
                                                                   <td key={mi} className="px-1.5 py-1.5 text-right font-mono text-gray-600 dark:text-gray-400">
-                                                                    {fmtShort(v)}
+                                                                    {useTL ? fmtShort(v) : v.toLocaleString('tr-TR')}
                                                                   </td>
                                                                 ))}
                                                                 <td className="px-3 py-1.5 text-right font-mono font-semibold text-gray-800 dark:text-gray-200">
-                                                                  {fmtShort(annual)}
+                                                                  {useTL ? fmtShort(annual) : annual.toLocaleString('tr-TR')}
                                                                 </td>
                                                               </tr>
                                                             );
@@ -1677,7 +1754,7 @@ export default function Home() {
                                                             <td className="px-4 pl-7 py-2 font-bold text-gray-900 dark:text-white">
                                                               Grup Toplamı
                                                             </td>
-                                                            {group.total.map((v, mi) => (
+                                                            {groupTotal.map((v, mi) => (
                                                               <td key={mi} className="px-1.5 py-2 text-right font-mono font-bold text-gray-900 dark:text-white">
                                                                 {fmtShort(v)}
                                                               </td>
@@ -1696,7 +1773,7 @@ export default function Home() {
                                                           e.stopPropagation();
                                                           setDdShowMore((prev) => ({
                                                             ...prev,
-                                                            [group.department]: showCount + 20,
+                                                            [deptKey]: showCount + 20,
                                                           }));
                                                         }}
                                                         className="w-full py-2 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 transition-colors border-t border-gray-100 dark:border-gray-800"
@@ -1709,6 +1786,27 @@ export default function Home() {
                                               </div>
                                             );
                                           })}
+
+                                          {/* Genel Toplam */}
+                                          <div className="overflow-x-auto border-t-2 border-gray-300 dark:border-gray-600" style={{ backgroundColor: `${catColor}10` }}>
+                                            <table className="w-full min-w-[900px] text-xs">
+                                              <tbody>
+                                                <tr>
+                                                  <td className="px-4 py-2 font-bold text-gray-900 dark:text-white min-w-[180px]">
+                                                    Genel Toplam
+                                                  </td>
+                                                  {grandTotal.map((v, mi) => (
+                                                    <td key={mi} className="px-1.5 py-2 text-right font-mono font-bold text-gray-900 dark:text-white min-w-[52px]">
+                                                      {fmtShort(v)}
+                                                    </td>
+                                                  ))}
+                                                  <td className="px-3 py-2 text-right font-mono font-bold text-gray-900 dark:text-white min-w-[72px]">
+                                                    {fmtShort(grandAnnual)}
+                                                  </td>
+                                                </tr>
+                                              </tbody>
+                                            </table>
+                                          </div>
                                         </div>
                                       );
                                     })()}
