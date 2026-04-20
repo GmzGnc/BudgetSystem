@@ -1281,10 +1281,6 @@ export default function Home() {
                   <button
                     disabled={isDetailPdfLoading || isExecPdfLoading}
                     onClick={async () => {
-                      if (!importedModelData) {
-                        alert('Önce Model Excel dosyasını yükleyin.');
-                        return;
-                      }
                       await handleFullPdf();
                     }}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-[#1e2a4a] hover:bg-[#263461] disabled:opacity-50 text-white shadow-sm transition-colors"
