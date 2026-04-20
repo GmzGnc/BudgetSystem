@@ -723,6 +723,8 @@ export default function Home() {
   // ── PDF handler ──
   const handleFullPdf = useCallback(async () => {
     if (isDetailPdfLoading) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (!lineItemsData || (lineItemsData as any[]).length === 0) { alert('Veri yüklenemedi'); return; }
     setIsDetailPdfLoading(true);
 
     const CAT_EN: Record<string, string> = {
@@ -738,64 +740,59 @@ export default function Home() {
       // Tüm kategoriler için paralel AI analizi yap
       const aiResults = await Promise.allSettled(
         CATEGORIES.map(async (c) => {
-          const cRange = CAT_ROW_RANGES[c.id];
-          const cRows = importedModelData
-            ? (cRange ? importedModelData.filter((r) => r.rowNum >= cRange[0] && r.rowNum <= cRange[1]) : [])
-            : (dbModelRows?.get(c.id) ?? []);
-          const cTLRow = cRows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName))
-            ?? cRows.find((r) => /^TL/i.test(r.unitType));
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const cItems = (lineItemsData as any[]).filter((i: any) => i.category_code === c.id);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const cTotal = cItems.find((i: any) => i.row_type === 'total');
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const cDepts = cItems.filter((i: any) => i.row_type === 'dept');
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const cParams = cItems.filter((i: any) => i.row_type === 'param');
+          const ensureArr = (v: unknown): number[] => {
+            if (!v) return Array(12).fill(0);
+            if (typeof v === 'string') { try { return JSON.parse(v); } catch { return Array(12).fill(0); } }
+            return Array.isArray(v) ? v as number[] : Array(12).fill(0);
+          };
+          const totalBudget = ensureArr(cTotal?.monthly_budget);
+          const totalActual = ensureArr(cTotal?.monthly_actual);
+          const activeIdxs = totalActual.map((v, i) => v !== 0 ? i : -1).filter(i => i >= 0);
 
-          const monthly = MONTH_LABELS.map((m, mi) => ({
-            month: m,
-            budget: cTLRow?.budget[mi] ?? 0,
-            actual: cTLRow?.actual[mi] ?? 0,
-          }));
-
-          const activeMonthIndices = monthly
-            .map((m, i) => ({ ...m, i }))
-            .filter((m) => m.actual > 0)
-            .map((m) => m.i);
-
-          const cActual = activeMonthIndices.reduce((s, i) => s + (cTLRow?.actual[i] ?? 0), 0);
-          const cBudget = activeMonthIndices.length > 0
-            ? activeMonthIndices.reduce((s, i) => s + (cTLRow?.budget[i] ?? 0), 0)
-            : (cTLRow ? cTLRow.budget.reduce((s, v) => s + v, 0) : categoryAnnual(staticMonthlyData, c.id));
+          const monthly = MONTH_LABELS.map((m, i) => ({ month: m, budget: totalBudget[i] ?? 0, actual: totalActual[i] ?? 0 }));
+          const cActual = activeIdxs.reduce((s, i) => s + (totalActual[i] ?? 0), 0);
+          const cBudget = activeIdxs.length > 0
+            ? activeIdxs.reduce((s, i) => s + (totalBudget[i] ?? 0), 0)
+            : totalBudget.reduce((s, v) => s + v, 0);
           const cVar = cActual - cBudget;
           const cVarPct = cBudget > 0 ? (cVar / cBudget) * 100 : 0;
 
-          const monthBreakdown = monthly.map((m, mi) => {
+          const monthBreakdown = monthly.map((m) => {
             const bv = m.budget;
             const av = m.actual;
             const vv = av - bv;
             return { month: m.month, budget: bv, actual: av, variance: vv, variancePct: bv > 0 ? (vv / bv) * 100 : 0 };
           });
 
-          const deptRowAI = ICA_DEPT.find((r) => r.categoryId === c.id);
-          const departmentBreakdown = deptRowAI
-            ? DEPARTMENTS.map((d) => ({ department: d, budget: deptRowAI[d] ?? 0, actual: deptRowAI[d] ?? 0, variance: 0, variancePct: 0 })).filter((d) => d.budget > 0)
-            : [];
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const departmentBreakdown = (cDepts as any[]).map((d) => {
+            const db = ensureArr(d.monthly_budget);
+            const da = ensureArr(d.monthly_actual);
+            const activeBudget = activeIdxs.reduce((s: number, i: number) => s + (db[i] ?? 0), 0);
+            const activeActual = activeIdxs.reduce((s: number, i: number) => s + (da[i] ?? 0), 0);
+            return { name: d.label, budget: activeBudget, actual: activeActual,
+              variance: activeActual - activeBudget,
+              variancePercent: activeBudget > 0 ? ((activeActual - activeBudget) / activeBudget) * 100 : 0 };
+          });
 
-          const params = cRows
-            .filter((r) => {
-              const bv = activeMonthIndices.length > 0
-                ? activeMonthIndices.reduce((s, i) => s + r.budget[i], 0)
-                : r.budget.reduce((s, v) => s + v, 0);
-              const av = activeMonthIndices.reduce((s, i) => s + r.actual[i], 0);
-              if (bv === 0 && av === 0) return false;
-              const name = r.paramName.trim();
-              if (/Toplam$/i.test(name) && name !== 'Toplam' && !/^TOPLAM$/i.test(name)) return false;
-              return true;
-            })
-            .sort((a, b) => (isKeyParam(a.paramName, c.id) ? 0 : 1) - (isKeyParam(b.paramName, c.id) ? 0 : 1))
-            .slice(0, 50)
-            .map((r) => {
-              const bv = activeMonthIndices.length > 0
-                ? activeMonthIndices.reduce((s, i) => s + r.budget[i], 0)
-                : r.budget.reduce((s, v) => s + v, 0);
-              const av = activeMonthIndices.reduce((s, i) => s + r.actual[i], 0);
-              const dv = av - bv;
-              return { paramName: r.paramName, unitType: r.unitType, budget: bv, actual: av, diff: dv, diffPct: bv > 0 ? (dv / bv) * 100 : null };
-            });
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const params = (cParams as any[]).slice(0, 30).map((p) => {
+            const pb = ensureArr(p.monthly_budget);
+            const pa = ensureArr(p.monthly_actual);
+            const bv = activeIdxs.reduce((s: number, i: number) => s + (pb[i] ?? 0), 0);
+            const av = activeIdxs.reduce((s: number, i: number) => s + (pa[i] ?? 0), 0);
+            return { paramName: p.label as string, unitType: (p.unit_type ?? 'TL') as string, budget: bv, actual: av,
+              diff: av - bv, diffPct: bv > 0 ? (av - bv) / bv * 100 : null };
+          }).filter((p) => p.budget !== 0 || p.actual !== 0)
+            .sort((a, b) => (isKeyParam(a.paramName, c.id) ? 0 : 1) - (isKeyParam(b.paramName, c.id) ? 0 : 1));
 
           const res = await fetch('/api/analyze-variance', {
             method: 'POST',
@@ -812,7 +809,7 @@ export default function Home() {
               monthBreakdown,
               departmentBreakdown,
               analysisScope: 'full',
-              activeMonths: activeMonthIndices,
+              activeMonths: activeIdxs,
             }),
           });
           const d = await res.json();
@@ -828,57 +825,45 @@ export default function Home() {
       });
 
       const pdfCategories: CategoryPDFData[] = CATEGORIES.map((c) => {
-        const cRange = CAT_ROW_RANGES[c.id];
-        const cRows = importedModelData
-          ? (cRange ? importedModelData.filter((r) => r.rowNum >= cRange[0] && r.rowNum <= cRange[1]) : [])
-          : (dbModelRows?.get(c.id) ?? []);
-        const cTLRow = cRows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName))
-          ?? cRows.find((r) => /^TL/i.test(r.unitType));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const cItems = (lineItemsData as any[]).filter((i: any) => i.category_code === c.id);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const cTotal = cItems.find((i: any) => i.row_type === 'total');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const cParams = cItems.filter((i: any) => i.row_type === 'param');
+        const ensureArr = (v: unknown): number[] => {
+          if (!v) return Array(12).fill(0);
+          if (typeof v === 'string') { try { return JSON.parse(v); } catch { return Array(12).fill(0); } }
+          return Array.isArray(v) ? v as number[] : Array(12).fill(0);
+        };
+        const totalBudget = ensureArr(cTotal?.monthly_budget);
+        const totalActual = ensureArr(cTotal?.monthly_actual);
+        const cActiveIndices = totalActual.map((v, i) => v !== 0 ? i : -1).filter(i => i >= 0);
+
         const cMonthly = Array.from({ length: 12 }, (_, mi) => ({
           month: mi + 1,
-          budget: cTLRow?.budget[mi] ?? 0,
-          actual: cTLRow?.actual[mi] ?? 0,
+          budget: totalBudget[mi] ?? 0,
+          actual: totalActual[mi] ?? 0,
         }));
 
-        const cActiveIndices = cMonthly.map((m, i) => i).filter((i) => cMonthly[i].actual > 0);
-
-        const cActual = cActiveIndices.reduce((s, i) => s + cMonthly[i].actual, 0);
+        const cActual = cActiveIndices.reduce((s, i) => s + (totalActual[i] ?? 0), 0);
         const cBudget = cActiveIndices.length > 0
-          ? cActiveIndices.reduce((s, i) => s + cMonthly[i].budget, 0)
-          : (cTLRow ? cTLRow.budget.reduce((s, v) => s + v, 0) : categoryAnnual(staticMonthlyData, c.id));
+          ? cActiveIndices.reduce((s, i) => s + (totalBudget[i] ?? 0), 0)
+          : totalBudget.reduce((s, v) => s + v, 0);
         const cVar = cActual - cBudget;
         const cVarPct = cBudget > 0 ? (cVar / cBudget) * 100 : 0;
 
-        const cActiveParams = cRows
-          .filter((r) => {
-            const bTotal = cActiveIndices.reduce((s, i) => s + r.budget[i], 0);
-            const aTotal = cActiveIndices.reduce((s, i) => s + r.actual[i], 0);
-            if (bTotal === 0 && aTotal === 0) return false;
-            const name = r.paramName.trim();
-            if (/Toplam$/i.test(name) && name !== 'Toplam' && !/^TOPLAM$/i.test(name)) return false;
-            return true;
-          })
-          .sort((a, b) => {
-            const aKey = isKeyParam(a.paramName, c.id) ? 0 : 1;
-            const bKey = isKeyParam(b.paramName, c.id) ? 0 : 1;
-            return aKey - bKey;
-          })
-          .map((r) => {
-            const bTotal = cActiveIndices.length > 0
-              ? cActiveIndices.reduce((s, i) => s + r.budget[i], 0)
-              : r.budget.reduce((s, v) => s + v, 0);
-            const aTotal = cActiveIndices.reduce((s, i) => s + r.actual[i], 0);
-            const dTotal = aTotal - bTotal;
-            return {
-              paramName: r.paramName,
-              unitType: r.unitType,
-              budgetTotal: bTotal,
-              actualTotal: aTotal,
-              diff: dTotal,
-              diffPct: bTotal > 0 ? (dTotal / bTotal) * 100 : null,
-              isKey: isKeyParam(r.paramName, c.id),
-            };
-          });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const cActiveParams = (cParams as any[]).slice(0, 30).map((p) => {
+          const pb = ensureArr(p.monthly_budget);
+          const pa = ensureArr(p.monthly_actual);
+          const bTotal = cActiveIndices.reduce((s: number, i: number) => s + (pb[i] ?? 0), 0);
+          const aTotal = cActiveIndices.reduce((s: number, i: number) => s + (pa[i] ?? 0), 0);
+          const dTotal = aTotal - bTotal;
+          return { paramName: p.label as string, unitType: (p.unit_type ?? 'TL') as string,
+            budgetTotal: bTotal, actualTotal: aTotal, diff: dTotal,
+            diffPct: bTotal > 0 ? dTotal / bTotal * 100 : null, isKey: isKeyParam(p.label as string, c.id) };
+        }).filter((p) => p.budgetTotal !== 0 || p.actualTotal !== 0);
 
         const ai = aiMap.get(c.id);
         const aiEff = ai?.effects?.map((eff) => ({
@@ -1093,8 +1078,9 @@ export default function Home() {
                   <button
                     disabled={isExecPdfLoading || isDetailPdfLoading}
                     onClick={async () => {
-                      if (!importedModelData) {
-                        alert('Önce Model Excel dosyasını yükleyin.');
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      if (!lineItemsData || (lineItemsData as any[]).length === 0) {
+                        alert('Veri yüklenemedi');
                         return;
                       }
                       setIsExecPdfLoading(true);
@@ -1110,33 +1096,35 @@ export default function Home() {
 
                         const aiResults = await Promise.allSettled(
                           CATEGORIES.map(async (c) => {
-                            const cRange = CAT_ROW_RANGES[c.id];
-                            const cRows = importedModelData
-                              ? (cRange ? importedModelData.filter((r) => r.rowNum >= cRange[0] && r.rowNum <= cRange[1]) : [])
-                              : (dbModelRows?.get(c.id) ?? []);
-                            const cTLRow = cRows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName)) ?? cRows.find((r) => /^TL/i.test(r.unitType));
-                            const cMonthly = Array.from({ length: 12 }, (_, mi) => ({ month: MONTH_LABELS[mi], budget: cTLRow?.budget[mi] ?? 0, actual: cTLRow?.actual[mi] ?? 0 }));
-                            const activeIdxs = cMonthly.map((_, i) => i).filter((i) => cMonthly[i].actual > 0);
-                            const activeBudget = activeIdxs.length > 0 ? activeIdxs.reduce((s, i) => s + cMonthly[i].budget, 0) : (cTLRow?.budget.reduce((s, v) => s + v, 0) ?? 0);
-                            const activeActual = activeIdxs.reduce((s, i) => s + cMonthly[i].actual, 0);
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const cItems = (lineItemsData as any[]).filter((i: any) => i.category_code === c.id);
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const cTotal = cItems.find((i: any) => i.row_type === 'total');
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const cParams = cItems.filter((i: any) => i.row_type === 'param');
+                            const ensureArr = (v: unknown): number[] => {
+                              if (!v) return Array(12).fill(0);
+                              if (typeof v === 'string') { try { return JSON.parse(v); } catch { return Array(12).fill(0); } }
+                              return Array.isArray(v) ? v as number[] : Array(12).fill(0);
+                            };
+                            const totalBudget = ensureArr(cTotal?.monthly_budget);
+                            const totalActual = ensureArr(cTotal?.monthly_actual);
+                            const activeIdxs = totalActual.map((v, i) => v !== 0 ? i : -1).filter(i => i >= 0);
+                            const cMonthly = MONTH_LABELS.map((m, i) => ({ month: m, budget: totalBudget[i] ?? 0, actual: totalActual[i] ?? 0 }));
+                            const activeBudget = activeIdxs.length > 0 ? activeIdxs.reduce((s, i) => s + (totalBudget[i] ?? 0), 0) : totalBudget.reduce((s, v) => s + v, 0);
+                            const activeActual = activeIdxs.reduce((s, i) => s + (totalActual[i] ?? 0), 0);
                             const activeVar = activeActual - activeBudget;
                             const activeVarPct = activeBudget > 0 ? (activeVar / activeBudget) * 100 : 0;
-                            const params = cRows
-                              .filter((r) => {
-                                const bv = activeIdxs.length > 0 ? activeIdxs.reduce((s, i) => s + r.budget[i], 0) : r.budget.reduce((s, v) => s + v, 0);
-                                const av = activeIdxs.reduce((s, i) => s + r.actual[i], 0);
-                                if (bv === 0 && av === 0) return false;
-                                const name = r.paramName.trim();
-                                if (/Toplam$/i.test(name) && name !== 'Toplam' && !/^TOPLAM$/i.test(name)) return false;
-                                return true;
-                              })
-                              .sort((a, b) => (isKeyParam(a.paramName, c.id) ? 0 : 1) - (isKeyParam(b.paramName, c.id) ? 0 : 1))
-                              .slice(0, 50)
-                              .map((r) => {
-                                const bv = activeIdxs.length > 0 ? activeIdxs.reduce((s, i) => s + r.budget[i], 0) : r.budget.reduce((s, v) => s + v, 0);
-                                const av = activeIdxs.reduce((s, i) => s + r.actual[i], 0);
-                                return { paramName: r.paramName, unitType: r.unitType, budget: bv, actual: av, diff: av - bv, diffPct: bv > 0 ? ((av - bv) / bv) * 100 : null };
-                              });
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const params = (cParams as any[]).slice(0, 30).map((p) => {
+                              const pb = ensureArr(p.monthly_budget);
+                              const pa = ensureArr(p.monthly_actual);
+                              const bv = activeIdxs.reduce((s: number, i: number) => s + (pb[i] ?? 0), 0);
+                              const av = activeIdxs.reduce((s: number, i: number) => s + (pa[i] ?? 0), 0);
+                              return { paramName: p.label as string, unitType: (p.unit_type ?? 'TL') as string,
+                                budget: bv, actual: av, diff: av - bv, diffPct: bv > 0 ? (av - bv) / bv * 100 : null };
+                            }).filter((p) => p.budget !== 0 || p.actual !== 0)
+                              .sort((a, b) => (isKeyParam(a.paramName, c.id) ? 0 : 1) - (isKeyParam(b.paramName, c.id) ? 0 : 1));
                             const res = await fetch('/api/analyze-variance', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
@@ -1153,37 +1141,36 @@ export default function Home() {
                         });
 
                         const pdfCategories: CategoryPDFData[] = CATEGORIES.map((c) => {
-                          const cRange = CAT_ROW_RANGES[c.id];
-                          const cRows = importedModelData
-                            ? (cRange ? importedModelData.filter((r) => r.rowNum >= cRange[0] && r.rowNum <= cRange[1]) : [])
-                            : (dbModelRows?.get(c.id) ?? []);
-                          const cTLRow = cRows.find((r) => /^TL/i.test(r.unitType) && /TOPLAM/i.test(r.paramName)) ?? cRows.find((r) => /^TL/i.test(r.unitType));
-                          const cMonthly = Array.from({ length: 12 }, (_, mi) => ({ month: mi + 1, budget: cTLRow?.budget[mi] ?? 0, actual: cTLRow?.actual[mi] ?? 0 }));
-                          const cActiveIndices = cMonthly.map((_, i) => i).filter((i) => cMonthly[i].actual > 0);
-                          const cActual = cActiveIndices.reduce((s, i) => s + cMonthly[i].actual, 0);
-                          const cBudget = cActiveIndices.length > 0 ? cActiveIndices.reduce((s, i) => s + cMonthly[i].budget, 0) : (cTLRow?.budget.reduce((s, v) => s + v, 0) ?? categoryAnnual(staticMonthlyData, c.id));
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          const cItems = (lineItemsData as any[]).filter((i: any) => i.category_code === c.id);
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          const cTotal = cItems.find((i: any) => i.row_type === 'total');
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          const cParams = cItems.filter((i: any) => i.row_type === 'param');
+                          const ensureArr = (v: unknown): number[] => {
+                            if (!v) return Array(12).fill(0);
+                            if (typeof v === 'string') { try { return JSON.parse(v); } catch { return Array(12).fill(0); } }
+                            return Array.isArray(v) ? v as number[] : Array(12).fill(0);
+                          };
+                          const totalBudget = ensureArr(cTotal?.monthly_budget);
+                          const totalActual = ensureArr(cTotal?.monthly_actual);
+                          const cActiveIndices = totalActual.map((v, i) => v !== 0 ? i : -1).filter(i => i >= 0);
+                          const cMonthly = Array.from({ length: 12 }, (_, mi) => ({ month: mi + 1, budget: totalBudget[mi] ?? 0, actual: totalActual[mi] ?? 0 }));
+                          const cActual = cActiveIndices.reduce((s, i) => s + (totalActual[i] ?? 0), 0);
+                          const cBudget = cActiveIndices.length > 0 ? cActiveIndices.reduce((s, i) => s + (totalBudget[i] ?? 0), 0) : totalBudget.reduce((s, v) => s + v, 0);
                           const cVar = cActual - cBudget;
                           const cVarPct = cBudget > 0 ? (cVar / cBudget) * 100 : 0;
-                          const cActiveParams = cRows
-                            .filter((r) => {
-                              const bTotal = cActiveIndices.reduce((s, i) => s + r.budget[i], 0);
-                              const aTotal = cActiveIndices.reduce((s, i) => s + r.actual[i], 0);
-                              if (bTotal === 0 && aTotal === 0) return false;
-                              const name = r.paramName.trim();
-                              if (/Toplam$/i.test(name) && name !== 'Toplam' && !/^TOPLAM$/i.test(name)) return false;
-                              return true;
-                            })
-                            .sort((a, b) => {
-                              const aKey = isKeyParam(a.paramName, c.id) ? 0 : 1;
-                              const bKey = isKeyParam(b.paramName, c.id) ? 0 : 1;
-                              return aKey - bKey;
-                            })
-                            .map((r) => {
-                              const bTotal = cActiveIndices.length > 0 ? cActiveIndices.reduce((s, i) => s + r.budget[i], 0) : r.budget.reduce((s, v) => s + v, 0);
-                              const aTotal = cActiveIndices.reduce((s, i) => s + r.actual[i], 0);
-                              const dTotal = aTotal - bTotal;
-                              return { paramName: r.paramName, unitType: r.unitType, budgetTotal: bTotal, actualTotal: aTotal, diff: dTotal, diffPct: bTotal > 0 ? (dTotal / bTotal) * 100 : null, isKey: isKeyParam(r.paramName, c.id) };
-                            });
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          const cActiveParams = (cParams as any[]).slice(0, 30).map((p) => {
+                            const pb = ensureArr(p.monthly_budget);
+                            const pa = ensureArr(p.monthly_actual);
+                            const bTotal = cActiveIndices.reduce((s: number, i: number) => s + (pb[i] ?? 0), 0);
+                            const aTotal = cActiveIndices.reduce((s: number, i: number) => s + (pa[i] ?? 0), 0);
+                            const dTotal = aTotal - bTotal;
+                            return { paramName: p.label as string, unitType: (p.unit_type ?? 'TL') as string,
+                              budgetTotal: bTotal, actualTotal: aTotal, diff: dTotal,
+                              diffPct: bTotal > 0 ? dTotal / bTotal * 100 : null, isKey: isKeyParam(p.label as string, c.id) };
+                          }).filter((p) => p.budgetTotal !== 0 || p.actualTotal !== 0);
                           const ai = aiMap.get(c.id);
                           const aiEff = ai?.effects?.map((eff) => ({ type: eff.name, label: eff.name, amount: eff.amount, contributionPercent: Math.abs(eff.amount) / (Math.abs(ai.totalVariance) || 1) * 100, description: eff.explanation, driver: eff.driver })) ?? [];
                           return {
