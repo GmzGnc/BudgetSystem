@@ -1651,6 +1651,14 @@ export default function Home() {
                                       );
                                       if (catItems.length === 0) return null;
 
+                                      // GRUP modunda aynı dept_code iki şirkette de olabilir (örn. temizlik_malzeme).
+                                      // Çakışmayı önlemek için GRUP'ta key = "COMPANY__dept_code" kullan.
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      const makeGroupKey = (co: string, deptCode: string | null) =>
+                                        company === 'GRUP'
+                                          ? `${co}__${deptCode ?? '__none__'}`
+                                          : (deptCode ?? '__none__');
+
                                       // dept_code → label map (from dept rows)
                                       const deptLabelMap = new Map<string, string>();
                                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1658,13 +1666,15 @@ export default function Home() {
                                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                         .filter((i: any) => i.category_code === cat.id && i.row_type === 'dept')
                                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                        .forEach((i: any) => { if (i.dept_code) deptLabelMap.set(i.dept_code, i.label); });
+                                        .forEach((i: any) => {
+                                          if (i.dept_code) deptLabelMap.set(makeGroupKey(i.company ?? 'ICA', i.dept_code), i.label);
+                                        });
 
-                                      // group items by dept_code
+                                      // group items by (compound) key
                                       const groupMap = new Map<string, typeof catItems>();
                                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                       catItems.forEach((item: any) => {
-                                        const key = item.dept_code ?? '__none__';
+                                        const key = makeGroupKey(item.company ?? 'ICA', item.dept_code);
                                         if (!groupMap.has(key)) groupMap.set(key, []);
                                         groupMap.get(key)!.push(item);
                                       });
@@ -1677,7 +1687,7 @@ export default function Home() {
                                         .filter((i: any) => i.category_code === cat.id && i.row_type === 'dept' && i.dept_code)
                                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                         .forEach((deptRow: any) => {
-                                          const key = deptRow.dept_code as string;
+                                          const key = makeGroupKey(deptRow.company ?? 'ICA', deptRow.dept_code as string);
                                           if (!groupMap.has(key)) {
                                             groupMap.set(key, [{
                                               ...deptRow,
@@ -1690,12 +1700,10 @@ export default function Home() {
 
                                       const groupKeys = Array.from(groupMap.keys());
 
-                                      // GRUP: her dept_code'un hangi şirkete ait olduğunu bul
+                                      // GRUP: compound key'den company çıkar (prefix "ICA__" / "ICE__")
                                       const deptCompanyMap = new Map<string, 'ICA' | 'ICE'>();
-                                      groupMap.forEach((items, key) => {
-                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                        const firstItem = items[0] as any;
-                                        deptCompanyMap.set(key, firstItem?.company ?? 'ICA');
+                                      groupKeys.forEach((key) => {
+                                        deptCompanyMap.set(key, key.startsWith('ICE__') ? 'ICE' : 'ICA');
                                       });
                                       const icaDeptKeys = groupKeys.filter((k) => deptCompanyMap.get(k) === 'ICA');
                                       const iceDeptKeys = groupKeys.filter((k) => deptCompanyMap.get(k) === 'ICE');
@@ -1717,9 +1725,11 @@ export default function Home() {
                                       const renderDeptAccordion = (deptKey: string) => {
                                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                         const groupItems = groupMap.get(deptKey)! as any[];
-                                        const deptLabel = deptKey === '__none__'
+                                        // GRUP: key is "COMPANY__dept_code"; strip prefix for display fallback
+                                        const deptKeyBase = company === 'GRUP' ? deptKey.replace(/^[^_]+__/, '') : deptKey;
+                                        const deptLabel = deptKeyBase === '__none__'
                                           ? cat.name
-                                          : (deptLabelMap.get(deptKey) ?? deptKey);
+                                          : (deptLabelMap.get(deptKey) ?? deptKeyBase);
 
                                         const filtered = searchLower
                                           // eslint-disable-next-line @typescript-eslint/no-explicit-any
