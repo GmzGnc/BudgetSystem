@@ -1467,8 +1467,8 @@ export default function Home() {
                                       )}
                                     </div>}
 
-                                    {/* ── Güvenlik 3-level panel ── */}
-                                    {cat.id === 'guvenlik' && (
+                                    {/* ── Güvenlik 3-level panel (ICA only) ── */}
+                                    {cat.id === 'guvenlik' && company !== 'ICE' && (
                                       <GuvenlikDetailPanel
                                         dark={dark}
                                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1476,8 +1476,8 @@ export default function Home() {
                                       />
                                     )}
 
-                                    {/* ── Temizlik 3-level panel ── */}
-                                    {cat.id === 'temizlik' && (
+                                    {/* ── Temizlik 3-level panel (ICA only) ── */}
+                                    {cat.id === 'temizlik' && company !== 'ICE' && (
                                       <TemizlikDetailPanel
                                         dark={dark}
                                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1485,8 +1485,8 @@ export default function Home() {
                                       />
                                     )}
 
-                                    {/* ── Yemek 3-level panel ── */}
-                                    {cat.id === 'yemek' && (
+                                    {/* ── Yemek 3-level panel (ICA only) ── */}
+                                    {cat.id === 'yemek' && company !== 'ICE' && (
                                       <YemekDetailPanel
                                         dark={dark}
                                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1494,8 +1494,8 @@ export default function Home() {
                                       />
                                     )}
 
-                                    {/* ── Servis dept-totals panel ── */}
-                                    {cat.id === 'servis' && (
+                                    {/* ── Servis dept-totals panel (ICA only) ── */}
+                                    {cat.id === 'servis' && company !== 'ICE' && (
                                       <ServisDetailPanel
                                         dark={dark}
                                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1503,8 +1503,16 @@ export default function Home() {
                                       />
                                     )}
 
-                                    {/* ── Generic panels: Araç Kira / HGS / Yakıt / Bakım / Diğer ── */}
-                                    {(['arac_kira', 'hgs', 'arac_yakit', 'arac_bakim', 'diger_hizmet', 'icme_suyu', 'diger_cesitli'] as const).includes(cat.id as never) && (() => {
+                                    {/* ── Generic panels: Araç Kira / HGS / Yakıt / Bakım / Diğer
+                                        + ICE fallback for temizlik / yemek / servis ── */}
+                                    {(() => {
+                                      const iceExtra = company === 'ICE' ? ['temizlik', 'yemek', 'servis'] : [];
+                                      const genericCats = [
+                                        'arac_kira', 'hgs', 'arac_yakit', 'arac_bakim',
+                                        'diger_hizmet', 'icme_suyu', 'diger_cesitli',
+                                        ...iceExtra,
+                                      ];
+                                      if (!genericCats.includes(cat.id)) return null;
                                       const colorMap: Record<string, string> = {
                                         arac_kira:     '#f97316',
                                         hgs:           '#06b6d4',
@@ -1513,6 +1521,9 @@ export default function Home() {
                                         diger_hizmet:  '#a78bfa',
                                         icme_suyu:     '#22d3ee',
                                         diger_cesitli: '#fb923c',
+                                        temizlik:      '#10b981',
+                                        yemek:         '#f59e0b',
+                                        servis:        '#3b82f6',
                                       };
                                       return (
                                         <GenericCategoryPanel
