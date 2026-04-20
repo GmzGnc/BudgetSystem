@@ -211,35 +211,105 @@ export default function Home() {
   useEffect(() => {
     async function loadFromDb() {
       setDbLoading(true);
-      const companyCode = company === 'GRUP' ? 'ICA' : company;
       try {
-        const [monthlyRes, sapRes, budgetRowsRes, companiesRes, yearsRes] = await Promise.all([
-          getBudgetMonthlyData(companyCode),
-          getSapMonthlyData(companyCode),
-          getBudgetEntriesAsModelRows(companyCode),
-          getCompanies(),
-          getFiscalYears(),
-        ]);
-        setDbMonthlyData(monthlyRes);
-        setDbSapData(sapRes);
-        if (budgetRowsRes) {
-          const map = new Map<string, ModelRow[]>();
-          budgetRowsRes.forEach(({ categoryCode, rows }) => map.set(categoryCode, rows));
-          setDbModelRows(map);
-        }
-        // ── budget_line_items fetch ──
-        const dbCompany = companiesRes.data?.find((c) => c.code === companyCode) ?? null;
-        const dbYear    = yearsRes.data?.find((y) => y.year === 2025 && y.status === 'active') ?? null;
-        if (dbCompany && dbYear) {
-          const items = await fetchBudgetLineItems(dbCompany.id, dbYear.id);
-          const uniqueItems = items.filter((item, idx, arr) =>
-            arr.findIndex((i) => i.id === item.id) === idx
-          );
-          setLineItemsData(uniqueItems);
+        const [companiesRes, yearsRes] = await Promise.all([getCompanies(), getFiscalYears()]);
+        const dbYear      = yearsRes.data?.find((y) => y.year === 2025 && y.status === 'active') ?? null;
+        const icaCompany  = companiesRes.data?.find((c) => c.code === 'ICA') ?? null;
+        const iceCompany  = companiesRes.data?.find((c) => c.code === 'ICE') ?? null;
+
+        if (company === 'GRUP') {
+          // Paralel fetch: ICA + ICE
+          const [
+            icaMonthly, iceMonthly,
+            icaSap,     iceSap,
+            icaRows,    iceRows,
+          ] = await Promise.all([
+            getBudgetMonthlyData('ICA'),
+            getBudgetMonthlyData('ICE'),
+            getSapMonthlyData('ICA'),
+            getSapMonthlyData('ICE'),
+            getBudgetEntriesAsModelRows('ICA'),
+            getBudgetEntriesAsModelRows('ICE'),
+          ]);
+
+          // Monthly merge — ay bazlı toplam
+          const mergedMonthly: MonthlyEntry[] = (icaMonthly ?? []).map((icaRow: MonthlyEntry, i: number) => {
+            const iceRow = ((iceMonthly ?? []) as MonthlyEntry[])[i] ?? {};
+            const merged: MonthlyEntry = { month: icaRow.month, monthLabel: icaRow.monthLabel } as MonthlyEntry;
+            const keys = new Set([...Object.keys(icaRow), ...Object.keys(iceRow)]);
+            for (const k of keys) {
+              if (k === 'month' || k === 'monthLabel') continue;
+              const ica = (icaRow as Record<string, unknown>)[k];
+              const ice = (iceRow as Record<string, unknown>)[k];
+              (merged as Record<string, unknown>)[k] = (typeof ica === 'number' ? ica : 0) + (typeof ice === 'number' ? ice : 0);
+            }
+            return merged;
+          });
+          setDbMonthlyData(mergedMonthly);
+
+          // SAP merge — flat list concat (SapEntry[], ay bazlı değil)
+          setDbSapData([...(icaSap ?? []), ...(iceSap ?? [])]);
+
+          // Budget rows: category bazında concat
+          if (icaRows || iceRows) {
+            const map = new Map<string, ModelRow[]>();
+            (icaRows ?? []).forEach(({ categoryCode, rows }) => {
+              map.set(categoryCode, [...(map.get(categoryCode) ?? []), ...rows]);
+            });
+            (iceRows ?? []).forEach(({ categoryCode, rows }) => {
+              map.set(categoryCode, [...(map.get(categoryCode) ?? []), ...rows]);
+            });
+            setDbModelRows(map);
+          }
+
+          // Line items: her satıra company tag'i ekle, paralel çek
+          if (dbYear && icaCompany && iceCompany) {
+            const [icaItems, iceItems] = await Promise.all([
+              fetchBudgetLineItems(icaCompany.id, dbYear.id),
+              fetchBudgetLineItems(iceCompany.id, dbYear.id),
+            ]);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const taggedIca = icaItems.map((i: any) => ({ ...i, company: 'ICA' as const }));
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const taggedIce = iceItems.map((i: any) => ({ ...i, company: 'ICE' as const }));
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const allItems: any[] = [...taggedIca, ...taggedIce];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const unique = allItems.filter((item: any, idx: number, arr: any[]) =>
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              arr.findIndex((i: any) => i.id === item.id) === idx
+            );
+            setLineItemsData(unique);
+          }
+        } else {
+          // Tek şirket (ICA veya ICE) — eski akış + company tag
+          const [monthlyRes, sapRes, budgetRowsRes] = await Promise.all([
+            getBudgetMonthlyData(company),
+            getSapMonthlyData(company),
+            getBudgetEntriesAsModelRows(company),
+          ]);
+          setDbMonthlyData(monthlyRes);
+          setDbSapData(sapRes);
+          if (budgetRowsRes) {
+            const map = new Map<string, ModelRow[]>();
+            budgetRowsRes.forEach(({ categoryCode, rows }) => map.set(categoryCode, rows));
+            setDbModelRows(map);
+          }
+          const dbCompany = companiesRes.data?.find((c) => c.code === company) ?? null;
+          if (dbCompany && dbYear) {
+            const items = await fetchBudgetLineItems(dbCompany.id, dbYear.id);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const taggedItems = items.map((i: any) => ({ ...i, company }));
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const uniqueItems = taggedItems.filter((item: any, idx: number, arr: any[]) =>
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              arr.findIndex((i: any) => i.id === item.id) === idx
+            );
+            setLineItemsData(uniqueItems);
+          }
         }
       } catch (e) {
         console.error('[loadFromDb] error:', e);
-        // DB erişilemiyorsa statik JSON kullan
       } finally {
         setDbLoading(false);
       }
@@ -450,6 +520,11 @@ export default function Home() {
   }, [loadWorkbook]);
 
   const handleImport = useCallback(async () => {
+    // GRUP seçiliyken Excel import yapma — konsolide view sadece okur
+    if (company === 'GRUP') {
+      alert('Grup Konsolide görünümünde Excel import yapılamaz. Lütfen önce ICA veya ICE seçin ve o şirket için Excel dosyasını yükleyin.');
+      return;
+    }
     const wb = wbRef.current;
     if (!wb || !selectedSheet) return;
 
@@ -460,7 +535,7 @@ export default function Home() {
       const [companiesRes, yearsRes, catsRes] = await Promise.all([
         getCompanies(), getFiscalYears(), getCategories(),
       ]);
-      const companyCode = company === 'GRUP' ? 'ICA' : company;
+      const companyCode = company;
       const dbCompany   = companiesRes.data?.find((c) => c.code === companyCode) ?? null;
       const dbYear      = yearsRes.data?.find((y) => y.year === 2025 && y.status === 'active') ?? null;
       const dbCats      = catsRes.data ?? [];
@@ -612,7 +687,7 @@ export default function Home() {
       const rawCat    = String(row[pick('category')] ?? '').trim();
       const category  = rawCat || detectCategory(code, name);
       if (!code) continue;
-      parsed.push({ code, name: name || code, budget, remaining, used, category, company: company === 'GRUP' ? 'ICA' : company });
+      parsed.push({ code, name: name || code, budget, remaining, used, category, company });
     }
 
     if (parsed.length === 0) return;
