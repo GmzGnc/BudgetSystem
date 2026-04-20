@@ -1386,7 +1386,9 @@ export default function Home() {
                         ? DEPARTMENTS.map((d) => ({ name: d, value: deptRow[d], color: DEPT_COLORS[d] })).filter((d) => d.value > 0)
                         : [];
 
-                      const showDept = (company === 'ICA' || company === 'GRUP') && deptRow;
+                      const showDept =
+                        (company === 'ICA' && !!deptRow) ||   // ICA: statik ICA_DEPT bazlı
+                        (company === 'GRUP');                   // GRUP: yeni dinamik görünüm
 
                       return (
                         <React.Fragment key={cat.id}>
@@ -1885,13 +1887,159 @@ export default function Home() {
                                     })()}
 
                                     {/* departman detay tablosu */}
-                                    {showDept && deptRow && (
+                                    {showDept && (<>
+
+                                    {/* ── GRUP: Şirket Kırılımı (her zaman görünür) ── */}
+                                    {company === 'GRUP' && (() => {
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      const totalRows = (lineItemsData as any[]).filter(
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                        (i: any) => i.category_code === cat.id && i.row_type === 'total'
+                                      );
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      const icaTotalRow = totalRows.find((r: any) => r.company === 'ICA');
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      const iceTotalRow = totalRows.find((r: any) => r.company === 'ICE');
+                                      const ensureArr = (v: unknown): number[] => {
+                                        if (!v) return Array(12).fill(0);
+                                        if (typeof v === 'string') { try { return JSON.parse(v); } catch { return Array(12).fill(0); } }
+                                        return Array.isArray(v) ? v as number[] : Array(12).fill(0);
+                                      };
+                                      const icaAnnual = icaTotalRow ? ensureArr(icaTotalRow.monthly_budget).reduce((s: number, v: number) => s + v, 0) : 0;
+                                      const iceAnnual = iceTotalRow ? ensureArr(iceTotalRow.monthly_budget).reduce((s: number, v: number) => s + v, 0) : 0;
+                                      const grandTotal = icaAnnual + iceAnnual;
+                                      if (grandTotal === 0) return null;
+                                      const icaShare = (icaAnnual / grandTotal) * 100;
+                                      const iceShare = (iceAnnual / grandTotal) * 100;
+                                      return (
+                                        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden mb-3">
+                                          <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700">
+                                            <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">Şirket Kırılımı</p>
+                                          </div>
+                                          <div className="overflow-x-auto">
+                                            <table className="w-full min-w-[380px] text-xs">
+                                              <thead className="bg-gray-50 dark:bg-gray-800">
+                                                <tr>
+                                                  {['Şirket','Yıllık Tutar','Pay %','Aylık Ort.'].map((h, i) => (
+                                                    <th key={h} className={`px-4 py-2 font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide ${i === 0 ? 'text-left' : 'text-right'}`}>{h}</th>
+                                                  ))}
+                                                </tr>
+                                              </thead>
+                                              <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+                                                {icaAnnual > 0 && (
+                                                  <tr className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                                    <td className="px-4 py-2 flex items-center gap-1.5">
+                                                      <span className="w-2 h-2 rounded-sm flex-shrink-0 bg-indigo-500" />
+                                                      <span className="font-medium text-gray-800 dark:text-gray-200">ICA</span>
+                                                    </td>
+                                                    <td className="px-4 py-2 text-right font-mono text-gray-700 dark:text-gray-300">{fmtFull(icaAnnual)}</td>
+                                                    <td className="px-4 py-2 text-right text-gray-600 dark:text-gray-400">{icaShare.toFixed(1)}%</td>
+                                                    <td className="px-4 py-2 text-right font-mono text-gray-600 dark:text-gray-400">{fmtFull(Math.round(icaAnnual / 12))}</td>
+                                                  </tr>
+                                                )}
+                                                {iceAnnual > 0 && (
+                                                  <tr className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                                    <td className="px-4 py-2 flex items-center gap-1.5">
+                                                      <span className="w-2 h-2 rounded-sm flex-shrink-0 bg-sky-500" />
+                                                      <span className="font-medium text-gray-800 dark:text-gray-200">ICE</span>
+                                                    </td>
+                                                    <td className="px-4 py-2 text-right font-mono text-gray-700 dark:text-gray-300">{fmtFull(iceAnnual)}</td>
+                                                    <td className="px-4 py-2 text-right text-gray-600 dark:text-gray-400">{iceShare.toFixed(1)}%</td>
+                                                    <td className="px-4 py-2 text-right font-mono text-gray-600 dark:text-gray-400">{fmtFull(Math.round(iceAnnual / 12))}</td>
+                                                  </tr>
+                                                )}
+                                              </tbody>
+                                              <tfoot className="bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+                                                <tr>
+                                                  <td className="px-4 py-2 font-bold text-gray-800 dark:text-gray-100">Toplam</td>
+                                                  <td className="px-4 py-2 text-right font-bold font-mono text-gray-900 dark:text-white">{fmtFull(grandTotal)}</td>
+                                                  <td className="px-4 py-2 text-right font-bold text-gray-700 dark:text-gray-300">100%</td>
+                                                  <td className="px-4 py-2 text-right font-bold font-mono text-gray-700 dark:text-gray-300">{fmtFull(Math.round(grandTotal / 12))}</td>
+                                                </tr>
+                                              </tfoot>
+                                            </table>
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
+
+                                    {/* ── GRUP: Departman Detayı Accordion ── */}
+                                    {company === 'GRUP' && (() => {
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      const deptRows = (lineItemsData as any[]).filter(
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                        (i: any) => i.category_code === cat.id && i.row_type === 'dept'
+                                      );
+                                      if (deptRows.length === 0) return null;
+                                      const ensureArr = (v: unknown): number[] => {
+                                        if (!v) return Array(12).fill(0);
+                                        if (typeof v === 'string') { try { return JSON.parse(v); } catch { return Array(12).fill(0); } }
+                                        return Array.isArray(v) ? v as number[] : Array(12).fill(0);
+                                      };
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      const deptTotalSum = deptRows.reduce((s: number, r: any) =>
+                                        s + ensureArr(r.monthly_budget).reduce((ss: number, v: number) => ss + v, 0), 0
+                                      );
+                                      return (
+                                        <details className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden group">
+                                          <summary className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 cursor-pointer flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/60 list-none">
+                                            <div className="flex items-center gap-2">
+                                              <svg className="w-4 h-4 text-gray-500 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                              </svg>
+                                              <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">Departman Detayı</p>
+                                              <span className="text-xs text-gray-400">({deptRows.length} departman)</span>
+                                            </div>
+                                          </summary>
+                                          <div className="overflow-x-auto">
+                                            <table className="w-full min-w-[500px] text-xs">
+                                              <thead className="bg-gray-50 dark:bg-gray-800">
+                                                <tr>
+                                                  {['Şirket','Departman','Yıllık Tutar','Pay %','Aylık Ort.'].map((h, i) => (
+                                                    <th key={h} className={`px-4 py-2 font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide ${i < 2 ? 'text-left' : 'text-right'}`}>{h}</th>
+                                                  ))}
+                                                </tr>
+                                              </thead>
+                                              <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+                                                {deptRows
+                                                  .slice()
+                                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                                  .sort((a: any, b: any) => {
+                                                    if (a.company !== b.company) return a.company === 'ICA' ? -1 : 1;
+                                                    return (a.dept_code ?? '').localeCompare(b.dept_code ?? '');
+                                                  })
+                                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                                  .map((d: any) => {
+                                                    const annual = ensureArr(d.monthly_budget).reduce((s: number, v: number) => s + v, 0);
+                                                    if (annual === 0) return null;
+                                                    const share = deptTotalSum > 0 ? (annual / deptTotalSum) * 100 : 0;
+                                                    return (
+                                                      <tr key={`${d.company}-${d.dept_code}`} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                                        <td className="px-4 py-2">
+                                                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold ${d.company === 'ICA' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300' : 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'}`}>
+                                                            <span className={`w-1.5 h-1.5 rounded-full ${d.company === 'ICA' ? 'bg-indigo-500' : 'bg-sky-500'}`} />
+                                                            {d.company}
+                                                          </span>
+                                                        </td>
+                                                        <td className="px-4 py-2 font-medium text-gray-800 dark:text-gray-200">{d.label}</td>
+                                                        <td className="px-4 py-2 text-right font-mono text-gray-700 dark:text-gray-300">{fmtFull(annual)}</td>
+                                                        <td className="px-4 py-2 text-right text-gray-600 dark:text-gray-400">{share.toFixed(1)}%</td>
+                                                        <td className="px-4 py-2 text-right font-mono text-gray-600 dark:text-gray-400">{fmtFull(Math.round(annual / 12))}</td>
+                                                      </tr>
+                                                    );
+                                                  })}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        </details>
+                                      );
+                                    })()}
+
+                                    {/* ── ICA: eski statik ICA_DEPT bazlı tablo (değişmedi) ── */}
+                                    {company !== 'GRUP' && deptRow && (
                                       <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-                                        <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                                        <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700">
                                           <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">Departman Detayı</p>
-                                          {company === 'GRUP' && (
-                                            <span className="text-xs text-amber-600 dark:text-amber-400">ICA kırılımı gösteriliyor</span>
-                                          )}
                                         </div>
                                         <div className="overflow-x-auto">
                                           <table className="w-full min-w-[380px] text-xs">
@@ -1919,29 +2067,10 @@ export default function Home() {
                                                   </tr>
                                                 );
                                               })}
-                                              {/* GRUP ise ICE toplamı ek satır */}
-                                              {company === 'GRUP' && (() => {
-                                                const iceVal = catTotal - icaTotal;
-                                                if (iceVal <= 0) return null;
-                                                const iceShare = catTotal > 0 ? (iceVal / catTotal) * 100 : 0;
-                                                return (
-                                                  <tr className="bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors">
-                                                    <td className="px-4 py-2 flex items-center gap-1.5">
-                                                      <span className="w-2 h-2 rounded-sm flex-shrink-0 bg-blue-400" />
-                                                      <span className="font-medium text-blue-700 dark:text-blue-300">ICE Toplam</span>
-                                                    </td>
-                                                    <td className="px-4 py-2 text-right font-mono text-blue-700 dark:text-blue-300">{fmtFull(iceVal)}</td>
-                                                    <td className="px-4 py-2 text-right text-blue-600 dark:text-blue-400">{iceShare.toFixed(1)}%</td>
-                                                    <td className="px-4 py-2 text-right font-mono text-blue-600 dark:text-blue-400">{fmtFull(Math.round(iceVal / 12))}</td>
-                                                  </tr>
-                                                );
-                                              })()}
                                             </tbody>
                                             <tfoot className="bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
                                               <tr>
-                                                <td className="px-4 py-2 font-bold text-gray-800 dark:text-gray-100">
-                                                  {company === 'GRUP' ? 'Grup Toplam' : 'ICA Toplam'}
-                                                </td>
+                                                <td className="px-4 py-2 font-bold text-gray-800 dark:text-gray-100">ICA Toplam</td>
                                                 <td className="px-4 py-2 text-right font-bold font-mono text-gray-900 dark:text-white">{fmtFull(catTotal)}</td>
                                                 <td className="px-4 py-2 text-right font-bold text-gray-700 dark:text-gray-300">100%</td>
                                                 <td className="px-4 py-2 text-right font-bold font-mono text-gray-700 dark:text-gray-300">{fmtFull(Math.round(catTotal / 12))}</td>
@@ -1951,6 +2080,8 @@ export default function Home() {
                                         </div>
                                       </div>
                                     )}
+
+                                    </>)}
 
                                     </>) /* end Aylık Detay tab */}
 
