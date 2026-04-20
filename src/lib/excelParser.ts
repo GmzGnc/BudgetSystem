@@ -77,19 +77,11 @@ export function parseExcelFile(
 
     // 2. DEPT rows
     for (const dept of catConfig.depts) {
-      const deptBudget = readRow(ws, dept.row, BUDGET_COLS);
-      const deptActual = readRow(ws, dept.row, ACTUAL_COLS);
-      lineItems.push({
-        category_code: catCode,
-        dept_code: dept.code,
-        item_code: null,
-        param_code: null,
-        row_type: 'dept',
-        label: dept.label,
-        monthly_budget: deptBudget,
-        monthly_actual: deptActual,
-        unit_type: 'TL',
-      });
+      // Collect item/pair rows first — needed both for emitting 'item' lineItems
+      // and (when virtual) for computing the dept's monthly totals.
+      const deptItemBudgets: number[][] = [];
+      const deptItemActuals: number[][] = [];
+      const itemLineItems: ParsedLineItem[] = [];
 
       // 3. ITEM rows (within dept)
       if (dept.itemRows) {
@@ -100,7 +92,7 @@ export function parseExcelFile(
           if (itemBudget.every(v => v === 0) && itemActual.every(v => v === 0)) continue;
           // label: prefer actual Excel text (plate/name from col K); fall back to config label
           const plate = readLabel(ws, item.row) || item.label;
-          lineItems.push({
+          itemLineItems.push({
             category_code: catCode,
             dept_code: dept.code,
             // item_code is row-based to guarantee uniqueness even when plates repeat
@@ -112,6 +104,11 @@ export function parseExcelFile(
             monthly_actual: itemActual,
             unit_type: item.unit ?? 'TL',
           });
+          // Only TL-denominated items roll up into the dept total (virtual path).
+          if ((item.unit ?? 'TL') === 'TL') {
+            deptItemBudgets.push(itemBudget);
+            deptItemActuals.push(itemActual);
+          }
         }
       }
 
@@ -125,7 +122,7 @@ export function parseExcelFile(
           const plate = readLabel(ws, tlRow) || `Araç ${idx + 1}`;
           // item_code is row-based — guaranteed unique even when the same plate
           // appears in multiple rows (e.g. TL+Litre of the same vehicle share the plate label)
-          lineItems.push({
+          itemLineItems.push({
             category_code: catCode,
             dept_code:  dept.code,
             item_code:  `${dept.code}_r${tlRow}`,
@@ -136,10 +133,14 @@ export function parseExcelFile(
             monthly_actual: tlActual,
             unit_type: 'TL',
           });
+          // Only the TL leg rolls up into the dept total (virtual path).
+          deptItemBudgets.push(tlBudget);
+          deptItemActuals.push(tlActual);
+
           const litreBudget = readRow(ws, litreRow, BUDGET_COLS);
           const litreActual = readRow(ws, litreRow, ACTUAL_COLS);
           if (!litreBudget.every(v => v === 0) || !litreActual.every(v => v === 0)) {
-            lineItems.push({
+            itemLineItems.push({
               category_code: catCode,
               dept_code:  dept.code,
               item_code:  `${dept.code}_r${litreRow}_l`,
@@ -153,6 +154,33 @@ export function parseExcelFile(
           }
         });
       }
+
+      // Resolve dept monthly totals: either read from the physical row, or compute
+      // by summing TL-unit items/pair TLs (virtual dept).
+      let deptBudget: number[];
+      let deptActual: number[];
+      if (dept.virtual) {
+        deptBudget = BUDGET_COLS.map((_, i) => deptItemBudgets.reduce((s, arr) => s + (arr[i] ?? 0), 0));
+        deptActual = ACTUAL_COLS.map((_, i) => deptItemActuals.reduce((s, arr) => s + (arr[i] ?? 0), 0));
+      } else {
+        deptBudget = readRow(ws, dept.row, BUDGET_COLS);
+        deptActual = readRow(ws, dept.row, ACTUAL_COLS);
+      }
+
+      lineItems.push({
+        category_code: catCode,
+        dept_code: dept.code,
+        item_code: null,
+        param_code: null,
+        row_type: 'dept',
+        label: dept.label,
+        monthly_budget: deptBudget,
+        monthly_actual: deptActual,
+        unit_type: 'TL',
+      });
+
+      // Emit the items collected above (in original order).
+      for (const li of itemLineItems) lineItems.push(li);
     }
 
     // 4. PARAM rows
