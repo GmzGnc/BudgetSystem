@@ -1608,6 +1608,7 @@ export default function Home() {
                                           categoryLabel={cat.name}
                                           dark={dark}
                                           color={colorMap[cat.id] ?? '#6366f1'}
+                                          isGroupView={company === 'GRUP'}
                                           // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                           lineItems={lineItemsData.filter((i: any) => i.category_code === cat.id)}
                                         />
@@ -1689,6 +1690,16 @@ export default function Home() {
 
                                       const groupKeys = Array.from(groupMap.keys());
 
+                                      // GRUP: her dept_code'un hangi şirkete ait olduğunu bul
+                                      const deptCompanyMap = new Map<string, 'ICA' | 'ICE'>();
+                                      groupMap.forEach((items, key) => {
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                        const firstItem = items[0] as any;
+                                        deptCompanyMap.set(key, firstItem?.company ?? 'ICA');
+                                      });
+                                      const icaDeptKeys = groupKeys.filter((k) => deptCompanyMap.get(k) === 'ICA');
+                                      const iceDeptKeys = groupKeys.filter((k) => deptCompanyMap.get(k) === 'ICE');
+
                                       // grand total — groupMap üzerinden hesapla (fallback dept satırları da dahil)
                                       const grandTotal = Array(12).fill(0) as number[];
                                       groupMap.forEach((items) => {
@@ -1701,6 +1712,149 @@ export default function Home() {
 
                                       const searchLower = ddSearch.trim().toLowerCase();
                                       const isTL = (unit: string) => unit === 'TL' || unit === 'TL Karşılığı';
+
+                                      // Dept accordion render helper — kullanılır hem flat ICA/ICE view'da, hem GRUP içi dept listesinde
+                                      const renderDeptAccordion = (deptKey: string) => {
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                        const groupItems = groupMap.get(deptKey)! as any[];
+                                        const deptLabel = deptKey === '__none__'
+                                          ? cat.name
+                                          : (deptLabelMap.get(deptKey) ?? deptKey);
+
+                                        const filtered = searchLower
+                                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                          ? groupItems.filter((it: any) => it.label.toLowerCase().includes(searchLower))
+                                          : groupItems;
+                                        if (searchLower && filtered.length === 0) return null;
+
+                                        const isGroupOpen = ddOpenGroups.has(deptKey);
+                                        const showCount   = ddShowMore[deptKey] ?? 20;
+                                        const visible     = filtered.slice(0, showCount);
+                                        const remaining   = filtered.length - showCount;
+
+                                        // group total (sum of ALL items in group, not just visible)
+                                        const groupTotal = Array(12).fill(0) as number[];
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                        groupItems.forEach((item: any) => {
+                                          ensureArr(item.monthly_budget).forEach((v: number, idx: number) => { groupTotal[idx] += v; });
+                                        });
+                                        const groupAnnual = groupTotal.reduce((s, v) => s + v, 0);
+
+                                        return (
+                                          <div key={deptKey} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
+                                            {/* grup başlık butonu */}
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setDdOpenGroups((prev) => {
+                                                  const next = new Set(prev);
+                                                  if (next.has(deptKey)) next.delete(deptKey);
+                                                  else next.add(deptKey);
+                                                  return next;
+                                                });
+                                              }}
+                                              className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors"
+                                            >
+                                              <span
+                                                className="text-gray-400 dark:text-gray-500 text-[10px] transition-transform duration-200 flex-shrink-0"
+                                                style={{ display: 'inline-block', transform: isGroupOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
+                                              >
+                                                ▶
+                                              </span>
+                                              <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 flex-1 text-left">
+                                                {deptLabel}
+                                              </span>
+                                              <span className="text-xs text-gray-400 dark:text-gray-500">
+                                                {groupItems.length} kalem
+                                              </span>
+                                              <span className="text-xs font-mono font-semibold text-gray-700 dark:text-gray-200 ml-3">
+                                                {fmtShort(groupAnnual)}
+                                              </span>
+                                            </button>
+
+                                            {/* açık iken: tablo */}
+                                            {isGroupOpen && (
+                                              <div className="border-t border-gray-100 dark:border-gray-800">
+                                                <div className="overflow-x-auto">
+                                                  <table className="w-full min-w-[900px] text-xs">
+                                                    <thead className="bg-gray-50 dark:bg-gray-800/60">
+                                                      <tr>
+                                                        <th className="px-4 py-2 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[180px]">
+                                                          Kalem
+                                                        </th>
+                                                        {MONTH_LABELS.map((m) => (
+                                                          <th key={m} className="px-1.5 py-2 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[52px]">
+                                                            {m}
+                                                          </th>
+                                                        ))}
+                                                        <th className="px-3 py-2 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[72px]">
+                                                          Yıllık
+                                                        </th>
+                                                      </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+                                                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                                                      {visible.map((item: any) => {
+                                                        const mb = ensureArr(item.monthly_budget);
+                                                        const annual = mb.reduce((s: number, v: number) => s + v, 0);
+                                                        const useTL = isTL(item.unit_type ?? 'TL');
+                                                        return (
+                                                          <tr key={item.item_code ?? item.label} className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
+                                                            <td className="px-4 pl-7 py-1.5 text-gray-700 dark:text-gray-300">
+                                                              {item.label}
+                                                            </td>
+                                                            {mb.map((v: number, mi: number) => (
+                                                              <td key={mi} className="px-1.5 py-1.5 text-right font-mono text-gray-600 dark:text-gray-400">
+                                                                {useTL ? fmtShort(v) : v.toLocaleString('tr-TR')}
+                                                              </td>
+                                                            ))}
+                                                            <td className="px-3 py-1.5 text-right font-mono font-semibold text-gray-800 dark:text-gray-200">
+                                                              {useTL ? fmtShort(annual) : annual.toLocaleString('tr-TR')}
+                                                            </td>
+                                                          </tr>
+                                                        );
+                                                      })}
+                                                    </tbody>
+                                                    <tfoot>
+                                                      <tr
+                                                        className="border-t-2 border-gray-200 dark:border-gray-600"
+                                                        style={{ backgroundColor: `${catColor}18` }}
+                                                      >
+                                                        <td className="px-4 pl-7 py-2 font-bold text-gray-900 dark:text-white">
+                                                          Grup Toplamı
+                                                        </td>
+                                                        {groupTotal.map((v, mi) => (
+                                                          <td key={mi} className="px-1.5 py-2 text-right font-mono font-bold text-gray-900 dark:text-white">
+                                                            {fmtShort(v)}
+                                                          </td>
+                                                        ))}
+                                                        <td className="px-3 py-2 text-right font-mono font-bold text-gray-900 dark:text-white">
+                                                          {fmtShort(groupAnnual)}
+                                                        </td>
+                                                      </tr>
+                                                    </tfoot>
+                                                  </table>
+                                                </div>
+                                                {/* daha fazla göster */}
+                                                {remaining > 0 && (
+                                                  <button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      setDdShowMore((prev) => ({
+                                                        ...prev,
+                                                        [deptKey]: showCount + 20,
+                                                      }));
+                                                    }}
+                                                    className="w-full py-2 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 transition-colors border-t border-gray-100 dark:border-gray-800"
+                                                  >
+                                                    Daha Fazla Göster ({remaining} kalem daha)
+                                                  </button>
+                                                )}
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      };
 
                                       return (
                                         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
@@ -1720,147 +1874,84 @@ export default function Home() {
                                           </div>
 
                                           {/* gruplar */}
-                                          {groupKeys.map((deptKey) => {
-                                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                            const groupItems = groupMap.get(deptKey)! as any[];
-                                            const deptLabel = deptKey === '__none__'
-                                              ? cat.name
-                                              : (deptLabelMap.get(deptKey) ?? deptKey);
+                                          {company === 'GRUP' ? (
+                                            // GRUP: iki üst-grup accordion (ICA + ICE)
+                                            (() => {
+                                              const buildGroupStats = (keys: string[]) => {
+                                                let totalItems = 0;
+                                                const monthlySum = Array(12).fill(0) as number[];
+                                                keys.forEach((k) => {
+                                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                                  const items = groupMap.get(k)! as any[];
+                                                  totalItems += items.length;
+                                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                                  items.forEach((item: any) => {
+                                                    ensureArr(item.monthly_budget).forEach((v: number, idx: number) => { monthlySum[idx] += v; });
+                                                  });
+                                                });
+                                                return { totalItems, annual: monthlySum.reduce((s, v) => s + v, 0) };
+                                              };
 
-                                            const filtered = searchLower
-                                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                              ? groupItems.filter((it: any) => it.label.toLowerCase().includes(searchLower))
-                                              : groupItems;
-                                            if (searchLower && filtered.length === 0) return null;
+                                              const companyGroups = [
+                                                { key: 'ICA' as const, label: 'ICA Departmanları', keys: icaDeptKeys },
+                                                { key: 'ICE' as const, label: 'ICE Departmanları', keys: iceDeptKeys },
+                                              ].filter((g) => g.keys.length > 0);
 
-                                            const isGroupOpen = ddOpenGroups.has(deptKey);
-                                            const showCount   = ddShowMore[deptKey] ?? 20;
-                                            const visible     = filtered.slice(0, showCount);
-                                            const remaining   = filtered.length - showCount;
-
-                                            // group total (sum of ALL items in group, not just visible)
-                                            const groupTotal = Array(12).fill(0) as number[];
-                                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                            groupItems.forEach((item: any) => {
-                                              ensureArr(item.monthly_budget).forEach((v: number, idx: number) => { groupTotal[idx] += v; });
-                                            });
-                                            const groupAnnual = groupTotal.reduce((s, v) => s + v, 0);
-
-                                            return (
-                                              <div key={deptKey} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
-                                                {/* grup başlık butonu */}
-                                                <button
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setDdOpenGroups((prev) => {
-                                                      const next = new Set(prev);
-                                                      if (next.has(deptKey)) next.delete(deptKey);
-                                                      else next.add(deptKey);
-                                                      return next;
-                                                    });
-                                                  }}
-                                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors"
-                                                >
-                                                  <span
-                                                    className="text-gray-400 dark:text-gray-500 text-[10px] transition-transform duration-200 flex-shrink-0"
-                                                    style={{ display: 'inline-block', transform: isGroupOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
-                                                  >
-                                                    ▶
-                                                  </span>
-                                                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 flex-1 text-left">
-                                                    {deptLabel}
-                                                  </span>
-                                                  <span className="text-xs text-gray-400 dark:text-gray-500">
-                                                    {groupItems.length} kalem
-                                                  </span>
-                                                  <span className="text-xs font-mono font-semibold text-gray-700 dark:text-gray-200 ml-3">
-                                                    {fmtShort(groupAnnual)}
-                                                  </span>
-                                                </button>
-
-                                                {/* açık iken: tablo */}
-                                                {isGroupOpen && (
-                                                  <div className="border-t border-gray-100 dark:border-gray-800">
-                                                    <div className="overflow-x-auto">
-                                                      <table className="w-full min-w-[900px] text-xs">
-                                                        <thead className="bg-gray-50 dark:bg-gray-800/60">
-                                                          <tr>
-                                                            <th className="px-4 py-2 text-left font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[180px]">
-                                                              Kalem
-                                                            </th>
-                                                            {MONTH_LABELS.map((m) => (
-                                                              <th key={m} className="px-1.5 py-2 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[52px]">
-                                                                {m}
-                                                              </th>
-                                                            ))}
-                                                            <th className="px-3 py-2 text-right font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[72px]">
-                                                              Yıllık
-                                                            </th>
-                                                          </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                                                          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                                                          {visible.map((item: any) => {
-                                                            const mb = ensureArr(item.monthly_budget);
-                                                            const annual = mb.reduce((s: number, v: number) => s + v, 0);
-                                                            const useTL = isTL(item.unit_type ?? 'TL');
-                                                            return (
-                                                              <tr key={item.item_code ?? item.label} className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
-                                                                <td className="px-4 pl-7 py-1.5 text-gray-700 dark:text-gray-300">
-                                                                  {item.label}
-                                                                </td>
-                                                                {mb.map((v: number, mi: number) => (
-                                                                  <td key={mi} className="px-1.5 py-1.5 text-right font-mono text-gray-600 dark:text-gray-400">
-                                                                    {useTL ? fmtShort(v) : v.toLocaleString('tr-TR')}
-                                                                  </td>
-                                                                ))}
-                                                                <td className="px-3 py-1.5 text-right font-mono font-semibold text-gray-800 dark:text-gray-200">
-                                                                  {useTL ? fmtShort(annual) : annual.toLocaleString('tr-TR')}
-                                                                </td>
-                                                              </tr>
-                                                            );
-                                                          })}
-                                                        </tbody>
-                                                        <tfoot>
-                                                          <tr
-                                                            className="border-t-2 border-gray-200 dark:border-gray-600"
-                                                            style={{ backgroundColor: `${catColor}18` }}
-                                                          >
-                                                            <td className="px-4 pl-7 py-2 font-bold text-gray-900 dark:text-white">
-                                                              Grup Toplamı
-                                                            </td>
-                                                            {groupTotal.map((v, mi) => (
-                                                              <td key={mi} className="px-1.5 py-2 text-right font-mono font-bold text-gray-900 dark:text-white">
-                                                                {fmtShort(v)}
-                                                              </td>
-                                                            ))}
-                                                            <td className="px-3 py-2 text-right font-mono font-bold text-gray-900 dark:text-white">
-                                                              {fmtShort(groupAnnual)}
-                                                            </td>
-                                                          </tr>
-                                                        </tfoot>
-                                                      </table>
-                                                    </div>
-                                                    {/* daha fazla göster */}
-                                                    {remaining > 0 && (
-                                                      <button
-                                                        onClick={(e) => {
-                                                          e.stopPropagation();
-                                                          setDdShowMore((prev) => ({
-                                                            ...prev,
-                                                            [deptKey]: showCount + 20,
-                                                          }));
-                                                        }}
-                                                        className="w-full py-2 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 transition-colors border-t border-gray-100 dark:border-gray-800"
-                                                      >
-                                                        Daha Fazla Göster ({remaining} kalem daha)
-                                                      </button>
+                                              return companyGroups.map((grp) => {
+                                                const groupKey = `__company_${grp.key}`;
+                                                const isOpen = ddOpenGroups.has(groupKey);
+                                                const stats = buildGroupStats(grp.keys);
+                                                const isICA = grp.key === 'ICA';
+                                                return (
+                                                  <div key={groupKey} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
+                                                    <button
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setDdOpenGroups((prev) => {
+                                                          const next = new Set(prev);
+                                                          if (next.has(groupKey)) next.delete(groupKey);
+                                                          else next.add(groupKey);
+                                                          return next;
+                                                        });
+                                                      }}
+                                                      className={`w-full flex items-center gap-2 px-4 py-3 text-left transition-colors ${
+                                                        isICA
+                                                          ? 'bg-indigo-50/60 dark:bg-indigo-950/20 hover:bg-indigo-100/60 dark:hover:bg-indigo-950/40'
+                                                          : 'bg-sky-50/60 dark:bg-sky-950/20 hover:bg-sky-100/60 dark:hover:bg-sky-950/40'
+                                                      }`}
+                                                    >
+                                                      <span
+                                                        className="text-gray-500 dark:text-gray-400 text-[10px] transition-transform duration-200 flex-shrink-0"
+                                                        style={{ display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}
+                                                      >▶</span>
+                                                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold flex-shrink-0 ${
+                                                        isICA
+                                                          ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
+                                                          : 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'
+                                                      }`}>{grp.key}</span>
+                                                      <span className={`text-xs font-semibold flex-1 text-left ${isICA ? 'text-indigo-700 dark:text-indigo-300' : 'text-sky-700 dark:text-sky-300'}`}>
+                                                        {grp.label}
+                                                      </span>
+                                                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                        {stats.totalItems} kalem · {grp.keys.length} dept
+                                                      </span>
+                                                      <span className="text-xs font-mono font-semibold text-gray-800 dark:text-gray-100 ml-3">
+                                                        {fmtShort(stats.annual)}
+                                                      </span>
+                                                    </button>
+                                                    {isOpen && (
+                                                      <div className="pl-4 border-t border-gray-100 dark:border-gray-800">
+                                                        {grp.keys.map((deptKey) => renderDeptAccordion(deptKey))}
+                                                      </div>
                                                     )}
                                                   </div>
-                                                )}
-                                              </div>
-                                            );
-                                          })}
+                                                );
+                                              });
+                                            })()
+                                          ) : (
+                                            // ICA / ICE: flat dept listesi (mevcut davranış)
+                                            groupKeys.map((deptKey) => renderDeptAccordion(deptKey))
+                                          )}
 
                                           {/* Genel Toplam */}
                                           <div className="overflow-x-auto border-t-2 border-gray-300 dark:border-gray-600" style={{ backgroundColor: `${catColor}10` }}>
