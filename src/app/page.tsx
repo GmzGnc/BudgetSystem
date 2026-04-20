@@ -1649,7 +1649,10 @@ export default function Home() {
                                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                         (i: any) => i.category_code === cat.id && i.row_type === 'item'
                                       );
-                                      if (catItems.length === 0) return null;
+                                      // NOTE: do NOT early-return here on catItems.length === 0.
+                                      // Some categories (e.g. ICA diger_cesitli) have no item rows but DO have
+                                      // dept rows; the fallback below promotes dept rows into items.
+                                      // We null-check AFTER groupMap construction (see `if (groupKeys.length === 0)`).
 
                                       // GRUP modunda aynı dept_code iki şirkette de olabilir (örn. temizlik_malzeme).
                                       // Çakışmayı önlemek için GRUP'ta key = "COMPANY__dept_code" kullan.
@@ -1699,6 +1702,7 @@ export default function Home() {
                                         });
 
                                       const groupKeys = Array.from(groupMap.keys());
+                                      if (groupKeys.length === 0) return null;
 
                                       // GRUP: compound key'den company çıkar (prefix "ICA__" / "ICE__")
                                       const deptCompanyMap = new Map<string, 'ICA' | 'ICE'>();
