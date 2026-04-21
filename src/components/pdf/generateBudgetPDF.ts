@@ -122,6 +122,14 @@ export interface CategoryPDFData {
     diffPct: number | null;
     isKey?: boolean;
   }>;
+  // YTD meta alanları (opsiyonel — backward compatible)
+  ytdBudget?: number;
+  ytdActual?: number;
+  ytdVariance?: number;
+  ytdVariancePct?: number;
+  annualBudget?: number;
+  periodLabel?: string;
+  reportDate?: string;
   aiAnalysis?: {
     summary: string;
     effects: { type: string; label: string; amount: number; contributionPercent: number; description: string }[];
@@ -137,6 +145,22 @@ export interface CategoryPDFData {
     } | null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     optimization?: any;
+    monthlyAnalysis?: Array<{
+      monthLabel: string;
+      budget: number;
+      actual: number;
+      variance: number;
+      variancePct: number;
+      isDataMissing: boolean;
+      analysis: string;
+      trendNote: string;
+    }> | null;
+    yearEndProjection?: {
+      projectedAnnualActual: number;
+      projectedVariancePct: number;
+      criticalThresholdMonth: string | null;
+      description: string;
+    } | null;
   };
 }
 
@@ -372,15 +396,24 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
   setDocFont(doc, 'normal');
   doc.text(tr(cat.nameEn), 18, 31.5);
 
-  // Özet kartlar (sağ üst)
+  // Özet kartlar (sağ üst) — YTD varsa YTD göster, yoksa budgetTotal
+  const dispBudget = cat.ytdBudget ?? cat.budgetTotal;
+  const dispActual = cat.ytdActual ?? cat.actualTotal;
+  const dispVar    = cat.ytdVariance ?? cat.variance;
   const summaryItems = [
-    tr(`Butce: ${formatTL(cat.budgetTotal)}`),
-    tr(`Fiili: ${formatTL(cat.actualTotal)}`),
-    tr(`Fark: ${formatTL(cat.variance)}`),
+    tr(`${cat.ytdBudget !== undefined ? 'YTD Butce' : 'Butce'}: ${formatTL(dispBudget)}`),
+    tr(`${cat.ytdActual !== undefined ? 'YTD Fiili' : 'Fiili'}: ${formatTL(dispActual)}`),
+    tr(`${cat.ytdVariance !== undefined ? 'YTD Fark' : 'Fark'}: ${formatTL(dispVar)}`),
   ];
   doc.setFontSize(6);
   doc.setTextColor(...WHITE);
   summaryItems.forEach((s, i) => doc.text(s, 130 + i * 52, 29));
+  // Yıllık referans (küçük alt yazı)
+  if (cat.annualBudget !== undefined) {
+    doc.setFontSize(5);
+    doc.setTextColor(200, 215, 245);
+    doc.text(tr(`Yillik: ${formatTL(cat.annualBudget)}`), 130, 32.5);
+  }
 
   // Aylık karşılaştırma tablosu
   doc.setFontSize(8);
@@ -549,7 +582,23 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
   doc.setTextColor(...NAVY);
   doc.text(tr(`${cat.name} — Yapay Zeka Sapma Analizi / AI Variance Analysis`), 18, 29);
 
-  let curY = 38;
+  // Dönem bilgisi
+  let curY = 35;
+  if (cat.periodLabel || cat.reportDate) {
+    setDocFont(doc, 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(...GRAY_DARK);
+    const dateStr = cat.reportDate
+      ? new Date(cat.reportDate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
+      : new Date().toLocaleDateString('tr-TR');
+    doc.text(
+      tr(`Donem: ${cat.periodLabel ?? 'Tum Yil'} | Rapor Tarihi: ${dateStr}`),
+      14, curY
+    );
+    curY += 5;
+  } else {
+    curY = 38;
+  }
   const LINE_H = 4.5;
   const HEADER_RESERVE = 32;
   const FOOTER_H = 16;
@@ -640,6 +689,67 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
       curY += blockH + 1;
     });
     curY += 3;
+  }
+
+  // Aylık Derin Analiz (YTD — her ay için ayrı derin analiz)
+  if (cat.aiAnalysis.monthlyAnalysis && cat.aiAnalysis.monthlyAnalysis.length > 0) {
+    ensureSpace(18);
+    setDocFont(doc, 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(...NAVY);
+    doc.text(tr('Aylik Derin Analiz / Monthly Deep Analysis:'), 14, curY);
+    curY += LINE_H + 1;
+
+    cat.aiAnalysis.monthlyAnalysis.forEach((month) => {
+      ensureSpace(22);
+
+      // Ay başlığı + rakamlar
+      doc.setFillColor(245, 247, 255);
+      doc.rect(14, curY, 269, 7, 'F');
+      setDocFont(doc, 'bold');
+      doc.setFontSize(6.5);
+      doc.setTextColor(...NAVY);
+      doc.text(tr(month.monthLabel + ':'), 17, curY + 5);
+
+      if (!month.isDataMissing) {
+        setDocFont(doc, 'normal');
+        doc.setFontSize(6);
+        doc.setTextColor(...BLACK);
+        const rakam = tr(`Butce ${formatTL(month.budget)} | Fiili ${formatTL(month.actual)} | Sapma ${month.variance >= 0 ? '+' : ''}${formatTL(month.variance)} (${month.variancePct >= 0 ? '+' : ''}${month.variancePct.toFixed(1)}%)`);
+        doc.text(rakam, 60, curY + 5);
+      } else {
+        setDocFont(doc, 'normal');
+        doc.setFontSize(6);
+        doc.setTextColor(160, 160, 160);
+        doc.text(tr('Fiili veri girilmemis'), 60, curY + 5);
+        doc.setTextColor(...BLACK);
+      }
+      curY += 8;
+
+      // Analiz metni
+      setDocFont(doc, 'normal');
+      doc.setFontSize(6.2);
+      doc.setTextColor(...BLACK);
+      const analysisLines = doc.splitTextToSize(tr(month.analysis ?? ''), 265);
+      analysisLines.forEach((line: string) => {
+        ensureSpace(LINE_H);
+        doc.text(line, 14, curY);
+        curY += LINE_H;
+      });
+
+      // Trend notu
+      if (month.trendNote && !month.isDataMissing) {
+        ensureSpace(LINE_H);
+        setDocFont(doc, 'normal');
+        doc.setFontSize(5.8);
+        doc.setTextColor(100, 100, 130);
+        const trendLines = doc.splitTextToSize(tr(`Trend: ${month.trendNote}`), 265);
+        trendLines.forEach((l: string) => { doc.text(l, 14, curY); curY += 4; });
+        doc.setTextColor(...BLACK);
+      }
+      curY += 3;
+    });
+    curY += 2;
   }
 
   // Aylık Trend
@@ -855,7 +965,8 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
       curY += 1;
     }
 
-    if (opt.yearEndForecast) {
+    // Yılsonu Tahmini — sadece yearEndProjection objesi yoksa eski metni göster
+    if (opt.yearEndForecast && !cat.aiAnalysis?.yearEndProjection) {
       ensureSpace(LINE_H * 3);
       setDocFont(doc, 'bold');
       doc.setFontSize(6.5);
@@ -867,6 +978,35 @@ function addCategoryAiPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData
       const foreLines = doc.splitTextToSize(tr(opt.yearEndForecast), 265);
       foreLines.forEach((l: string) => { ensureSpace(LINE_H); doc.text(l, 14, curY); curY += LINE_H; });
     }
+  }
+
+  // Yıl Sonu Projeksiyon (YTD AI çıktısından — daha zengin)
+  if (cat.aiAnalysis?.yearEndProjection) {
+    const proj = cat.aiAnalysis.yearEndProjection;
+    ensureSpace(25);
+    setDocFont(doc, 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(...NAVY);
+    doc.text(tr('Yil Sonu Projeksiyon / Year-End Projection:'), 14, curY);
+    curY += LINE_H + 1;
+
+    setDocFont(doc, 'normal');
+    doc.setFontSize(6.2);
+    doc.setTextColor(...BLACK);
+    doc.text(tr(`Projekte Yillik Fiili: ${formatTL(proj.projectedAnnualActual)}`), 14, curY); curY += LINE_H;
+    doc.text(tr(`Projekte Yil Sonu Sapma: ${proj.projectedVariancePct >= 0 ? '+' : ''}${proj.projectedVariancePct.toFixed(1)}%`), 14, curY); curY += LINE_H;
+    if (proj.criticalThresholdMonth) {
+      ensureSpace(LINE_H);
+      setDocFont(doc, 'bold');
+      doc.setTextColor(200, 50, 50);
+      doc.text(tr(`Kritik Esik Ayi: ${proj.criticalThresholdMonth}`), 14, curY);
+      doc.setTextColor(...BLACK);
+      curY += LINE_H;
+    }
+    setDocFont(doc, 'normal');
+    const projLines = doc.splitTextToSize(tr(proj.description ?? ''), 265);
+    projLines.forEach((l: string) => { ensureSpace(LINE_H); doc.text(l, 14, curY); curY += LINE_H; });
+    curY += 2;
   }
 }
 
