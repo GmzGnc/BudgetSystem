@@ -301,10 +301,11 @@ export default function Home() {
             const taggedIce = iceItems.map((i: any) => ({ ...i, company: 'ICE' as const }));
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const allItems: any[] = [...taggedIca, ...taggedIce];
+            // compound key: aynı id farklı şirkette ayrı satır olarak tutulur
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const unique = allItems.filter((item: any, idx: number, arr: any[]) =>
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              arr.findIndex((i: any) => i.id === item.id) === idx
+              arr.findIndex((i: any) => i.id === item.id && i.company === item.company) === idx
             );
             setLineItemsData(unique);
           }
