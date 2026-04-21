@@ -358,7 +358,13 @@ ${companyBreakdown.net.balanced ? `
 ANALİZİN GRUP-ÖZEL BEKLENTİLERİ:
 1. Departman ve parametre listesinde her öğenin başında [ICA] veya [ICE] etiketi var — bunları karıştırma.
 2. "Baskın Etken", "İkincil Etken", "Karma Etki" bölümlerinde hangi şirketten kaynaklandığını belirt.
-3. "Öneriler" bölümünde ICA tarafı, ICE tarafı ve varsa GRUP stratejisi için ayrı alt başlıklar kullan.
+3. "Öneriler" (recommendations array) bölümünde her öneri string'inin BAŞINA şu etiketlerden birini ekle:
+   - "GRUP:" → konsolide / her iki şirkete dokunan öneriler için
+   - "ICA:"  → sadece ICA'ya özel aksiyon maddeleri için
+   - "ICE:"  → sadece ICE'a özel aksiyon maddeleri için
+   Sıralama: önce GRUP, sonra ICA, sonra ICE. Örnek:
+   ["GRUP: Kira sözleşmeleri için her iki şirkette de tavanlı fiyat klozu ekle", "ICA: Kilyos'ta araç sayısını 32'den 29'a düşür", "ICE: Ana departmanında 813.996 TL varyans için sözleşme revizyonu yap"]
+   Her öneri tek bir etiketle başlar, karma listede ama net ayrımlı olsun.
 4. Optimizasyon senaryolarında her öğenin adında [ICA]/[ICE] prefix olsun.
 5. Dengeleme tespit edildiyse: tasarruf sağlayan şirketin mevcut disiplinini koruma önerisini ekle.
 
