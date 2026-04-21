@@ -50,6 +50,7 @@ export interface VarianceAnalysisRequest {
   }>;
   analysisScope?: 'category' | 'department' | 'monthly' | 'full';
   isGroupView?: boolean;
+  periodLabel?: string;
   companyBreakdown?: {
     ICA: { budget: number; actual: number; variance: number; variancePercent: number };
     ICE: { budget: number; actual: number; variance: number; variancePercent: number };
@@ -273,7 +274,7 @@ export async function POST(req: NextRequest) {
     mode, categoryName, departmentName, budgetTotal, actualTotal,
     varianceAmount, variancePercent, monthlyData, parameters,
     subItems, monthBreakdown, departmentBreakdown,
-    isGroupView, companyBreakdown,
+    isGroupView, companyBreakdown, periodLabel,
   } = body;
 
   const subject = mode === 'department' && departmentName
@@ -342,6 +343,10 @@ export async function POST(req: NextRequest) {
     ? '\nDERIN ANALIZ MODU: Bu tek bir kategorinin detay raporudur. Mumkun olan en kapsamli analizi yap. Her parametreyi tek tek incele, sapmalarin tam nedenini bul, somut rakamlarla destekle.\n'
     : '';
 
+  const periodNote = periodLabel
+    ? `\nANALIZ DONEMI: ${periodLabel}\nAsagidaki tum butce, fiili ve varyans degerleri bu doneme aittir.\n`
+    : '';
+
   const groupAnalysisBlock = (isGroupView && companyBreakdown) ? `
 
 ═══════════════════════════════════════════════════════════════
@@ -381,7 +386,7 @@ ANALİZİN GRUP-ÖZEL BEKLENTİLERİ:
         .join('\n')
     : '';
 
-  const userMessage = `${depthNote}${groupAnalysisBlock}Analiz konusu: ${subject}
+  const userMessage = `${depthNote}${periodNote}${groupAnalysisBlock}Analiz konusu: ${subject}
 
 ÖZET (TÜM YIL):
 - Yıllık Bütçe: ${budgetTotal.toLocaleString('tr-TR')} ₺
@@ -413,7 +418,7 @@ Lütfen bu varyansı analiz et ve JSON formatında yanıt ver.`;
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 4000,
+        max_tokens: 8000,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userMessage }],
       }),
