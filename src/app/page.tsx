@@ -2196,7 +2196,13 @@ export default function Home() {
                                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                       const varLineItems = (lineItemsData as any[]).filter((i: any) => i.category_code === cat.id);
                                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                      const varTotal = varLineItems.find((i: any) => i.row_type === 'total');
+                                      const allTotalRows = varLineItems.filter((i: any) => i.row_type === 'total');
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      const icaTotal = allTotalRows.find((t: any) => t.company === 'ICA') ?? null;
+                                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                      const iceTotal = allTotalRows.find((t: any) => t.company === 'ICE') ?? null;
+                                      const singleTotal = allTotalRows[0] ?? null;
+                                      const varTotal = company === 'GRUP' ? (icaTotal || iceTotal) : singleTotal;
                                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                       const varDepts  = varLineItems.filter((i: any) => i.row_type === 'dept');
                                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -2209,8 +2215,18 @@ export default function Home() {
                                         );
                                       }
 
-                                      const totalBudgetArr = ensureArr(varTotal.monthly_budget);
-                                      const totalActualArr = ensureArr(varTotal.monthly_actual);
+                                      // GRUP: element-wise sum of ICA + ICE monthly arrays
+                                      const icaBudget = icaTotal ? ensureArr(icaTotal.monthly_budget) : Array(12).fill(0);
+                                      const icaActual = icaTotal ? ensureArr(icaTotal.monthly_actual) : Array(12).fill(0);
+                                      const iceBudget = iceTotal ? ensureArr(iceTotal.monthly_budget) : Array(12).fill(0);
+                                      const iceActual = iceTotal ? ensureArr(iceTotal.monthly_actual) : Array(12).fill(0);
+
+                                      const totalBudgetArr = company === 'GRUP'
+                                        ? icaBudget.map((v: number, i: number) => v + iceBudget[i])
+                                        : ensureArr(varTotal.monthly_budget);
+                                      const totalActualArr = company === 'GRUP'
+                                        ? icaActual.map((v: number, i: number) => v + iceActual[i])
+                                        : ensureArr(varTotal.monthly_actual);
 
                                       const hasActual = totalActualArr.some((v) => v !== 0);
                                       const monthsWithActual = totalActualArr
@@ -2351,7 +2367,7 @@ export default function Home() {
                                                       const av = ensureArr(r.monthly_actual)[safeMonth] ?? 0;
                                                       const dv = av - bv;
                                                       const pName = (r.label ?? r.param_code ?? '') as string;
-                                                      return { paramName: pName, unitType: (r.unit_type ?? 'TL') as string, budget: bv, actual: av, diff: dv, diffPct: bv > 0 ? (dv / bv) * 100 : null };
+                                                      return { paramName: pName, unitType: (r.unit_type ?? 'TL') as string, company: r.company ?? null, budget: bv, actual: av, diff: dv, diffPct: bv > 0 ? (dv / bv) * 100 : null };
                                                     })
                                                     .filter((p) => p.budget !== 0 || p.actual !== 0)
                                                     .sort((a, b) => (isKeyParam(a.paramName, cat.id) ? 0 : 1) - (isKeyParam(b.paramName, cat.id) ? 0 : 1))
@@ -2386,6 +2402,7 @@ export default function Home() {
                                                     const activeActual = activeMonthIdxs.reduce((s: number, i: number) => s + (dActual[i] ?? 0), 0);
                                                     return {
                                                       name: d.label,
+                                                      company: d.company ?? null,
                                                       budget: activeBudget,
                                                       actual: activeActual,
                                                       variance: activeActual - activeBudget,
@@ -2398,6 +2415,22 @@ export default function Home() {
                                                   const activeActualTotal = activeMonthIdxs.reduce((s, mi) => s + (totalActualArr[mi] ?? 0), 0);
                                                   const activeVarianceAmount = activeActualTotal - activeBudgetTotal;
                                                   const activeVariancePct = activeBudgetTotal > 0 ? (activeVarianceAmount / activeBudgetTotal) * 100 : 0;
+
+                                                  // GRUP: şirket bazlı kırılım + dengeleme flag
+                                                  const companyBreakdown = company === 'GRUP' && (icaTotal || iceTotal) ? (() => {
+                                                    const icaActBudget = activeMonthIdxs.reduce((s: number, i: number) => s + (icaBudget[i] ?? 0), 0);
+                                                    const icaActActual = activeMonthIdxs.reduce((s: number, i: number) => s + (icaActual[i] ?? 0), 0);
+                                                    const iceActBudget = activeMonthIdxs.reduce((s: number, i: number) => s + (iceBudget[i] ?? 0), 0);
+                                                    const iceActActual = activeMonthIdxs.reduce((s: number, i: number) => s + (iceActual[i] ?? 0), 0);
+                                                    const icaVar = icaActActual - icaActBudget;
+                                                    const iceVar = iceActActual - iceActBudget;
+                                                    const netBudget = icaActBudget + iceActBudget;
+                                                    return {
+                                                      ICA: { budget: icaActBudget, actual: icaActActual, variance: icaVar, variancePercent: icaActBudget > 0 ? (icaVar / icaActBudget) * 100 : 0 },
+                                                      ICE: { budget: iceActBudget, actual: iceActActual, variance: iceVar, variancePercent: iceActBudget > 0 ? (iceVar / iceActBudget) * 100 : 0 },
+                                                      net: { budget: netBudget, actual: icaActActual + iceActActual, variance: icaVar + iceVar, variancePercent: netBudget > 0 ? ((icaVar + iceVar) / netBudget) * 100 : 0, balanced: icaVar * iceVar < 0 },
+                                                    };
+                                                  })() : null;
                                                   // Build subItems: match TL params with corresponding adet params by name similarity
                                                   const tlParams = params.filter((p) => (p.unitType || '').toUpperCase() === 'TL' && p.actual > 0);
                                                   const adetParams = params.filter((p) => {
@@ -2443,6 +2476,8 @@ export default function Home() {
                                                       departmentBreakdown,
                                                       analysisScope: 'full',
                                                       activeMonths: activeMonthIdxs,
+                                                      companyBreakdown,
+                                                      isGroupView: company === 'GRUP',
                                                     }),
                                                   })
                                                     .then((r) => r.json())

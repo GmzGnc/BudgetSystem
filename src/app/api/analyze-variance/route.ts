@@ -42,12 +42,19 @@ export interface VarianceAnalysisRequest {
   }>;
   departmentBreakdown?: Array<{
     name: string;
+    company?: 'ICA' | 'ICE' | null;
     budget: number;
     actual: number;
     variance: number;
     variancePercent: number;
   }>;
   analysisScope?: 'category' | 'department' | 'monthly' | 'full';
+  isGroupView?: boolean;
+  companyBreakdown?: {
+    ICA: { budget: number; actual: number; variance: number; variancePercent: number };
+    ICE: { budget: number; actual: number; variance: number; variancePercent: number };
+    net: { budget: number; actual: number; variance: number; variancePercent: number; balanced: boolean };
+  } | null;
 }
 
 export interface VarianceEffect {
@@ -266,6 +273,7 @@ export async function POST(req: NextRequest) {
     mode, categoryName, departmentName, budgetTotal, actualTotal,
     varianceAmount, variancePercent, monthlyData, parameters,
     subItems, monthBreakdown, departmentBreakdown,
+    isGroupView, companyBreakdown,
   } = body;
 
   const subject = mode === 'department' && departmentName
@@ -305,9 +313,11 @@ export async function POST(req: NextRequest) {
 
   const paramLines = parameters
     .slice(0, 30) // limit to 30 rows to keep prompt size reasonable
-    .map((p) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((p: any) => {
       const pctStr = p.diffPct !== null ? ` (${p.diffPct >= 0 ? '+' : ''}${p.diffPct.toFixed(1)}%)` : '';
-      return `  [${p.unitType || 'adet'}] ${p.paramName}: Bütçe ${p.budget.toLocaleString('tr-TR')}, Fiili ${p.actual.toLocaleString('tr-TR')}, Fark ${p.diff >= 0 ? '+' : ''}${p.diff.toLocaleString('tr-TR')}${pctStr}`;
+      const companyTag = p.company ? `[${p.company}] ` : '';
+      return `  ${companyTag}[${p.unitType || 'adet'}] ${p.paramName}: Bütçe ${p.budget.toLocaleString('tr-TR')}, Fiili ${p.actual.toLocaleString('tr-TR')}, Fark ${p.diff >= 0 ? '+' : ''}${p.diff.toLocaleString('tr-TR')}${pctStr}`;
     })
     .join('\n');
 
@@ -319,7 +329,11 @@ export async function POST(req: NextRequest) {
 
   const deptBreakdownLines = departmentBreakdown && departmentBreakdown.length > 0
     ? '\nDEPARTMAN BREAKDOWN:\n' + departmentBreakdown
-        .map((d) => `  ${d.name}: Bütçe ${d.budget.toLocaleString('tr-TR')} ₺, Fiili ${d.actual.toLocaleString('tr-TR')} ₺, Varyans ${d.variance >= 0 ? '+' : ''}${d.variance.toLocaleString('tr-TR')} ₺`)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((d: any) => {
+          const companyTag = d.company ? `[${d.company}] ` : '';
+          return `  ${companyTag}${d.name}: Bütçe ${d.budget.toLocaleString('tr-TR')} ₺, Fiili ${d.actual.toLocaleString('tr-TR')} ₺, Varyans ${d.variance >= 0 ? '+' : ''}${d.variance.toLocaleString('tr-TR')} ₺`;
+        })
         .join('\n')
     : '';
 
@@ -327,6 +341,28 @@ export async function POST(req: NextRequest) {
   const depthNote = isDeep
     ? '\nDERIN ANALIZ MODU: Bu tek bir kategorinin detay raporudur. Mumkun olan en kapsamli analizi yap. Her parametreyi tek tek incele, sapmalarin tam nedenini bul, somut rakamlarla destekle.\n'
     : '';
+
+  const groupAnalysisBlock = (isGroupView && companyBreakdown) ? `
+
+═══════════════════════════════════════════════════════════════
+⚠️ BU RAPOR ICA + ICE ŞİRKETLERİNİN KONSOLİDE (GRUP) VERİSİDİR
+═══════════════════════════════════════════════════════════════
+
+ŞİRKET BAZLI KIRILIM (AKTİF DÖNEM):
+- ICA:  Bütçe ${companyBreakdown.ICA.budget.toLocaleString('tr-TR')} ₺, Fiili ${companyBreakdown.ICA.actual.toLocaleString('tr-TR')} ₺, Varyans ${companyBreakdown.ICA.variance >= 0 ? '+' : ''}${companyBreakdown.ICA.variance.toLocaleString('tr-TR')} ₺ (${companyBreakdown.ICA.variancePercent >= 0 ? '+' : ''}${companyBreakdown.ICA.variancePercent.toFixed(1)}%)
+- ICE:  Bütçe ${companyBreakdown.ICE.budget.toLocaleString('tr-TR')} ₺, Fiili ${companyBreakdown.ICE.actual.toLocaleString('tr-TR')} ₺, Varyans ${companyBreakdown.ICE.variance >= 0 ? '+' : ''}${companyBreakdown.ICE.variance.toLocaleString('tr-TR')} ₺ (${companyBreakdown.ICE.variancePercent >= 0 ? '+' : ''}${companyBreakdown.ICE.variancePercent.toFixed(1)}%)
+- NET GRUP: Bütçe ${companyBreakdown.net.budget.toLocaleString('tr-TR')} ₺, Fiili ${companyBreakdown.net.actual.toLocaleString('tr-TR')} ₺, Net Varyans ${companyBreakdown.net.variance >= 0 ? '+' : ''}${companyBreakdown.net.variance.toLocaleString('tr-TR')} ₺ (${companyBreakdown.net.variancePercent >= 0 ? '+' : ''}${companyBreakdown.net.variancePercent.toFixed(1)}%)
+${companyBreakdown.net.balanced ? `
+🔔 DENGELEME ETKİSİ TESPİT EDİLDİ: Bir şirket aşımda, diğeri tasarrufta. Net GRUP varyansı iki şirketin zıt yönlü performansının toplamıdır. Raporda mutlaka belirt: hangi şirketin aşım yaptığını ve diğerinin kısmen dengelediğini.
+` : ''}
+ANALİZİN GRUP-ÖZEL BEKLENTİLERİ:
+1. Departman ve parametre listesinde her öğenin başında [ICA] veya [ICE] etiketi var — bunları karıştırma.
+2. "Baskın Etken", "İkincil Etken", "Karma Etki" bölümlerinde hangi şirketten kaynaklandığını belirt.
+3. "Öneriler" bölümünde ICA tarafı, ICE tarafı ve varsa GRUP stratejisi için ayrı alt başlıklar kullan.
+4. Optimizasyon senaryolarında her öğenin adında [ICA]/[ICE] prefix olsun.
+5. Dengeleme tespit edildiyse: tasarruf sağlayan şirketin mevcut disiplinini koruma önerisini ekle.
+
+` : '';
 
   const subItemLines = subItems && subItems.length > 0
     ? '\nALT KALEM DETAYI (adet x birim fiyat):\n' + subItems
@@ -339,7 +375,7 @@ export async function POST(req: NextRequest) {
         .join('\n')
     : '';
 
-  const userMessage = `${depthNote}Analiz konusu: ${subject}
+  const userMessage = `${depthNote}${groupAnalysisBlock}Analiz konusu: ${subject}
 
 ÖZET (TÜM YIL):
 - Yıllık Bütçe: ${budgetTotal.toLocaleString('tr-TR')} ₺
