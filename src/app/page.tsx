@@ -857,7 +857,8 @@ export default function Home() {
           };
           const totalBudget = ensureArr(cTotal?.monthly_budget);
           const totalActual = ensureArr(cTotal?.monthly_actual);
-          const activeIdxs = totalActual.map((v, i) => v !== 0 ? i : -1).filter(i => i >= 0);
+          // Tüm Yıl PDF: tüm 12 ayı dahil et — fiili-olmayan ayları dışlamak yıllık bütçeyi küçültüyor
+          const activeIdxs = Array.from({ length: 12 }, (_, i) => i);
 
           // GRUP: ICA ve ICE total satırlarını ayrı parse et
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -971,7 +972,8 @@ export default function Home() {
         };
         const totalBudget = ensureArr(cTotal?.monthly_budget);
         const totalActual = ensureArr(cTotal?.monthly_actual);
-        const cActiveIndices = totalActual.map((v, i) => v !== 0 ? i : -1).filter(i => i >= 0);
+        // Tüm Yıl PDF: tüm 12 ayı dahil et
+        const cActiveIndices = Array.from({ length: 12 }, (_, i) => i);
 
         const cMonthly = Array.from({ length: 12 }, (_, mi) => ({
           month: mi + 1,
