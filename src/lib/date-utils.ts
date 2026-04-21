@@ -1,43 +1,75 @@
 /**
- * YTD (Year-To-Date) yardımcı fonksiyonlar.
- * Sistem tarihine ve rapor yılına göre dahil edilecek ay indekslerini hesaplar.
+ * Dönem (period) yardımcı fonksiyonlar.
+ * Kategori bazlı aktif ay hesabı ve etiket üretimi.
  */
 
 /**
- * Belirtilen rapor yılına göre YTD ay indekslerini (0-indexed) döndürür.
- * Sistem tarihinin son tamamlanmış ayına kadar dahildir.
+ * Bir kategorinin aktif ay indekslerini döndürür.
+ * Aktif ay: monthly_actual[i] > 0 olan aylar.
+ * Fallback 1: hiç fiili yoksa budget > 0 olan aylar.
+ * Fallback 2: hiçbiri yoksa tüm 12 ay (güvenli fallback).
  *
- * Örnekler (sistem tarihi 21 Nisan 2026):
- *   reportYear = 2026 → [0, 1, 2]  (Ocak, Şubat, Mart)
- *   reportYear = 2025 → [0..11]    (geçmiş yıl, tam yıl)
- *
- * Edge case (sistem tarihi 5 Ocak 2026):
- *   reportYear = 2026 → [0]        (Ocak başı fallback)
+ * Örnekler:
+ *   Güvenlik (3 ay fiili):   actual=[v,v,v,0,...] → [0,1,2]
+ *   Temizlik (12 ay fiili):  actual=[v,...,v]     → [0..11]
+ *   Yeni kategori (0 fiili): budget=[v,...,v]     → [0..11] (budget fallback)
  */
-export function getYtdIndices(reportYear: number): number[] {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth(); // 0-indexed
+export function getActiveMonthIndices(
+  budgetArr: number[],
+  actualArr: number[]
+): number[] {
+  const actualIndices: number[] = [];
+  for (let i = 0; i < 12; i++) {
+    if ((actualArr[i] ?? 0) > 0) actualIndices.push(i);
+  }
+  if (actualIndices.length > 0) return actualIndices;
 
-  if (currentYear > reportYear) {
-    // Geçmiş yıl — tüm 12 ay dahil
-    return Array.from({ length: 12 }, (_, i) => i);
+  // Fallback 1: fiili yoksa bütçenin tanımlı olduğu aylar
+  const budgetIndices: number[] = [];
+  for (let i = 0; i < 12; i++) {
+    if ((budgetArr[i] ?? 0) > 0) budgetIndices.push(i);
   }
-  if (currentYear < reportYear) {
-    // Gelecek yıl — henüz veri yok
-    return [];
-  }
-  // Aynı yıl: son tamamlanmış aya kadar (Ocak = 0, Şubat = 1, ...)
-  if (currentMonth === 0) {
-    return [0]; // Yılın ilk ayı — en az Ocak dahil
-  }
-  return Array.from({ length: currentMonth }, (_, i) => i);
+  if (budgetIndices.length > 0) return budgetIndices;
+
+  // Fallback 2: tamamen boşsa tüm yıl
+  return Array.from({ length: 12 }, (_, i) => i);
 }
 
 /**
- * YTD için dinamik periodLabel oluşturur.
- * Örn: [0,1,2] → "YTD Ocak-Mart 2026"
+ * Aktif ay indekslerinden dinamik dönem etiketi üretir.
+ *
+ * [0..11] (12 ay) → "Tum Yil 2025"
+ * [0,1,2]        → "Aktif Donem: Ocak-Mart 2025"
+ * [0]            → "Aktif Donem: Ocak 2025"
+ * []             → "2025 (veri yok)"
  */
+export function getActivePeriodLabel(
+  activeIdxs: number[],
+  reportYear: number,
+  monthLabels: readonly string[]
+): string {
+  if (activeIdxs.length === 0) return `${reportYear} (veri yok)`;
+  if (activeIdxs.length === 12) return `Tum Yil ${reportYear}`;
+  const first = monthLabels[activeIdxs[0]] ?? String(activeIdxs[0] + 1);
+  const last  = monthLabels[activeIdxs[activeIdxs.length - 1]] ?? String(activeIdxs[activeIdxs.length - 1] + 1);
+  if (activeIdxs.length === 1) return `Aktif Donem: ${first} ${reportYear}`;
+  return `Aktif Donem: ${first}-${last} ${reportYear}`;
+}
+
+// ── Geriye uyumluluk ─────────────────────────────────────────────────────────
+
+/** @deprecated Kullanın: getActiveMonthIndices */
+export function getYtdIndices(reportYear: number): number[] {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  if (currentYear > reportYear) return Array.from({ length: 12 }, (_, i) => i);
+  if (currentYear < reportYear) return [];
+  if (currentMonth === 0) return [0];
+  return Array.from({ length: currentMonth }, (_, i) => i);
+}
+
+/** @deprecated Kullanın: getActivePeriodLabel */
 export function getYtdPeriodLabel(
   ytdIdxs: number[],
   reportYear: number,

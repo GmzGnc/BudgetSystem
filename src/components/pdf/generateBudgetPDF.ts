@@ -122,12 +122,15 @@ export interface CategoryPDFData {
     diffPct: number | null;
     isKey?: boolean;
   }>;
-  // YTD meta alanları (opsiyonel — backward compatible)
+  // Aktif dönem meta alanları (opsiyonel — backward compatible)
   ytdBudget?: number;
   ytdActual?: number;
   ytdVariance?: number;
   ytdVariancePct?: number;
   annualBudget?: number;
+  isFullYear?: boolean;
+  activePeriodLabel?: string;
+  activeMonthsCount?: number;
   periodLabel?: string;
   reportDate?: string;
   aiAnalysis?: {
@@ -273,8 +276,9 @@ function addExecutiveSummaryPage(doc: jsPDF, data: PDFReportData, pageNum: numbe
   addPageHeader(doc, data.companyName, pageNum, totalPages, logoBase64);
   addPageFooter(doc, data.generatedAt);
 
-  const totalBudget   = data.categories.reduce((s, c) => s + c.budgetTotal, 0);
-  const totalActual   = data.categories.reduce((s, c) => s + c.actualTotal, 0);
+  // Aktif dönem bazlı toplamlar (ytdBudget/ytdActual varsa kullan)
+  const totalBudget   = data.categories.reduce((s, c) => s + (c.ytdBudget ?? c.budgetTotal), 0);
+  const totalActual   = data.categories.reduce((s, c) => s + (c.ytdActual ?? c.actualTotal), 0);
   const totalVariance = totalActual - totalBudget;
   const totalPct      = totalBudget > 0 ? (totalVariance / totalBudget) * 100 : 0;
 
@@ -325,12 +329,14 @@ function addExecutiveSummaryPage(doc: jsPDF, data: PDFReportData, pageNum: numbe
   doc.text(tr('Kategori Bazli Ozet / Category Summary'), 14, 78);
 
   const tableY = 82;
-  const cols   = [14, 90, 140, 190, 232, 260];
+  // 7 kolon: Kategori | Aktif Dönem | Bütçe | Fiili | Fark | % | Durum
+  const cols   = [14, 73, 113, 153, 191, 226, 250];
   const headers = [
     [tr('Kategori'), tr('Category')],
-    [tr('Butce (TL)'), tr('Budget')],
-    [tr('Fiili (TL)'), tr('Actual')],
-    [tr('Fark (TL)'), tr('Variance')],
+    [tr('Aktif Donem'), tr('Period')],
+    [tr('Butce'), tr('Budget')],
+    [tr('Fiili'), tr('Actual')],
+    [tr('Fark'), tr('Variance')],
     ['%', '%'],
     [tr('Durum'), tr('Status')],
   ];
@@ -338,14 +344,14 @@ function addExecutiveSummaryPage(doc: jsPDF, data: PDFReportData, pageNum: numbe
   doc.setFillColor(...NAVY);
   doc.rect(14, tableY, 269, 10, 'F');
   doc.setTextColor(...WHITE);
-  doc.setFontSize(7);
+  doc.setFontSize(6.5);
   setDocFont(doc, 'bold');
   headers.forEach((h, i) => {
     doc.text(h[0], cols[i] + 2, tableY + 5);
-    doc.setFontSize(5.5);
+    doc.setFontSize(5);
     setDocFont(doc, 'normal');
     doc.text(h[1], cols[i] + 2, tableY + 8.5);
-    doc.setFontSize(7);
+    doc.setFontSize(6.5);
     setDocFont(doc, 'bold');
   });
 
@@ -357,27 +363,40 @@ function addExecutiveSummaryPage(doc: jsPDF, data: PDFReportData, pageNum: numbe
     doc.setLineWidth(0.1);
     doc.line(14, rowY + 9, 283, rowY + 9);
 
+    const catBudget  = cat.ytdBudget ?? cat.budgetTotal;
+    const catActual  = cat.ytdActual ?? cat.actualTotal;
+    const catVar     = cat.ytdVariance ?? cat.variance;
+    const catVarPct  = cat.ytdVariancePct ?? cat.variancePercent;
+
+    // Aktif dönem kısa etiketi
+    const periodTxt  = cat.isFullYear === false
+      ? tr((cat.activePeriodLabel ?? cat.periodLabel ?? '').replace('Aktif Donem: ', '').replace(/ \d{4}$/, ''))
+      : tr('Tum Yil');
+
     setDocFont(doc, 'normal');
-    doc.setFontSize(7);
+    doc.setFontSize(6.5);
     doc.setTextColor(...BLACK);
     doc.text(tr(cat.name), cols[0] + 2, rowY + 6);
-    doc.text(formatTL(cat.budgetTotal), cols[1] + 2, rowY + 6);
-    doc.text(formatTL(cat.actualTotal), cols[2] + 2, rowY + 6);
+    doc.setFontSize(6);
+    doc.text(periodTxt, cols[1] + 2, rowY + 6);
+    doc.setFontSize(6.5);
+    doc.text(formatTL(catBudget), cols[2] + 2, rowY + 6);
+    doc.text(formatTL(catActual), cols[3] + 2, rowY + 6);
 
-    doc.setTextColor(...(cat.variance > 0 ? RED : GREEN));
-    doc.text(formatTL(cat.variance), cols[3] + 2, rowY + 6);
-    doc.text(formatPct(cat.variancePercent), cols[4] + 2, rowY + 6);
+    doc.setTextColor(...(catVar > 0 ? RED : GREEN));
+    doc.text(formatTL(catVar), cols[4] + 2, rowY + 6);
+    doc.text(formatPct(catVarPct), cols[5] + 2, rowY + 6);
 
-    const statusText   = cat.variance > 0 ? tr('ASIM')     : tr('TASARRUF');
-    const statusTextEn = cat.variance > 0 ? tr('OVER')     : tr('SAVING');
-    doc.setFillColor(...(cat.variance > 0 ? RED : GREEN));
-    doc.roundedRect(cols[5] + 2, rowY + 1, 22, 7, 1, 1, 'F');
+    const statusText   = catVar > 0 ? tr('ASIM')     : tr('TASARRUF');
+    const statusTextEn = catVar > 0 ? tr('OVER')     : tr('SAVING');
+    doc.setFillColor(...(catVar > 0 ? RED : GREEN));
+    doc.roundedRect(cols[6] + 2, rowY + 1, 22, 7, 1, 1, 'F');
     doc.setTextColor(...WHITE);
     doc.setFontSize(5.5);
     setDocFont(doc, 'bold');
-    doc.text(statusText,   cols[5] + 13, rowY + 4.5, { align: 'center' });
+    doc.text(statusText,   cols[6] + 13, rowY + 4.5, { align: 'center' });
     doc.setFontSize(4.5);
-    doc.text(statusTextEn, cols[5] + 13, rowY + 7,   { align: 'center' });
+    doc.text(statusTextEn, cols[6] + 13, rowY + 7,   { align: 'center' });
   });
 }
 
@@ -396,23 +415,37 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
   setDocFont(doc, 'normal');
   doc.text(tr(cat.nameEn), 18, 31.5);
 
-  // Özet kartlar (sağ üst) — YTD varsa YTD göster, yoksa budgetTotal
-  const dispBudget = cat.ytdBudget ?? cat.budgetTotal;
-  const dispActual = cat.ytdActual ?? cat.actualTotal;
-  const dispVar    = cat.ytdVariance ?? cat.variance;
-  const summaryItems = [
-    tr(`${cat.ytdBudget !== undefined ? 'YTD Butce' : 'Butce'}: ${formatTL(dispBudget)}`),
-    tr(`${cat.ytdActual !== undefined ? 'YTD Fiili' : 'Fiili'}: ${formatTL(dispActual)}`),
-    tr(`${cat.ytdVariance !== undefined ? 'YTD Fark' : 'Fark'}: ${formatTL(dispVar)}`),
-  ];
-  doc.setFontSize(6);
+  // Özet kartlar (sağ üst) — aktif dönem bazlı, iki durum
+  const isFull        = cat.isFullYear ?? true;
+  const dispBudget    = cat.ytdBudget ?? cat.budgetTotal;
+  const dispActual    = cat.ytdActual ?? cat.actualTotal;
+  const dispVar       = cat.ytdVariance ?? cat.variance;
+  const dispVarPct    = cat.ytdVariancePct ?? cat.variancePercent;
+  const annualBudget  = cat.annualBudget ?? dispBudget;
+  const activeN       = cat.activeMonthsCount ?? 12;
+  const varSign       = dispVar >= 0 ? '+' : '';
+  const pctSign       = dispVarPct >= 0 ? '+' : '';
+
+  doc.setFontSize(5.5);
   doc.setTextColor(...WHITE);
-  summaryItems.forEach((s, i) => doc.text(s, 130 + i * 52, 29));
-  // Yıllık referans (küçük alt yazı)
-  if (cat.annualBudget !== undefined) {
+  if (isFull) {
+    // Tek satır — "Yıllık Bütçe | Yıllık Fiili | Sapma"
+    doc.text(tr(`Yillik Butce: ${formatTL(dispBudget)}`), 130, 29);
+    doc.text(tr(`Yillik Fiili: ${formatTL(dispActual)}`), 178, 29);
+    doc.text(tr(`Sapma: ${varSign}${formatTL(dispVar)} (${pctSign}${dispVarPct.toFixed(1)}%)`), 226, 29);
+  } else {
+    // Satır 1 — aktif dönem
+    doc.text(tr(`Aktif Butce (${activeN} ay): ${formatTL(dispBudget)}`), 130, 27);
+    doc.text(tr(`Aktif Fiili: ${formatTL(dispActual)}`), 196, 27);
+    doc.text(tr(`Sapma: ${varSign}${formatTL(dispVar)} (${pctSign}${dispVarPct.toFixed(1)}%)`), 240, 27);
+    // Satır 2 — yıllık referans
     doc.setFontSize(5);
     doc.setTextColor(200, 215, 245);
-    doc.text(tr(`Yillik: ${formatTL(cat.annualBudget)}`), 130, 32.5);
+    doc.text(tr(`Yillik Butce (ref): ${formatTL(annualBudget)}`), 130, 32);
+    const missingN = 12 - activeN;
+    if (missingN > 0) {
+      doc.text(tr(`Fiili girilmemis: ${missingN} ay`), 205, 32);
+    }
   }
 
   // Aylık karşılaştırma tablosu

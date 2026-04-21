@@ -23,7 +23,7 @@ import SapmaTab from '@/components/tabs/SapmaTab';
 import SapTab from '@/components/tabs/SapTab';
 import DeptTab from '@/components/tabs/DeptTab';
 import { fmt, fmtShort, fmtFull, pctTextColor, sapamaColor, sapamaStatus } from '@/lib/utils';
-import { getYtdIndices, getYtdPeriodLabel } from '@/lib/date-utils';
+import { getActiveMonthIndices, getActivePeriodLabel } from '@/lib/date-utils';
 import { ICA_BUDGET, ICE_BUDGET, GROUP_MONTHLY } from '@/data/budget-data';
 import { getSapData, SAP_CATEGORY_COLORS } from '@/data/sap-data';
 import type { SapEntry } from '@/data/sap-data';
@@ -841,10 +841,8 @@ export default function Home() {
     };
 
     try {
-      // YTD: sistem tarihine göre dahil edilecek ay indekslerini hesapla
+      // Her kategori kendi aktif dönemini hesaplar (fiili girilmiş aylar)
       const reportYear = 2025;
-      const ytdIdxs = getYtdIndices(reportYear);
-      const ytdPeriodLabel = getYtdPeriodLabel(ytdIdxs, reportYear, MONTH_LABELS);
       const reportDateStr = new Date().toISOString();
 
       // Tüm kategoriler için paralel AI analizi yap
@@ -864,7 +862,10 @@ export default function Home() {
           };
           const totalBudget = ensureArr(cTotal?.monthly_budget);
           const totalActual = ensureArr(cTotal?.monthly_actual);
-          // YTD: ytdIdxs outer scope'tan gelir (getYtdIndices ile hesaplandı)
+          // Kategori bazlı aktif dönem (fiili girilmiş aylar)
+          const activeIdxs = getActiveMonthIndices(totalBudget, totalActual);
+          const activePeriodLabel = getActivePeriodLabel(activeIdxs, reportYear, MONTH_LABELS);
+          const isFullYear = activeIdxs.length === 12;
 
           // GRUP: ICA ve ICE total satırlarını ayrı parse et
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -879,17 +880,15 @@ export default function Home() {
           const cIceActual = ensureArr(cIceTotal?.monthly_actual);
 
           const monthly = MONTH_LABELS.map((m, i) => ({ month: m, budget: totalBudget[i] ?? 0, actual: totalActual[i] ?? 0 }));
-          // YTD toplamlar
-          const cActual = ytdIdxs.reduce((s, i) => s + (totalActual[i] ?? 0), 0);
-          const cBudget = ytdIdxs.length > 0
-            ? ytdIdxs.reduce((s, i) => s + (totalBudget[i] ?? 0), 0)
-            : totalBudget.reduce((s, v) => s + v, 0);
+          // Aktif dönem toplamlar
+          const cActual = activeIdxs.reduce((s, i) => s + (totalActual[i] ?? 0), 0);
+          const cBudget = activeIdxs.reduce((s, i) => s + (totalBudget[i] ?? 0), 0);
           const cVar = cActual - cBudget;
           const cVarPct = cBudget > 0 ? (cVar / cBudget) * 100 : 0;
           // Yıllık bütçe (referans — AI prompt için)
           const annualBudget = totalBudget.reduce((s, v) => s + v, 0);
-          // YTD aylık derin analiz verisi
-          const monthlyDataForAI = ytdIdxs.map((i) => ({
+          // Aktif dönem aylık derin analiz verisi
+          const monthlyDataForAI = activeIdxs.map((i) => ({
             monthIdx: i,
             monthLabel: MONTH_LABELS[i] ?? String(i + 1),
             budget: totalBudget[i] ?? 0,
@@ -912,8 +911,8 @@ export default function Home() {
           const departmentBreakdown = (cDepts as any[]).map((d) => {
             const db = ensureArr(d.monthly_budget);
             const da = ensureArr(d.monthly_actual);
-            const activeBudget = ytdIdxs.reduce((s: number, i: number) => s + (db[i] ?? 0), 0);
-            const activeActual = ytdIdxs.reduce((s: number, i: number) => s + (da[i] ?? 0), 0);
+            const activeBudget = activeIdxs.reduce((s: number, i: number) => s + (db[i] ?? 0), 0);
+            const activeActual = activeIdxs.reduce((s: number, i: number) => s + (da[i] ?? 0), 0);
             return { name: d.label, company: (d.company ?? null) as string | null, budget: activeBudget, actual: activeActual,
               variance: activeActual - activeBudget,
               variancePercent: activeBudget > 0 ? ((activeActual - activeBudget) / activeBudget) * 100 : 0 };
@@ -923,19 +922,19 @@ export default function Home() {
           const params = (cParams as any[]).slice(0, 30).map((p) => {
             const pb = ensureArr(p.monthly_budget);
             const pa = ensureArr(p.monthly_actual);
-            const bv = ytdIdxs.reduce((s: number, i: number) => s + (pb[i] ?? 0), 0);
-            const av = ytdIdxs.reduce((s: number, i: number) => s + (pa[i] ?? 0), 0);
+            const bv = activeIdxs.reduce((s: number, i: number) => s + (pb[i] ?? 0), 0);
+            const av = activeIdxs.reduce((s: number, i: number) => s + (pa[i] ?? 0), 0);
             return { paramName: p.label as string, unitType: (p.unit_type ?? 'TL') as string, company: (p.company ?? null) as string | null, budget: bv, actual: av,
               diff: av - bv, diffPct: bv > 0 ? (av - bv) / bv * 100 : null };
           }).filter((p) => p.budget !== 0 || p.actual !== 0)
             .sort((a, b) => (isKeyParam(a.paramName, c.id) ? 0 : 1) - (isKeyParam(b.paramName, c.id) ? 0 : 1));
 
-          // GRUP: şirket bazlı kırılım (YTD)
+          // GRUP: şirket bazlı kırılım (aktif dönem)
           const companyBreakdown = company === 'GRUP' && (cIcaTotal || cIceTotal) ? (() => {
-            const icaPB = ytdIdxs.reduce((s, i) => s + (cIcaBudget[i] ?? 0), 0);
-            const icaPA = ytdIdxs.reduce((s, i) => s + (cIcaActual[i] ?? 0), 0);
-            const icePB = ytdIdxs.reduce((s, i) => s + (cIceBudget[i] ?? 0), 0);
-            const icePA = ytdIdxs.reduce((s, i) => s + (cIceActual[i] ?? 0), 0);
+            const icaPB = activeIdxs.reduce((s, i) => s + (cIcaBudget[i] ?? 0), 0);
+            const icaPA = activeIdxs.reduce((s, i) => s + (cIcaActual[i] ?? 0), 0);
+            const icePB = activeIdxs.reduce((s, i) => s + (cIceBudget[i] ?? 0), 0);
+            const icePA = activeIdxs.reduce((s, i) => s + (cIceActual[i] ?? 0), 0);
             const icaVar = icaPA - icaPB;
             const iceVar = icePA - icePB;
             const netBudget = icaPB + icePB;
@@ -964,10 +963,10 @@ export default function Home() {
               monthBreakdown,
               departmentBreakdown,
               analysisScope: 'full',
-              activeMonths: ytdIdxs,
+              activeMonths: activeIdxs,
               companyBreakdown,
               isGroupView: company === 'GRUP',
-              periodLabel: ytdPeriodLabel,
+              periodLabel: activePeriodLabel,
               deepAnalysis: true,
             }),
           });
@@ -996,7 +995,10 @@ export default function Home() {
         };
         const totalBudget = ensureArr(cTotal?.monthly_budget);
         const totalActual = ensureArr(cTotal?.monthly_actual);
-        // YTD: ytdIdxs outer scope'tan (getYtdIndices ile hesaplandı)
+        // Kategori bazlı aktif dönem (PDF veri döngüsü)
+        const activeIdxs = getActiveMonthIndices(totalBudget, totalActual);
+        const activePeriodLabel = getActivePeriodLabel(activeIdxs, reportYear, MONTH_LABELS);
+        const isFullYear = activeIdxs.length === 12;
 
         const cMonthly = Array.from({ length: 12 }, (_, mi) => ({
           month: mi + 1,
@@ -1004,10 +1006,8 @@ export default function Home() {
           actual: totalActual[mi] ?? 0,
         }));
 
-        const cActual = ytdIdxs.reduce((s, i) => s + (totalActual[i] ?? 0), 0);
-        const cBudget = ytdIdxs.length > 0
-          ? ytdIdxs.reduce((s, i) => s + (totalBudget[i] ?? 0), 0)
-          : totalBudget.reduce((s, v) => s + v, 0);
+        const cActual = activeIdxs.reduce((s, i) => s + (totalActual[i] ?? 0), 0);
+        const cBudget = activeIdxs.reduce((s, i) => s + (totalBudget[i] ?? 0), 0);
         const cVar = cActual - cBudget;
         const cVarPct = cBudget > 0 ? (cVar / cBudget) * 100 : 0;
         const catAnnualBudget = totalBudget.reduce((s, v) => s + v, 0);
@@ -1016,8 +1016,8 @@ export default function Home() {
         const cActiveParams = (cParams as any[]).slice(0, 30).map((p) => {
           const pb = ensureArr(p.monthly_budget);
           const pa = ensureArr(p.monthly_actual);
-          const bTotal = ytdIdxs.reduce((s: number, i: number) => s + (pb[i] ?? 0), 0);
-          const aTotal = ytdIdxs.reduce((s: number, i: number) => s + (pa[i] ?? 0), 0);
+          const bTotal = activeIdxs.reduce((s: number, i: number) => s + (pb[i] ?? 0), 0);
+          const aTotal = activeIdxs.reduce((s: number, i: number) => s + (pa[i] ?? 0), 0);
           const dTotal = aTotal - bTotal;
           return { paramName: p.label as string, unitType: (p.unit_type ?? 'TL') as string,
             budgetTotal: bTotal, actualTotal: aTotal, diff: dTotal,
@@ -1042,13 +1042,16 @@ export default function Home() {
           variancePercent: cVarPct,
           monthlyData: cMonthly,
           parameters: cActiveParams,
-          // YTD meta alanları — PDF şablonu için
+          // Aktif dönem meta alanları — PDF şablonu için
           ytdBudget: cBudget,
           ytdActual: cActual,
           ytdVariance: cVar,
           ytdVariancePct: cVarPct,
           annualBudget: catAnnualBudget,
-          periodLabel: ytdPeriodLabel,
+          isFullYear,
+          activePeriodLabel,
+          activeMonthsCount: activeIdxs.length,
+          periodLabel: activePeriodLabel,
           reportDate: reportDateStr,
           aiAnalysis: ai ? {
             summary: ai.summary,
@@ -1070,7 +1073,7 @@ export default function Home() {
       const pdfData: PDFReportData = {
         companyName: companyLabel,
         companyCode: company,
-        period: `2025 Butce Karsilastirmasi — ${ytdPeriodLabel}`,
+        period: '2025 Butce Karsilastirmasi — Aktif Donem',
         generatedAt: new Date().toLocaleString('tr-TR'),
         categories: pdfCategories,
       };

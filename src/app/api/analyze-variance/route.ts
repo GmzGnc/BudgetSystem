@@ -428,15 +428,15 @@ ANALİZİN GRUP-ÖZEL BEKLENTİLERİ:
   const ytdAnalysisBlock = (ytdMonthlyData && ytdMonthlyData.length > 0 && annualBudget !== undefined) ? `
 
 ═══════════════════════════════════════════════════════════════
-YTD (YEAR-TO-DATE) ANALIZ MODU
+DONEM BAZLI ANALIZ — ${periodLabel || 'Aktif Donem'}
 ═══════════════════════════════════════════════════════════════
 
 Rapor Tarihi: ${reportDate ? new Date(reportDate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }) : 'belirtilmemis'}
-Analiz Donemi: ${periodLabel || 'YTD'}
+Analiz Donemi: ${periodLabel || 'Aktif Donem'}
 Yillik Butce (referans, tam yil): ${annualBudget.toLocaleString('tr-TR')} TL
-YTD Butce (${ytdMonthlyData.length} ay): ${budgetTotal.toLocaleString('tr-TR')} TL
-YTD Fiili: ${actualTotal.toLocaleString('tr-TR')} TL
-YTD Sapma: ${varianceAmount.toLocaleString('tr-TR')} TL (${variancePercent.toFixed(1)}%)
+Aktif Donem Butcesi (${ytdMonthlyData.length} ay): ${budgetTotal.toLocaleString('tr-TR')} TL
+Aktif Donem Fiili: ${actualTotal.toLocaleString('tr-TR')} TL
+Aktif Donem Sapmasi: ${varianceAmount.toLocaleString('tr-TR')} TL (${variancePercent.toFixed(1)}%)
 
 AYLIK DETAY:
 ${ytdMonthlyData.map((m) =>
@@ -448,7 +448,7 @@ ANALIZ BEKLENTİLERİ
 ═══════════════════════════════════════════════════════════════
 
 1. AYLIK DERİN ANALİZ (monthlyAnalysis array):
-   YTD donemindeki HER AY icin ayri bir obje dondur. Her obje su alanlari icermeli:
+   Aktif donemdeki HER AY icin ayri bir obje dondur. Her obje su alanlari icermeli:
    - monthLabel: Ayin Turkce adi ("Ocak", "Subat", ...)
    - budget, actual, variance, variancePct: Ayin rakamlari
    - isDataMissing: Fiili veri eksikse true
