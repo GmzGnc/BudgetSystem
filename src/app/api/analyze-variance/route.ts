@@ -56,6 +56,19 @@ export interface VarianceAnalysisRequest {
     ICE: { budget: number; actual: number; variance: number; variancePercent: number };
     net: { budget: number; actual: number; variance: number; variancePercent: number; balanced: boolean };
   } | null;
+
+  // YTD alanları (opsiyonel — backward compatible)
+  annualBudget?: number;
+  ytdMonthlyData?: Array<{
+    monthIdx: number;
+    monthLabel: string;
+    budget: number;
+    actual: number;
+    variance: number;
+    variancePct: number;
+    isActualMissing: boolean;
+  }>;
+  reportDate?: string;
 }
 
 export interface VarianceEffect {
@@ -106,6 +119,22 @@ export interface VarianceAnalysisResponse {
     riskNote: string;
     yearEndForecast: string;
   };
+  monthlyAnalysis?: Array<{
+    monthLabel: string;
+    budget: number;
+    actual: number;
+    variance: number;
+    variancePct: number;
+    isDataMissing: boolean;
+    analysis: string;
+    trendNote: string;
+  }> | null;
+  yearEndProjection?: {
+    projectedAnnualActual: number;
+    projectedVariancePct: number;
+    criticalThresholdMonth: string | null;
+    description: string;
+  } | null;
 }
 
 const SYSTEM_PROMPT = `Sen deneyimli bir Turk finans analistisin. Butce varyans analizleri ve maliyet optimizasyonu konusunda uzmansın.
@@ -177,6 +206,26 @@ Yanitini MUTLAKA su JSON formatinda ver (baska hicbir metin ekleme):
     "dominantFactor": "En baskin etken",
     "secondaryFactor": "Ikincil etken"
   },
+  "monthlyAnalysis": [
+    {
+      "monthLabel": "Ocak",
+      "budget": 0,
+      "actual": 0,
+      "variance": 0,
+      "variancePct": 0.0,
+      "isDataMissing": false,
+      "analysis": "5-7 cumlelik genis analiz: sapma nedeni, fiyat/miktar etkisi, one cikan parametre/departman, onceki ayla karsilastirma, o aya ozgu olay.",
+      "trendNote": "Onceki ayla karsilastirmali 1 cumlelik not."
+    }
+  ],
+  "yearEndProjection": {
+    "projectedAnnualActual": 0,
+    "projectedVariancePct": 0.0,
+    "criticalThresholdMonth": null,
+    "description": "3-4 cumlelik aciklama: projeksiyonun dayanagi, risk faktorleri, yil sonu beklenen fark."
+  },
+KRİTİK: monthlyAnalysis ve yearEndProjection — ytdMonthlyData geldiyse MUTLAKA doldurulmalidir. ytdMonthlyData gelmezse bu alanlar null olabilir. monthlyAnalysis icindeki her ay icin analysis en az 5 cumle olmalidir (isDataMissing=true olan aylar haric).
+
 KRİTİK: optimization.scenarioA, scenarioB ve scenarioC alanlari MUTLAKA doldurulmalidir.
 Bu alanlar bos veya eksik birakilamaz. Her senaryo icin:
 - title: string (zorunlu)
@@ -275,6 +324,7 @@ export async function POST(req: NextRequest) {
     varianceAmount, variancePercent, monthlyData, parameters,
     subItems, monthBreakdown, departmentBreakdown,
     isGroupView, companyBreakdown, periodLabel,
+    annualBudget, ytdMonthlyData, reportDate,
   } = body;
 
   const subject = mode === 'department' && departmentName
@@ -375,6 +425,68 @@ ANALİZİN GRUP-ÖZEL BEKLENTİLERİ:
 
 ` : '';
 
+  const ytdAnalysisBlock = (ytdMonthlyData && ytdMonthlyData.length > 0 && annualBudget !== undefined) ? `
+
+═══════════════════════════════════════════════════════════════
+YTD (YEAR-TO-DATE) ANALIZ MODU
+═══════════════════════════════════════════════════════════════
+
+Rapor Tarihi: ${reportDate ? new Date(reportDate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }) : 'belirtilmemis'}
+Analiz Donemi: ${periodLabel || 'YTD'}
+Yillik Butce (referans, tam yil): ${annualBudget.toLocaleString('tr-TR')} TL
+YTD Butce (${ytdMonthlyData.length} ay): ${budgetTotal.toLocaleString('tr-TR')} TL
+YTD Fiili: ${actualTotal.toLocaleString('tr-TR')} TL
+YTD Sapma: ${varianceAmount.toLocaleString('tr-TR')} TL (${variancePercent.toFixed(1)}%)
+
+AYLIK DETAY:
+${ytdMonthlyData.map((m) =>
+  `  ${m.monthLabel}: Butce ${m.budget.toLocaleString('tr-TR')} TL, Fiili ${m.actual.toLocaleString('tr-TR')} TL, Sapma ${m.variance.toLocaleString('tr-TR')} TL (${m.variancePct.toFixed(1)}%)${m.isActualMissing ? '  [FİİLİ VERİ GİRİLMEMİS]' : ''}`
+).join('\n')}
+
+═══════════════════════════════════════════════════════════════
+ANALIZ BEKLENTİLERİ
+═══════════════════════════════════════════════════════════════
+
+1. AYLIK DERİN ANALİZ (monthlyAnalysis array):
+   YTD donemindeki HER AY icin ayri bir obje dondur. Her obje su alanlari icermeli:
+   - monthLabel: Ayin Turkce adi ("Ocak", "Subat", ...)
+   - budget, actual, variance, variancePct: Ayin rakamlari
+   - isDataMissing: Fiili veri eksikse true
+   - analysis: 5-7 cumlelik GENIS analiz. Sunlari kapsa:
+     * O ayin butce/fiili/sapma rakamini net ifade et
+     * Sapmanin nedeni: Fiyat etkisi mi, miktar etkisi mi, karma mi?
+     * Hangi parametre veya departman bu ayda one cikiyor?
+     * Onceki ay(lar)a gore karsilastirma: Ivme artiyor mu, yavaslıyor mu, stabil mi?
+     * O aya ozgu dikkat cekici olay (zam uygulamasi, ek personel, sezon etkisi, tek seferlik gider vb.)
+     * GRUP modundaysa ICA vs ICE davranisi farkli mi
+   - trendNote: Onceki ayla karsilastirmali kisa not (1 cumle)
+
+   ONEMLI: isDataMissing = true olan aylarda analysis alani sadece
+   "Bu ay icin fiili veri girilmemis; analiz yapilamamaktadir." icermeli.
+   ONEMLI: Her analysis metni en az 5 cumle olmali (eksik veri haric).
+
+2. YTD KONSOLİDE ANALİZ (mevcut summary, varianceDecomposition, monthlyTrend alanlarinda):
+   - Toplam YTD sapmasi ve yuzdesi
+   - Trend yonu: Ilk aydan son aya degisim nasil?
+   - Dominant etki: YTD boyunca ana sapma kaynagi hangi faktor?
+   - Dengeleme var mi (bazi ay tasarruf, bazi ay asim)?
+   - Eksik veri varsa YTD yorumunda mutlaka belirt ve
+     "YTD sapma rakami [ay listesi] aylarindaki veri eksikligi nedeniyle yaniltici olabilir" uyarisi yap.
+
+3. YIL SONU PROJEKSİYON (yearEndProjection objesi):
+   - projectedAnnualActual: Mevcut YTD trend yil sonuna tasinsa projekte edilen yillik fiili (TL)
+   - projectedVariancePct: Projekte edilen yil sonu fiili ile yillik butcenin karsilastirilmasindaki yuzde sapma
+   - criticalThresholdMonth: Ivme artiyorsa butce asiminin kritik esigi asacagi ay ("Temmuz" gibi). Projeksiyon butce icinde kaliyorsa null.
+   - description: 3-4 cumlelik aciklama. Projeksiyonun dayanagi, risk faktorleri, yil sonu beklenen fark.
+
+4. GRUP ANALİZİ (isGroupView: true ise) — Mevcut kurallar korunuyor.
+
+5. ÖNERİLER (recommendations array): YTD performansina dayali somut aksiyonlar. Hangi ay hangi alanda mudahale gerekli. Yil sonu projeksiyon riskli ise ek tedbir oner.
+
+6. OPTİMİZASYON SENARYOLARI (optimizationScenarios): Mevcut A/B/C senaryo yapisi korunuyor.
+
+` : '';
+
   const subItemLines = subItems && subItems.length > 0
     ? '\nALT KALEM DETAYI (adet x birim fiyat):\n' + subItems
         .map((si) => {
@@ -386,7 +498,7 @@ ANALİZİN GRUP-ÖZEL BEKLENTİLERİ:
         .join('\n')
     : '';
 
-  const userMessage = `${depthNote}${periodNote}${groupAnalysisBlock}Analiz konusu: ${subject}
+  const userMessage = `${depthNote}${periodNote}${ytdAnalysisBlock}${groupAnalysisBlock}Analiz konusu: ${subject}
 
 ÖZET (TÜM YIL):
 - Yıllık Bütçe: ${budgetTotal.toLocaleString('tr-TR')} ₺
@@ -418,7 +530,7 @@ Lütfen bu varyansı analiz et ve JSON formatında yanıt ver.`;
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 8000,
+        max_tokens: 32000,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userMessage }],
       }),
