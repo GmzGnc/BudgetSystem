@@ -112,6 +112,32 @@ const DEFAULT_COEFFICIENTS: ProjectionCoefficients = Object.fromEntries(
   CATEGORIES.map((c) => [c.id, parseFloat((1 + c.rate / 100).toFixed(3))]),
 );
 
+// ─── mergeTotalRows ───────────────────────────────────────────────────────────
+// GRUP modunda ICA + ICE iki ayrı total satırı üretir. Bu helper birden fazla
+// total satırını element-wise toplayarak tek bir sanal satır döndürür.
+// Tek satır varsa onu, hiç satır yoksa null döndürür (eski davranış korunur).
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mergeTotalRows(rows: any[]): any {
+  if (rows.length === 0) return null;
+  if (rows.length === 1) return rows[0];
+  const parseArr = (v: unknown): number[] => {
+    if (!v) return [];
+    if (typeof v === 'string') { try { return JSON.parse(v) as number[]; } catch { return []; } }
+    return Array.isArray(v) ? (v as number[]) : [];
+  };
+  const sumArrays = (arrays: number[][]): number[] => {
+    const maxLen = Math.max(...arrays.map((a) => a.length), 12);
+    return Array.from({ length: maxLen }, (_, i) => arrays.reduce((s, a) => s + (a[i] ?? 0), 0));
+  };
+  return {
+    ...rows[0],
+    monthly_budget: sumArrays(rows.map((r) => parseArr(r.monthly_budget))),
+    monthly_actual: sumArrays(rows.map((r) => parseArr(r.monthly_actual))),
+    company: 'GRUP',
+  };
+}
+
 // ─── main page ───────────────────────────────────────────────────────────────
 
 type Tab = 'overview' | 'projection' | 'sapma' | 'sap' | 'dept';
@@ -131,6 +157,7 @@ export default function Home() {
   const [ddShowMore,   setDdShowMore]   = useState<Record<string, number>>({});
   const [ddActiveTab,  setDdActiveTab]  = useState<'detail' | 'variance'>('detail');
   const [varMonth,     setVarMonth]     = useState(0);
+  const [sapmaPeriod,  setSapmaPeriod]  = useState<'month' | 'ytd' | 'year'>('month');
 
   useEffect(() => {
     setDdSearch('');
@@ -817,8 +844,7 @@ export default function Home() {
         CATEGORIES.map(async (c) => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const cItems = (lineItemsData as any[]).filter((i: any) => i.category_code === c.id);
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const cTotal = cItems.find((i: any) => i.row_type === 'total');
+          const cTotal = mergeTotalRows(cItems.filter((i: any) => i.row_type === 'total'));
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const cDepts = cItems.filter((i: any) => i.row_type === 'dept');
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -902,8 +928,7 @@ export default function Home() {
       const pdfCategories: CategoryPDFData[] = CATEGORIES.map((c) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const cItems = (lineItemsData as any[]).filter((i: any) => i.category_code === c.id);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const cTotal = cItems.find((i: any) => i.row_type === 'total');
+        const cTotal = mergeTotalRows(cItems.filter((i: any) => i.row_type === 'total'));
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const cParams = cItems.filter((i: any) => i.row_type === 'param');
         const ensureArr = (v: unknown): number[] => {
@@ -1173,8 +1198,7 @@ export default function Home() {
                           CATEGORIES.map(async (c) => {
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             const cItems = (lineItemsData as any[]).filter((i: any) => i.category_code === c.id);
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            const cTotal = cItems.find((i: any) => i.row_type === 'total');
+                            const cTotal = mergeTotalRows(cItems.filter((i: any) => i.row_type === 'total'));
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             const cParams = cItems.filter((i: any) => i.row_type === 'param');
                             const ensureArr = (v: unknown): number[] => {
@@ -1218,8 +1242,7 @@ export default function Home() {
                         const pdfCategories: CategoryPDFData[] = CATEGORIES.map((c) => {
                           // eslint-disable-next-line @typescript-eslint/no-explicit-any
                           const cItems = (lineItemsData as any[]).filter((i: any) => i.category_code === c.id);
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          const cTotal = cItems.find((i: any) => i.row_type === 'total');
+                          const cTotal = mergeTotalRows(cItems.filter((i: any) => i.row_type === 'total'));
                           // eslint-disable-next-line @typescript-eslint/no-explicit-any
                           const cParams = cItems.filter((i: any) => i.row_type === 'param');
                           const ensureArr = (v: unknown): number[] => {
@@ -1309,8 +1332,10 @@ export default function Home() {
                       // guvenlik + temizlik moved to budget_line_items — read annual sum from there
                       const liCategories = ['guvenlik', 'temizlik', 'yemek', 'servis', 'arac_kira', 'hgs', 'arac_yakit', 'arac_bakim', 'diger_hizmet', 'icme_suyu', 'diger_cesitli'];
                       const liTotalItem = liCategories.includes(cat.id)
-                        ? (lineItemsData as any[]).find(
-                            (i: any) => i.category_code === cat.id && i.row_type === 'total'
+                        ? mergeTotalRows(
+                            (lineItemsData as any[]).filter(
+                              (i: any) => i.category_code === cat.id && i.row_type === 'total'
+                            )
                           )
                         : null;
                       const liAnnual = liTotalItem
@@ -1342,7 +1367,7 @@ export default function Home() {
                             return Array.isArray(v) ? (v as number[]) : Array(12).fill(0);
                           };
                           const liItems = (lineItemsData as any[]).filter((i: any) => i.category_code === cat.id);
-                          const liTotal = liItems.find((i: any) => i.row_type === 'total');
+                          const liTotal = mergeTotalRows(liItems.filter((i: any) => i.row_type === 'total'));
                           const totalActual = ensureArr(liTotal?.monthly_actual);
                           const effective = totalActual.some((v: number) => v > 0)
                             ? totalActual
@@ -2352,6 +2377,18 @@ export default function Home() {
                                           {/* ── Aksiyon butonları: Sapma Raporu + PDF ── */}
                                           {hasActual && (
                                             <div className="flex items-center justify-end gap-2">
+                                              {/* Period Seçici */}
+                                              <div className="flex items-center rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden text-xs font-medium">
+                                                {(['month', 'ytd', 'year'] as const).map((p) => (
+                                                  <button
+                                                    key={p}
+                                                    onClick={(e) => { e.stopPropagation(); setSapmaPeriod(p); }}
+                                                    className={`px-2.5 py-1.5 transition-colors ${sapmaPeriod === p ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-gray-700'}`}
+                                                  >
+                                                    {p === 'month' ? 'Tek Ay' : p === 'ytd' ? 'YTD' : 'Yıl'}
+                                                  </button>
+                                                ))}
+                                              </div>
                                               {/* Sapma Raporu Oluştur */}
                                               <button
                                                 onClick={(e) => {
@@ -2360,11 +2397,24 @@ export default function Home() {
                                                   setVarDrawerResult(null);
                                                   setVarDrawerError(null);
                                                   setVarDrawerLoading(true);
+                                                  // Period seçiciye göre hangi ay indekslerini dahil edeceğimizi belirle
+                                                  const periodIdxs: number[] = sapmaPeriod === 'month'
+                                                    ? [safeMonth]
+                                                    : sapmaPeriod === 'ytd'
+                                                    ? Array.from({ length: safeMonth + 1 }, (_, i) => i)
+                                                    : Array.from({ length: 12 }, (_, i) => i);
+                                                  const periodLabel: string = sapmaPeriod === 'month'
+                                                    ? MONTH_LABELS[safeMonth]
+                                                    : sapmaPeriod === 'ytd'
+                                                    ? `Ocak-${MONTH_LABELS[safeMonth]} (YTD)`
+                                                    : 'Tum Yil';
                                                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                                   const params = (varParams as any[])
                                                     .map((r) => {
-                                                      const bv = ensureArr(r.monthly_budget)[safeMonth] ?? 0;
-                                                      const av = ensureArr(r.monthly_actual)[safeMonth] ?? 0;
+                                                      const bArr = ensureArr(r.monthly_budget);
+                                                      const aArr = ensureArr(r.monthly_actual);
+                                                      const bv = periodIdxs.reduce((s: number, mi) => s + (bArr[mi] ?? 0), 0);
+                                                      const av = periodIdxs.reduce((s: number, mi) => s + (aArr[mi] ?? 0), 0);
                                                       const dv = av - bv;
                                                       const pName = (r.label ?? r.param_code ?? '') as string;
                                                       return { paramName: pName, unitType: (r.unit_type ?? 'TL') as string, company: r.company ?? null, budget: bv, actual: av, diff: dv, diffPct: bv > 0 ? (dv / bv) * 100 : null };
@@ -2377,51 +2427,47 @@ export default function Home() {
                                                     budget: totalBudgetArr[mi] ?? 0,
                                                     actual: totalActualArr[mi] ?? 0,
                                                   }));
-                                                  // Ay bazlı breakdown
-                                                  const monthBreakdown = MONTH_LABELS.map((m, mi) => {
+                                                  // Seçili periyoda ait aylık breakdown
+                                                  const monthBreakdown = periodIdxs.map((mi) => {
                                                     const bv = totalBudgetArr[mi] ?? 0;
                                                     const av = totalActualArr[mi] ?? 0;
                                                     const vv = av - bv;
                                                     return {
-                                                      month: m,
+                                                      month: MONTH_LABELS[mi],
                                                       budget: bv,
                                                       actual: av,
                                                       variance: vv,
                                                       variancePct: bv > 0 ? (vv / bv) * 100 : 0,
                                                     };
                                                   });
-                                                  // Aktif ay bazlı bütçe/fiili hesabı
-                                                  const activeMonthIdxs = MONTH_LABELS
-                                                    .map((_, mi) => mi)
-                                                    .filter((mi) => (totalActualArr[mi] ?? 0) > 0);
                                                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                                   const departmentBreakdown = (varDepts as any[]).map((d) => {
                                                     const dBudget = ensureArr(d.monthly_budget);
                                                     const dActual = ensureArr(d.monthly_actual);
-                                                    const activeBudget = activeMonthIdxs.reduce((s: number, i: number) => s + (dBudget[i] ?? 0), 0);
-                                                    const activeActual = activeMonthIdxs.reduce((s: number, i: number) => s + (dActual[i] ?? 0), 0);
+                                                    const pBudget = periodIdxs.reduce((s: number, i: number) => s + (dBudget[i] ?? 0), 0);
+                                                    const pActual = periodIdxs.reduce((s: number, i: number) => s + (dActual[i] ?? 0), 0);
                                                     return {
                                                       name: d.label,
                                                       company: d.company ?? null,
-                                                      budget: activeBudget,
-                                                      actual: activeActual,
-                                                      variance: activeActual - activeBudget,
-                                                      variancePercent: activeBudget > 0 ? ((activeActual - activeBudget) / activeBudget) * 100 : 0,
+                                                      budget: pBudget,
+                                                      actual: pActual,
+                                                      variance: pActual - pBudget,
+                                                      variancePercent: pBudget > 0 ? ((pActual - pBudget) / pBudget) * 100 : 0,
                                                     };
                                                   });
-                                                  const activeBudgetTotal = activeMonthIdxs.length > 0
-                                                    ? activeMonthIdxs.reduce((s, mi) => s + (totalBudgetArr[mi] ?? 0), 0)
+                                                  const activeBudgetTotal = periodIdxs.length > 0
+                                                    ? periodIdxs.reduce((s, mi) => s + (totalBudgetArr[mi] ?? 0), 0)
                                                     : budgetTotal;
-                                                  const activeActualTotal = activeMonthIdxs.reduce((s, mi) => s + (totalActualArr[mi] ?? 0), 0);
+                                                  const activeActualTotal = periodIdxs.reduce((s, mi) => s + (totalActualArr[mi] ?? 0), 0);
                                                   const activeVarianceAmount = activeActualTotal - activeBudgetTotal;
                                                   const activeVariancePct = activeBudgetTotal > 0 ? (activeVarianceAmount / activeBudgetTotal) * 100 : 0;
 
                                                   // GRUP: şirket bazlı kırılım + dengeleme flag
                                                   const companyBreakdown = company === 'GRUP' && (icaTotal || iceTotal) ? (() => {
-                                                    const icaActBudget = activeMonthIdxs.reduce((s: number, i: number) => s + (icaBudget[i] ?? 0), 0);
-                                                    const icaActActual = activeMonthIdxs.reduce((s: number, i: number) => s + (icaActual[i] ?? 0), 0);
-                                                    const iceActBudget = activeMonthIdxs.reduce((s: number, i: number) => s + (iceBudget[i] ?? 0), 0);
-                                                    const iceActActual = activeMonthIdxs.reduce((s: number, i: number) => s + (iceActual[i] ?? 0), 0);
+                                                    const icaActBudget = periodIdxs.reduce((s: number, i: number) => s + (icaBudget[i] ?? 0), 0);
+                                                    const icaActActual = periodIdxs.reduce((s: number, i: number) => s + (icaActual[i] ?? 0), 0);
+                                                    const iceActBudget = periodIdxs.reduce((s: number, i: number) => s + (iceBudget[i] ?? 0), 0);
+                                                    const iceActActual = periodIdxs.reduce((s: number, i: number) => s + (iceActual[i] ?? 0), 0);
                                                     const icaVar = icaActActual - icaActBudget;
                                                     const iceVar = iceActActual - iceActBudget;
                                                     const netBudget = icaActBudget + iceActBudget;
@@ -2475,7 +2521,8 @@ export default function Home() {
                                                       monthBreakdown,
                                                       departmentBreakdown,
                                                       analysisScope: 'full',
-                                                      activeMonths: activeMonthIdxs,
+                                                      activeMonths: periodIdxs,
+                                                      periodLabel,
                                                       companyBreakdown,
                                                       isGroupView: company === 'GRUP',
                                                     }),
