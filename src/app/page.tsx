@@ -858,6 +858,18 @@ export default function Home() {
           const totalActual = ensureArr(cTotal?.monthly_actual);
           const activeIdxs = totalActual.map((v, i) => v !== 0 ? i : -1).filter(i => i >= 0);
 
+          // GRUP: ICA ve ICE total satırlarını ayrı parse et
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const cTotals = cItems.filter((i: any) => i.row_type === 'total');
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const cIcaTotal = company === 'GRUP' ? (cTotals.find((t: any) => t.company === 'ICA') ?? null) : null;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const cIceTotal = company === 'GRUP' ? (cTotals.find((t: any) => t.company === 'ICE') ?? null) : null;
+          const cIcaBudget = ensureArr(cIcaTotal?.monthly_budget);
+          const cIcaActual = ensureArr(cIcaTotal?.monthly_actual);
+          const cIceBudget = ensureArr(cIceTotal?.monthly_budget);
+          const cIceActual = ensureArr(cIceTotal?.monthly_actual);
+
           const monthly = MONTH_LABELS.map((m, i) => ({ month: m, budget: totalBudget[i] ?? 0, actual: totalActual[i] ?? 0 }));
           const cActual = activeIdxs.reduce((s, i) => s + (totalActual[i] ?? 0), 0);
           const cBudget = activeIdxs.length > 0
@@ -879,7 +891,7 @@ export default function Home() {
             const da = ensureArr(d.monthly_actual);
             const activeBudget = activeIdxs.reduce((s: number, i: number) => s + (db[i] ?? 0), 0);
             const activeActual = activeIdxs.reduce((s: number, i: number) => s + (da[i] ?? 0), 0);
-            return { name: d.label, budget: activeBudget, actual: activeActual,
+            return { name: d.label, company: (d.company ?? null) as string | null, budget: activeBudget, actual: activeActual,
               variance: activeActual - activeBudget,
               variancePercent: activeBudget > 0 ? ((activeActual - activeBudget) / activeBudget) * 100 : 0 };
           });
@@ -890,10 +902,27 @@ export default function Home() {
             const pa = ensureArr(p.monthly_actual);
             const bv = activeIdxs.reduce((s: number, i: number) => s + (pb[i] ?? 0), 0);
             const av = activeIdxs.reduce((s: number, i: number) => s + (pa[i] ?? 0), 0);
-            return { paramName: p.label as string, unitType: (p.unit_type ?? 'TL') as string, budget: bv, actual: av,
+            return { paramName: p.label as string, unitType: (p.unit_type ?? 'TL') as string, company: (p.company ?? null) as string | null, budget: bv, actual: av,
               diff: av - bv, diffPct: bv > 0 ? (av - bv) / bv * 100 : null };
           }).filter((p) => p.budget !== 0 || p.actual !== 0)
             .sort((a, b) => (isKeyParam(a.paramName, c.id) ? 0 : 1) - (isKeyParam(b.paramName, c.id) ? 0 : 1));
+
+          // GRUP: şirket bazlı kırılım (tüm yıl)
+          const fullYearIdxs = Array.from({ length: 12 }, (_, i) => i);
+          const companyBreakdown = company === 'GRUP' && (cIcaTotal || cIceTotal) ? (() => {
+            const icaPB = fullYearIdxs.reduce((s, i) => s + (cIcaBudget[i] ?? 0), 0);
+            const icaPA = fullYearIdxs.reduce((s, i) => s + (cIcaActual[i] ?? 0), 0);
+            const icePB = fullYearIdxs.reduce((s, i) => s + (cIceBudget[i] ?? 0), 0);
+            const icePA = fullYearIdxs.reduce((s, i) => s + (cIceActual[i] ?? 0), 0);
+            const icaVar = icaPA - icaPB;
+            const iceVar = icePA - icePB;
+            const netBudget = icaPB + icePB;
+            return {
+              ICA: { budget: icaPB, actual: icaPA, variance: icaVar, variancePercent: icaPB > 0 ? (icaVar / icaPB) * 100 : 0 },
+              ICE: { budget: icePB, actual: icePA, variance: iceVar, variancePercent: icePB > 0 ? (iceVar / icePB) * 100 : 0 },
+              net: { budget: netBudget, actual: icaPA + icePA, variance: icaVar + iceVar, variancePercent: netBudget > 0 ? ((icaVar + iceVar) / netBudget) * 100 : 0, balanced: icaVar * iceVar < 0 },
+            };
+          })() : null;
 
           const res = await fetch('/api/analyze-variance', {
             method: 'POST',
@@ -911,6 +940,9 @@ export default function Home() {
               departmentBreakdown,
               analysisScope: 'full',
               activeMonths: activeIdxs,
+              companyBreakdown,
+              isGroupView: company === 'GRUP',
+              periodLabel: 'Tüm Yıl',
             }),
           });
           const d = await res.json();
@@ -1215,19 +1247,46 @@ export default function Home() {
                             const activeVar = activeActual - activeBudget;
                             const activeVarPct = activeBudget > 0 ? (activeVar / activeBudget) * 100 : 0;
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            // GRUP: ICA ve ICE total satırlarını ayrı parse et
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const cTotals2 = cItems.filter((i: any) => i.row_type === 'total');
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const cIcaTotal2 = company === 'GRUP' ? (cTotals2.find((t: any) => t.company === 'ICA') ?? null) : null;
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            const cIceTotal2 = company === 'GRUP' ? (cTotals2.find((t: any) => t.company === 'ICE') ?? null) : null;
+                            const cIcaBudget2 = ensureArr(cIcaTotal2?.monthly_budget);
+                            const cIcaActual2 = ensureArr(cIcaTotal2?.monthly_actual);
+                            const cIceBudget2 = ensureArr(cIceTotal2?.monthly_budget);
+                            const cIceActual2 = ensureArr(cIceTotal2?.monthly_actual);
                             const params = (cParams as any[]).slice(0, 30).map((p) => {
                               const pb = ensureArr(p.monthly_budget);
                               const pa = ensureArr(p.monthly_actual);
                               const bv = activeIdxs.reduce((s: number, i: number) => s + (pb[i] ?? 0), 0);
                               const av = activeIdxs.reduce((s: number, i: number) => s + (pa[i] ?? 0), 0);
-                              return { paramName: p.label as string, unitType: (p.unit_type ?? 'TL') as string,
+                              return { paramName: p.label as string, unitType: (p.unit_type ?? 'TL') as string, company: (p.company ?? null) as string | null,
                                 budget: bv, actual: av, diff: av - bv, diffPct: bv > 0 ? (av - bv) / bv * 100 : null };
                             }).filter((p) => p.budget !== 0 || p.actual !== 0)
                               .sort((a, b) => (isKeyParam(a.paramName, c.id) ? 0 : 1) - (isKeyParam(b.paramName, c.id) ? 0 : 1));
+                            // GRUP: şirket bazlı kırılım (tüm yıl)
+                            const execFullYearIdxs = Array.from({ length: 12 }, (_, i) => i);
+                            const execCompanyBreakdown = company === 'GRUP' && (cIcaTotal2 || cIceTotal2) ? (() => {
+                              const icaPB2 = execFullYearIdxs.reduce((s, i) => s + (cIcaBudget2[i] ?? 0), 0);
+                              const icaPA2 = execFullYearIdxs.reduce((s, i) => s + (cIcaActual2[i] ?? 0), 0);
+                              const icePB2 = execFullYearIdxs.reduce((s, i) => s + (cIceBudget2[i] ?? 0), 0);
+                              const icePA2 = execFullYearIdxs.reduce((s, i) => s + (cIceActual2[i] ?? 0), 0);
+                              const icaVar2 = icaPA2 - icaPB2;
+                              const iceVar2 = icePA2 - icePB2;
+                              const netBudget2 = icaPB2 + icePB2;
+                              return {
+                                ICA: { budget: icaPB2, actual: icaPA2, variance: icaVar2, variancePercent: icaPB2 > 0 ? (icaVar2 / icaPB2) * 100 : 0 },
+                                ICE: { budget: icePB2, actual: icePA2, variance: iceVar2, variancePercent: icePB2 > 0 ? (iceVar2 / icePB2) * 100 : 0 },
+                                net: { budget: netBudget2, actual: icaPA2 + icePA2, variance: icaVar2 + iceVar2, variancePercent: netBudget2 > 0 ? ((icaVar2 + iceVar2) / netBudget2) * 100 : 0, balanced: icaVar2 * iceVar2 < 0 },
+                              };
+                            })() : null;
                             const res = await fetch('/api/analyze-variance', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ mode: 'category', categoryName: c.name, budgetTotal: activeBudget, actualTotal: activeActual, varianceAmount: activeVar, variancePercent: activeVarPct, monthlyData: cMonthly, parameters: params, activeMonths: activeIdxs, analysisScope: 'full' }),
+                              body: JSON.stringify({ mode: 'category', categoryName: c.name, budgetTotal: activeBudget, actualTotal: activeActual, varianceAmount: activeVar, variancePercent: activeVarPct, monthlyData: cMonthly, parameters: params, activeMonths: activeIdxs, analysisScope: 'full', companyBreakdown: execCompanyBreakdown, isGroupView: company === 'GRUP', periodLabel: 'Tüm Yıl' }),
                             });
                             const d = await res.json();
                             return { catId: c.id, result: d };
@@ -2597,6 +2656,7 @@ export default function Home() {
                                                       const activeActual = activeIdxs.reduce((s: number, i: number) => s + (dActual[i] ?? 0), 0);
                                                       return {
                                                         name: d.label,
+                                                        company: (d.company ?? null) as string | null,
                                                         budget: activeBudget,
                                                         actual: activeActual,
                                                         variance: activeActual - activeBudget,
@@ -2616,9 +2676,30 @@ export default function Home() {
                                                         if (bv === 0 && av === 0) return null;
                                                         const dv = av - bv;
                                                         const pName = (r.label ?? r.param_code ?? '') as string;
-                                                        return { paramName: pName, unitType: (r.unit_type ?? 'TL') as string, budget: bv, actual: av, diff: dv, diffPct: bv > 0 ? (dv / bv) * 100 : null, isKey: isKeyParam(pName, cat.id) };
+                                                        return { paramName: pName, unitType: (r.unit_type ?? 'TL') as string, company: (r.company ?? null) as string | null, budget: bv, actual: av, diff: dv, diffPct: bv > 0 ? (dv / bv) * 100 : null, isKey: isKeyParam(pName, cat.id) };
                                                       })
-                                                      .filter(Boolean)) as { paramName: string; unitType: string; budget: number; actual: number; diff: number; diffPct: number | null; isKey: boolean }[];
+                                                      .filter(Boolean)) as { paramName: string; unitType: string; company: string | null; budget: number; actual: number; diff: number; diffPct: number | null; isKey: boolean }[];
+
+                                                    // GRUP: companyBreakdown (activeIdxs bazlı)
+                                                    const pdfCompanyBreakdown = company === 'GRUP' && (icaTotal || iceTotal) ? (() => {
+                                                      const pdfIcaPB = activeIdxs.reduce((s: number, i: number) => s + (icaBudget[i] ?? 0), 0);
+                                                      const pdfIcaPA = activeIdxs.reduce((s: number, i: number) => s + (icaActual[i] ?? 0), 0);
+                                                      const pdfIcePB = activeIdxs.reduce((s: number, i: number) => s + (iceBudget[i] ?? 0), 0);
+                                                      const pdfIcePA = activeIdxs.reduce((s: number, i: number) => s + (iceActual[i] ?? 0), 0);
+                                                      const pdfIcaVar = pdfIcaPA - pdfIcaPB;
+                                                      const pdfIceVar = pdfIcePA - pdfIcePB;
+                                                      const pdfNetBudget = pdfIcaPB + pdfIcePB;
+                                                      return {
+                                                        ICA: { budget: pdfIcaPB, actual: pdfIcaPA, variance: pdfIcaVar, variancePercent: pdfIcaPB > 0 ? (pdfIcaVar / pdfIcaPB) * 100 : 0 },
+                                                        ICE: { budget: pdfIcePB, actual: pdfIcePA, variance: pdfIceVar, variancePercent: pdfIcePB > 0 ? (pdfIceVar / pdfIcePB) * 100 : 0 },
+                                                        net: { budget: pdfNetBudget, actual: pdfIcaPA + pdfIcePA, variance: pdfIcaVar + pdfIceVar, variancePercent: pdfNetBudget > 0 ? ((pdfIcaVar + pdfIceVar) / pdfNetBudget) * 100 : 0, balanced: pdfIcaVar * pdfIceVar < 0 },
+                                                      };
+                                                    })() : null;
+                                                    const pdfPeriodLabel = activeIdxs.length === 0
+                                                      ? 'Tüm Yıl'
+                                                      : activeIdxs.length === 1
+                                                      ? MONTH_LABELS[activeIdxs[0]]
+                                                      : `${MONTH_LABELS[activeIdxs[0]]}-${MONTH_LABELS[activeIdxs[activeIdxs.length - 1]]}`;
 
                                                     // Eğer drawer'dan daha önce analiz yapıldıysa yeniden API çağrısı yapmadan kullan
                                                     let aiResult: typeof varDrawerResult | null = varDrawerResult ?? null;
@@ -2637,12 +2718,15 @@ export default function Home() {
                                                           parameters: allParams
                                                             .sort((a, b) => (b.isKey ? 1 : 0) - (a.isKey ? 1 : 0))
                                                             .slice(0, 50)
-                                                            .map((p) => ({ paramName: p.paramName, unitType: p.unitType, budget: p.budget, actual: p.actual, diff: p.diff, diffPct: p.diffPct })),
+                                                            .map((p) => ({ paramName: p.paramName, unitType: p.unitType, company: p.company, budget: p.budget, actual: p.actual, diff: p.diff, diffPct: p.diffPct })),
                                                           monthBreakdown,
                                                           departmentBreakdown,
                                                           activeMonths: activeIdxs,
                                                           analysisScope: 'full',
                                                           deepAnalysis: true,
+                                                          companyBreakdown: pdfCompanyBreakdown,
+                                                          isGroupView: company === 'GRUP',
+                                                          periodLabel: pdfPeriodLabel,
                                                         }),
                                                       });
                                                       aiResult = res.ok ? await res.json() : null;
