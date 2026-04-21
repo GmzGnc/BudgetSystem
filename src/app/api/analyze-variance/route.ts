@@ -219,8 +219,8 @@ Yanitini MUTLAKA su JSON formatinda ver (baska hicbir metin ekleme):
     }
   ],
   "yearEndProjection": {
-    "projectedAnnualActual": 0,
-    "projectedVariancePct": 0.0,
+    "projectedAnnualActual": 153939384,
+    "projectedVariancePct": 18.6,
     "criticalThresholdMonth": null,
     "description": "3-4 cumlelik aciklama: projeksiyonun dayanagi, risk faktorleri, yil sonu beklenen fark."
   },
@@ -287,6 +287,28 @@ Veri yetersiz olsa bile her 3 senaryoyu mutlaka uret.
     "yearEndForecast": "Mevcut trend devam ederse yil sonu tahmini toplam: X TL (butce Y TL, asim Z TL / %P)"
   }
 }
+
+═══════════════════════════════════════════════════════════════
+JSON SAYI FORMATI — MUTLAK KURAL
+═══════════════════════════════════════════════════════════════
+
+JSON icindeki TUM sayi alanlari (budget, actual, variance,
+projectedAnnualActual, amount, newTotal, saving vb.) SAF SAYI
+olmalidir. Turkce binlik ayirici (nokta), ondalik virgul veya
+para birimi sembolu KULLANILMAZ.
+
+DOGRU:   "projectedAnnualActual": 153939384
+DOGRU:   "amount": 4200000
+DOGRU:   "variancePct": 18.6
+YANLIS:  "projectedAnnualActual": 153.939.384   (ikinci nokta JSON hatasi)
+YANLIS:  "amount": "4.200.000"                   (string, sayi degil)
+YANLIS:  "variance": 6.044.955                   (uc nokta JSON hatasi)
+YANLIS:  "budget": "6.044.955 TL"                (TL eki yasak)
+
+Ondalik sayi gerekirse tek nokta kullan: 18.6  -72.2
+Aciklama metinlerinde (summary, analysis, driver vb.) Turkce
+binlik ayirici serbesttir — o alanlar string tipindedir.
+═══════════════════════════════════════════════════════════════
 
 Matematiksel kurallar (ZORUNLU):
 - newTotal = actualTotal - toplam saving (items[].saving toplami)
@@ -551,10 +573,11 @@ Lütfen bu varyansı analiz et ve JSON formatında yanıt ver.`;
     try {
       analysisResult = JSON.parse(rawText);
     } catch {
-      return NextResponse.json({ error: 'Analiz başarısız', details: 'JSON parse hatası' }, { status: 500 });
+      return NextResponse.json({ error: 'Analiz başarısız' }, { status: 500 });
     }
     return NextResponse.json(analysisResult);
   } catch (err) {
+    console.error('[analyze-variance]', err);
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: msg }, { status: 500 });
   }

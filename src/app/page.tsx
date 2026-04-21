@@ -945,31 +945,37 @@ export default function Home() {
             };
           })() : null;
 
-          const res = await fetch('/api/analyze-variance', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              mode: 'category',
-              categoryName: c.name,
-              budgetTotal: cBudget,
-              actualTotal: cActual,
-              varianceAmount: cVar,
-              variancePercent: cVarPct,
-              monthlyData: monthly,
-              ytdMonthlyData: monthlyDataForAI,
-              annualBudget,
-              reportDate: reportDateStr,
-              parameters: params,
-              monthBreakdown,
-              departmentBreakdown,
-              analysisScope: 'full',
-              activeMonths: activeIdxs,
-              companyBreakdown,
-              isGroupView: company === 'GRUP',
-              periodLabel: activePeriodLabel,
-              deepAnalysis: true,
-            }),
-          });
+          let res: Response;
+          try {
+            res = await fetch('/api/analyze-variance', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                mode: 'category',
+                categoryName: c.name,
+                budgetTotal: cBudget,
+                actualTotal: cActual,
+                varianceAmount: cVar,
+                variancePercent: cVarPct,
+                monthlyData: monthly,
+                ytdMonthlyData: monthlyDataForAI,
+                annualBudget,
+                reportDate: reportDateStr,
+                parameters: params,
+                monthBreakdown,
+                departmentBreakdown,
+                analysisScope: 'full',
+                activeMonths: activeIdxs,
+                companyBreakdown,
+                isGroupView: company === 'GRUP',
+                periodLabel: activePeriodLabel,
+                deepAnalysis: true,
+              }),
+            });
+          } catch (fetchErr) {
+            throw fetchErr;
+          }
+
           const d = await res.json();
           return { catId: c.id, result: d };
         })
@@ -1081,7 +1087,7 @@ export default function Home() {
     } finally {
       setIsDetailPdfLoading(false);
     }
-  }, [importedModelData, monthlyData, companyLabel, company, varDrawerResult, isDetailPdfLoading]);
+  }, [importedModelData, monthlyData, companyLabel, company, varDrawerResult, isDetailPdfLoading, lineItemsData]);
 
   // ── render ──
   return (
