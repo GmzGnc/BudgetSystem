@@ -1063,14 +1063,26 @@ export default function Home() {
           monthlyData: cMonthly,
           parameters: cActiveParams,
           vehicleItems: ['arac_kira', 'hgs', 'arac_bakim', 'arac_yakit'].includes(c.id)
-            ? (cItems.filter((i: any) => i.row_type === 'item') as any[]).map((v) => {
+            ? (cItems.filter((i: any) => i.row_type === 'item' && !String(i.label ?? '').includes('(Litre)') && !String(i.label ?? '').toLowerCase().includes('litre')) as any[]).map((v) => {
                 const vb = ensureArr(v.monthly_budget);
                 const va = ensureArr(v.monthly_actual);
                 const bTotal = activeIdxs.reduce((s: number, i: number) => s + (vb[i] ?? 0), 0);
                 const aTotal = activeIdxs.reduce((s: number, i: number) => s + (va[i] ?? 0), 0);
                 const dTotal = aTotal - bTotal;
-                return { plate: v.label as string, budgetTotal: bTotal, actualTotal: aTotal, diff: dTotal, diffPct: bTotal > 0 ? dTotal / bTotal * 100 : null };
+                return { plate: String(v.label ?? ''), budgetTotal: bTotal, actualTotal: aTotal, diff: dTotal, diffPct: bTotal > 0 ? dTotal / bTotal * 100 : null };
               }).filter((v) => v.budgetTotal !== 0 || v.actualTotal !== 0)
+              .reduce((acc: Array<{ plate: string; budgetTotal: number; actualTotal: number; diff: number; diffPct: number | null }>, v) => {
+                const existing = acc.find(x => x.plate === v.plate);
+                if (existing) {
+                  existing.budgetTotal += v.budgetTotal;
+                  existing.actualTotal += v.actualTotal;
+                  existing.diff += v.diff;
+                  existing.diffPct = existing.budgetTotal > 0 ? existing.diff / existing.budgetTotal * 100 : null;
+                } else {
+                  acc.push({ ...v });
+                }
+                return acc;
+              }, [])
             : undefined,
           routeItems: cRouteItems,
           // Aktif dönem meta alanları — PDF şablonu için
