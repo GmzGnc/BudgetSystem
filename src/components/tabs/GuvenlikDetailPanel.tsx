@@ -18,6 +18,7 @@ export interface LineItem {
   monthly_budget: number[];
   monthly_actual: number[];
   unit_type: string | null;
+  company?: 'ICA' | 'ICE';
 }
 
 interface Props {

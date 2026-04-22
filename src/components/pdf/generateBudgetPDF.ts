@@ -122,6 +122,13 @@ export interface CategoryPDFData {
     diffPct: number | null;
     isKey?: boolean;
   }>;
+  vehicleItems?: Array<{
+    plate: string;
+    budgetTotal: number;
+    actualTotal: number;
+    diff: number;
+    diffPct: number | null;
+  }>;
   // Aktif dönem meta alanları (opsiyonel — backward compatible)
   ytdBudget?: number;
   ytdActual?: number;
@@ -513,6 +520,8 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
   doc.setTextColor(...varColor);
   doc.text(formatTL(cat.variance) + ' (' + formatPct(cat.variancePercent) + ')', 42 + colW * 2, totY + 5.5);
 
+  let vStartY = totY + 12;
+
   // Parametre detay tablosu — otomatik sayfa kırma
   if (cat.parameters && cat.parameters.length > 0) {
     const ROW_H = 5.5;
@@ -597,6 +606,87 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
         pCols[5] + 2, pCurY + 3.8
       );
       pCurY += ROW_H;
+    });
+    vStartY = pCurY + 4;
+  }
+
+  // Araç listesi tablosu — otomatik sayfa kırma
+  if (cat.vehicleItems && cat.vehicleItems.length > 0) {
+    const ROW_H = 5.5;
+    const PAGE_MAX_Y = doc.internal.pageSize.getHeight() - 16 - 4;
+    const PAGE_START_Y = 22;
+    const vCols = [14, 110, 148, 186, 224, 256];
+    const vHeaders = [tr('Plaka'), '', tr('Butce'), tr('Fiili'), tr('Fark'), tr('Oran')];
+    let isFirstVehiclePage = true;
+
+    function drawVehicleHeader(y: number): number {
+      if (isFirstVehiclePage) {
+        doc.setFontSize(8);
+        setDocFont(doc, 'bold');
+        doc.setTextColor(...NAVY);
+        doc.text(tr('Arac Listesi / Vehicle List'), 14, y);
+        y += 3;
+        isFirstVehiclePage = false;
+      }
+      doc.setFillColor(...NAVY);
+      doc.rect(14, y, 269, 7, 'F');
+      doc.setTextColor(...WHITE);
+      doc.setFontSize(5.5);
+      setDocFont(doc, 'bold');
+      vHeaders.forEach((h, i) => { if (h) doc.text(h, vCols[i] + 2, y + 4.5); });
+      return y + 7;
+    }
+
+    let vGuardY = vStartY;
+    if (vGuardY + 15.5 > PAGE_MAX_Y) {
+      doc.addPage();
+      addPageHeader(doc, data.companyName, 0, 0, logoBase64);
+      addPageFooter(doc, data.generatedAt);
+      vGuardY = PAGE_START_Y + 5;
+    }
+    let vCurY = drawVehicleHeader(vGuardY);
+
+    cat.vehicleItems.forEach((v, vi) => {
+      if (vCurY + ROW_H > PAGE_MAX_Y) {
+        doc.addPage();
+        addPageHeader(doc, data.companyName, 0, 0, logoBase64);
+        addPageFooter(doc, data.generatedAt);
+        vCurY = drawVehicleHeader(PAGE_START_Y + 5);
+      }
+
+      doc.setFillColor(...(vi % 2 === 0 ? GRAY_LIGHT : WHITE));
+      doc.rect(14, vCurY, 269, ROW_H, 'F');
+      doc.setFontSize(5);
+      setDocFont(doc, 'normal');
+      doc.setTextColor(...BLACK);
+
+      doc.text(tr(v.plate), vCols[0] + 2, vCurY + 3.8);
+      doc.text(
+        v.budgetTotal !== 0
+          ? new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(v.budgetTotal)
+          : '-',
+        vCols[2] + 2, vCurY + 3.8
+      );
+      doc.text(
+        v.actualTotal > 0
+          ? new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(v.actualTotal)
+          : '-',
+        vCols[3] + 2, vCurY + 3.8
+      );
+      doc.setTextColor(...(v.diff > 0 ? RED : v.diff < 0 ? GREEN : BLACK));
+      doc.text(
+        v.diff !== 0
+          ? (v.diff > 0 ? '+' : '') + new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(v.diff)
+          : '-',
+        vCols[4] + 2, vCurY + 3.8
+      );
+      doc.text(
+        v.diffPct !== null
+          ? (v.diffPct > 0 ? '+' : '') + v.diffPct.toFixed(1) + '%'
+          : '-',
+        vCols[5] + 2, vCurY + 3.8
+      );
+      vCurY += ROW_H;
     });
   }
 }

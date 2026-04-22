@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(npm run *)",
+      "Bash(node -e \"require\\('dotenv'\\).config\\({path:'.env.local'}\\); console.log\\('KEY:', process.env.ANTHROPIC_API_KEY ? 'VAR' : 'YOK'\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(node -e \"const https = require\\('https'\\);const data = JSON.stringify\\({model:'claude-sonnet-4-20250514',max_tokens:100,messages:[{role:'user',content:'say hi'}]}\\);require\\('dotenv'\\).config\\({path:'.env.local'}\\);const req = https.request\\({hostname:'api.anthropic.com',path:'/v1/messages',method:'POST',headers:{'Content-Type':'application/json','x-api-key':process.env.ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01','Content-Length':Buffer.byteLength\\(data\\)}},res=>{let b='';res.on\\('data',d=>b+=d\\);res.on\\('end',\\(\\)=>console.log\\(b\\)\\)}\\);req.write\\(data\\);req.end\\(\\);\")"
+    ]
+  }
+}
