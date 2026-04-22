@@ -1019,7 +1019,9 @@ export default function Home() {
         const catAnnualBudget = totalBudget.reduce((s, v) => s + v, 0);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const cActiveParams = (cParams as any[]).slice(0, 30).map((p) => {
+        const cActiveParams = (cParams as any[])
+          .filter((p: any) => c.id !== 'servis' || !(typeof p.param_code === 'string' && p.param_code.startsWith('birim_fiyat__')))
+          .slice(0, 50).map((p) => {
           const pb = ensureArr(p.monthly_budget);
           const pa = ensureArr(p.monthly_actual);
           const bTotal = activeIdxs.reduce((s: number, i: number) => s + (pb[i] ?? 0), 0);
@@ -1038,6 +1040,18 @@ export default function Home() {
           contributionPercent: Math.abs(eff.amount) / (Math.abs(ai.totalVariance) || 1) * 100,
           description: eff.explanation,
         })) ?? [];
+
+        const cRouteItems = c.id === 'servis'
+          ? (cItems.filter((i: any) => i.row_type === 'param' && typeof i.param_code === 'string' && i.param_code.startsWith('birim_fiyat__')) as any[]).map((v) => {
+              const suffix = (v.param_code as string).replace('birim_fiyat__', '');
+              const vb = ensureArr(v.monthly_budget);
+              const va = ensureArr(v.monthly_actual);
+              const bTotal = activeIdxs.reduce((s: number, i: number) => s + (vb[i] ?? 0), 0);
+              const aTotal = activeIdxs.reduce((s: number, i: number) => s + (va[i] ?? 0), 0);
+              const dTotal = aTotal - bTotal;
+              return { plate: suffix, budgetTotal: bTotal, actualTotal: aTotal, diff: dTotal, diffPct: bTotal > 0 ? dTotal / bTotal * 100 : null };
+            }).filter((v) => v.budgetTotal !== 0 || v.actualTotal !== 0)
+          : undefined;
 
         return {
           name: c.name,
@@ -1058,6 +1072,7 @@ export default function Home() {
                 return { plate: v.label as string, budgetTotal: bTotal, actualTotal: aTotal, diff: dTotal, diffPct: bTotal > 0 ? dTotal / bTotal * 100 : null };
               }).filter((v) => v.budgetTotal !== 0 || v.actualTotal !== 0)
             : undefined,
+          routeItems: cRouteItems,
           // Aktif dönem meta alanları — PDF şablonu için
           ytdBudget: cBudget,
           ytdActual: cActual,
@@ -1376,7 +1391,9 @@ export default function Home() {
                           const cVar = cActual - cBudget;
                           const cVarPct = cBudget > 0 ? (cVar / cBudget) * 100 : 0;
                           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          const cActiveParams = (cParams as any[]).slice(0, 30).map((p) => {
+                          const cActiveParams = (cParams as any[])
+                            .filter((p: any) => c.id !== 'servis' || !(typeof p.param_code === 'string' && p.param_code.startsWith('birim_fiyat__')))
+                            .slice(0, 50).map((p) => {
                             const pb = ensureArr(p.monthly_budget);
                             const pa = ensureArr(p.monthly_actual);
                             const bTotal = cActiveIndices.reduce((s: number, i: number) => s + (pb[i] ?? 0), 0);

@@ -129,6 +129,13 @@ export interface CategoryPDFData {
     diff: number;
     diffPct: number | null;
   }>;
+  routeItems?: Array<{
+    plate: string;
+    budgetTotal: number;
+    actualTotal: number;
+    diff: number;
+    diffPct: number | null;
+  }>;
   // Aktif dönem meta alanları (opsiyonel — backward compatible)
   ytdBudget?: number;
   ytdActual?: number;
@@ -203,6 +210,50 @@ const BLACK      = [17, 24, 39]    as [number, number, number];
 
 const MONTHS_TR = ['Oca','Sub','Mar','Nis','May','Haz','Tem','Agu','Eyl','Eki','Kas','Ara'];
 const MONTHS_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+const SERVIS_ROUTES: { name: string; annualBudget: number }[] = [
+  { name: "Tuzla (Aydınlı)",                              annualBudget: 80401 },
+  { name: "Beylikdüzü",                                   annualBudget: 80401 },
+  { name: "Pendik",                                       annualBudget: 79580 },
+  { name: "Avcılar",                                      annualBudget: 79498 },
+  { name: "Bağcılar",                                     annualBudget: 79211 },
+  { name: "Bakırköy-Küçükçekmece",                       annualBudget: 78970 },
+  { name: "Bostancı",                                     annualBudget: 78760 },
+  { name: "Kadıköy",                                      annualBudget: 78678 },
+  { name: "Kartal",                                       annualBudget: 78678 },
+  { name: "Üsküdar",                                      annualBudget: 77775 },
+  { name: "Bayrampaşa",                                   annualBudget: 77775 },
+  { name: "Yeşilpınar-Göktürk",                          annualBudget: 77775 },
+  { name: "Sultangazi",                                   annualBudget: 77775 },
+  { name: "Ataşehir",                                     annualBudget: 77775 },
+  { name: "Çıksalın-Nurtepe",                            annualBudget: 77775 },
+  { name: "Maltepe",                                      annualBudget: 77775 },
+  { name: "Yenibosna",                                    annualBudget: 77775 },
+  { name: "Kasımpaşa",                                    annualBudget: 77775 },
+  { name: "Esenler",                                      annualBudget: 77775 },
+  { name: "CCN Haftasonu Mesai-Sultangazi",               annualBudget: 77775 },
+  { name: "CCN Haftasonu Mesai-Sultangazi (Bayrampaşa)", annualBudget: 77775 },
+  { name: "Başakşehir-Bahçeşehir",                       annualBudget: 77242 },
+  { name: "Taşdelen",                                     annualBudget: 76134 },
+  { name: "Arnavutköy",                                   annualBudget: 76134 },
+  { name: "Yenidoğan",                                    annualBudget: 76134 },
+  { name: "Arnavutköy Haraççı",                          annualBudget: 76134 },
+  { name: "Çekmeköy (Ümraniye)",                         annualBudget: 76134 },
+  { name: "Sultanbeyli",                                  annualBudget: 76134 },
+  { name: "Beykoz",                                       annualBudget: 76134 },
+  { name: "Kağıthane",                                    annualBudget: 73509 },
+  { name: "İstinye-Sarıyer",                             annualBudget: 73509 },
+  { name: "Beşiktaş",                                     annualBudget: 73509 },
+  { name: "Ayazağa",                                      annualBudget: 72688 },
+  { name: "Bahçeköy",                                     annualBudget: 71786 },
+  { name: "Maden-Rumeli Feneri",                          annualBudget: 71047 },
+  { name: "Odayeri-Garipçe-1 (Ring)",                    annualBudget: 13366 },
+  { name: "Odayeri-Garipçe-2 (Ring)",                    annualBudget: 13366 },
+  { name: "Hüseynili-Garipçe-1 (Ring)",                 annualBudget: 12382 },
+  { name: "Hüseynili-Garipçe-2 (Ring)",                 annualBudget: 12382 },
+  { name: "Hacıosman Metro-Garipçe-1",                   annualBudget: 11151 },
+  { name: "Hacıosman Metro-Garipçe-2",                   annualBudget: 11151 },
+].sort((a, b) => b.annualBudget - a.annualBudget);
 
 function formatTL(val: number): string {
   return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(val) + ' TL';
@@ -610,6 +661,8 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
     vStartY = pCurY + 4;
   }
 
+  let rStartY = vStartY;
+
   // Araç listesi tablosu — otomatik sayfa kırma
   if (cat.vehicleItems && cat.vehicleItems.length > 0) {
     const ROW_H = 5.5;
@@ -687,6 +740,149 @@ function addCategoryPage(doc: jsPDF, cat: CategoryPDFData, data: PDFReportData, 
         vCols[5] + 2, vCurY + 3.8
       );
       vCurY += ROW_H;
+    });
+    rStartY = vCurY + 4;
+  }
+
+  let routesEndY = rStartY;
+
+  // Rota listesi tablosu — otomatik sayfa kırma
+  if (cat.routeItems && cat.routeItems.length > 0) {
+    const ROW_H = 5.5;
+    const PAGE_MAX_Y = doc.internal.pageSize.getHeight() - 16 - 4;
+    const PAGE_START_Y = 22;
+    const rCols = [14, 110, 148, 186, 224, 256];
+    const rHeaders = [tr('Rota'), '', tr('Butce'), tr('Fiili'), tr('Fark'), tr('Oran')];
+    let isFirstRoutePage = true;
+
+    function drawRouteHeader(y: number): number {
+      if (isFirstRoutePage) {
+        doc.setFontSize(8);
+        setDocFont(doc, 'bold');
+        doc.setTextColor(...NAVY);
+        doc.text(tr('Rota Listesi / Route List'), 14, y);
+        y += 3;
+        isFirstRoutePage = false;
+      }
+      doc.setFillColor(...NAVY);
+      doc.rect(14, y, 269, 7, 'F');
+      doc.setTextColor(...WHITE);
+      doc.setFontSize(5.5);
+      setDocFont(doc, 'bold');
+      rHeaders.forEach((h, i) => { if (h) doc.text(h, rCols[i] + 2, y + 4.5); });
+      return y + 7;
+    }
+
+    let rGuardY = rStartY;
+    if (rGuardY + 15.5 > PAGE_MAX_Y) {
+      doc.addPage();
+      addPageHeader(doc, data.companyName, 0, 0, logoBase64);
+      addPageFooter(doc, data.generatedAt);
+      rGuardY = PAGE_START_Y + 5;
+    }
+    let rCurY = drawRouteHeader(rGuardY);
+
+    cat.routeItems.forEach((r, ri) => {
+      if (rCurY + ROW_H > PAGE_MAX_Y) {
+        doc.addPage();
+        addPageHeader(doc, data.companyName, 0, 0, logoBase64);
+        addPageFooter(doc, data.generatedAt);
+        rCurY = drawRouteHeader(PAGE_START_Y + 5);
+      }
+
+      doc.setFillColor(...(ri % 2 === 0 ? GRAY_LIGHT : WHITE));
+      doc.rect(14, rCurY, 269, ROW_H, 'F');
+      doc.setFontSize(5);
+      setDocFont(doc, 'normal');
+      doc.setTextColor(...BLACK);
+
+      doc.text(tr(r.plate), rCols[0] + 2, rCurY + 3.8);
+      doc.text(
+        r.budgetTotal !== 0
+          ? new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(r.budgetTotal)
+          : '-',
+        rCols[2] + 2, rCurY + 3.8
+      );
+      doc.text(
+        r.actualTotal > 0
+          ? new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(r.actualTotal)
+          : '-',
+        rCols[3] + 2, rCurY + 3.8
+      );
+      doc.setTextColor(...(r.diff > 0 ? RED : r.diff < 0 ? GREEN : BLACK));
+      doc.text(
+        r.diff !== 0
+          ? (r.diff > 0 ? '+' : '') + new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(r.diff)
+          : '-',
+        rCols[4] + 2, rCurY + 3.8
+      );
+      doc.text(
+        r.diffPct !== null
+          ? (r.diffPct > 0 ? '+' : '') + r.diffPct.toFixed(1) + '%'
+          : '-',
+        rCols[5] + 2, rCurY + 3.8
+      );
+      rCurY += ROW_H;
+    });
+    routesEndY = rCurY;
+  }
+
+  // Servis/Ulaşım için statik rota tablosu
+  if (cat.name === 'Servis/Ulaşım') {
+    const SR_ROW_H = 5.5;
+    const SR_PAGE_MAX_Y = doc.internal.pageSize.getHeight() - 16 - 4;
+    const SR_PAGE_START_Y = 22;
+    const sCols = [14, 148, 200];
+    let isFirstSRPage = true;
+
+    function drawSRHeader(y: number): number {
+      if (isFirstSRPage) {
+        doc.setFontSize(8);
+        setDocFont(doc, 'bold');
+        doc.setTextColor(...NAVY);
+        doc.text(tr('Rota Bazli Butce / Route Budget'), 14, y);
+        y += 3;
+        isFirstSRPage = false;
+      }
+      doc.setFillColor(...NAVY);
+      doc.rect(14, y, 269, 7, 'F');
+      doc.setTextColor(...WHITE);
+      doc.setFontSize(5.5);
+      setDocFont(doc, 'bold');
+      doc.text(tr('Rota'), sCols[0] + 2, y + 4.5);
+      doc.text(tr('Yillik Butce'), sCols[1] + 2, y + 4.5);
+      doc.text(tr('Fiili'), sCols[2] + 2, y + 4.5);
+      return y + 7;
+    }
+
+    let srGuardY = routesEndY;
+    if (srGuardY + 15.5 > SR_PAGE_MAX_Y) {
+      doc.addPage();
+      addPageHeader(doc, data.companyName, 0, 0, logoBase64);
+      addPageFooter(doc, data.generatedAt);
+      srGuardY = SR_PAGE_START_Y + 5;
+    }
+    let srCurY = drawSRHeader(srGuardY);
+
+    SERVIS_ROUTES.forEach((route, si) => {
+      if (srCurY + SR_ROW_H > SR_PAGE_MAX_Y) {
+        doc.addPage();
+        addPageHeader(doc, data.companyName, 0, 0, logoBase64);
+        addPageFooter(doc, data.generatedAt);
+        srCurY = drawSRHeader(SR_PAGE_START_Y + 5);
+      }
+      doc.setFillColor(...(si % 2 === 0 ? GRAY_LIGHT : WHITE));
+      doc.rect(14, srCurY, 269, SR_ROW_H, 'F');
+      doc.setFontSize(5);
+      setDocFont(doc, 'normal');
+      doc.setTextColor(...BLACK);
+      doc.text(tr(route.name), sCols[0] + 2, srCurY + 3.8);
+      doc.text(
+        new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(route.annualBudget),
+        sCols[1] + 2, srCurY + 3.8
+      );
+      doc.text('-', sCols[2] + 2, srCurY + 3.8);
+      srCurY += SR_ROW_H;
     });
   }
 }

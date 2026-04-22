@@ -75,7 +75,8 @@ export async function fetchBudgetLineItems(
     .eq('fiscal_year_id', fiscalYearId)
     .order('category_code')
     .order('row_type')
-    .order('dept_code');
+    .order('dept_code')
+    .limit(5000);
 
   if (categoryCode) {
     query = query.eq('category_code', categoryCode);
